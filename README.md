@@ -1,111 +1,135 @@
-Synapse: AI-Powered Personal Learning Companion
-![alt text](https://img.shields.io/badge/build-passing-brightgreen)
+# Synapse: AI-Powered Personal Learning Companion  
 
-![alt text](https://img.shields.io/badge/License-MIT-yellow.svg)
+![Build](https://img.shields.io/badge/build-passing-brightgreen)  
+![License](https://img.shields.io/badge/License-MIT-yellow.svg)  
+![Python](https://img.shields.io/badge/python-3.9+-blue.svg)  
 
-![alt text](https://img.shields.io/badge/python-3.9+-blue.svg)
-An intelligent application designed to transform passive video content into a dynamic and effective learning experience. Synapse leverages the power of Large Language Models to help you master any subject by creating summaries, quizzes, and a personalized review schedule.
-🌟 Key Features
-🧠 AI-Powered Analysis: Automatically processes YouTube video transcripts to generate detailed summaries, identify key concepts, and extract actionable bullet points.
-💡 Intelligent Quiz Generation: Creates custom, multiple-choice quizzes based on the video's core content to test and reinforce your understanding.
-🚀 Spaced Repetition System (SRS): An integrated SRS schedules quiz questions for review at optimal intervals, scientifically proven to enhance long-term memory retention.
-🤖 AI Tutor: Engage in a conversation with an AI tutor that can answer your specific questions about the video content, providing clarifications and deeper insights.
-🗂️ Content Management: Organize your learning materials by course, manage your videos, and track your progress through a user-friendly interface.
-🛠️ Technology Stack
-This project is currently a fully-functional prototype built within the Google Colab environment, with a planned migration to a scalable web application.
-Current (Google Colab Prototype)
-Backend: Python
-AI Integration: Google Gemini API
-Database: SQLite for persistent storage
-Frontend/UI: ipywidgets for a rich, interactive notebook experience
-Environment: Google Colab / Jupyter
-Planned (Web Application)
-Backend: Python (Flask or FastAPI)
-AI Integration: Google Gemini API
-Database: PostgreSQL with SQLAlchemy (ORM)
-Frontend: React or Vue.js
-Asynchronous Tasks: Celery with Redis for handling AI processing in the background
-Deployment: Docker, Heroku/AWS/Render
-🚀 Getting Started
-Follow these instructions to get a local copy up and running for development and testing purposes.
-Prerequisites
-Python 3.9+
-Git
-A Google Gemini API Key
-Installation
-Clone the repository:
-code
-Sh
-git clone https://github.com/your-username/synapse-learning-companion.git
-cd synapse-learning-companion
+An intelligent application designed to transform passive video content into a dynamic and effective learning experience. **Synapse** leverages Large Language Models to help you master any subject by creating summaries, quizzes, and a personalized review schedule.  
+
+---
+
+## 🌟 Key Features  
+
+- 🧠 **AI-Powered Analysis**: Processes YouTube video transcripts to generate summaries, key concepts, and actionable notes.  
+- 💡 **Intelligent Quiz Generation**: Builds custom multiple-choice quizzes to reinforce understanding.  
+- 🚀 **Spaced Repetition System (SRS)**: Optimizes review intervals for long-term memory retention.  
+- 🤖 **AI Tutor**: Chat with an AI that can answer questions and provide deeper insights.  
+- 🗂️ **Content Management**: Organize learning materials by course, track videos, and monitor progress.  
+
+---
+
+## 🛠️ Technology Stack  
+
+### Current (Google Colab Prototype)  
+- **Backend**: Python  
+- **AI Integration**: Google Gemini API  
+- **Database**: SQLite  
+- **Frontend/UI**: ipywidgets  
+- **Environment**: Google Colab / Jupyter  
+
+### Planned (Web Application)  
+- **Backend**: Python (Flask or FastAPI)  
+- **AI Integration**: Google Gemini API  
+- **Database**: PostgreSQL with SQLAlchemy  
+- **Frontend**: React or Vue.js  
+- **Async Tasks**: Celery + Redis  
+- **Deployment**: Docker, Heroku/AWS/Render  
+
+---
+
+## 🚀 Getting Started  
+
+### Prerequisites  
+- Python 3.9+  
+- Git  
+- Google Gemini API Key  
+
+### Installation  
+
+Clone the repository:  
+```sh
 Create and activate a virtual environment:
-On macOS/Linux:
-code
-Sh
+
+# macOS/Linux
 python3 -m venv venv
 source venv/bin/activate
-On Windows:
-code
-Sh
+
+# Windows
 python -m venv venv
 .\venv\Scripts\activate
-Install the required dependencies:
-code
-Sh
+
+
+Install dependencies:
+
 pip install -r requirements.txt
-Set up your environment variables:
-Create a file named .env in the root directory of the project.
-Add your Gemini API key to this file. Do not commit this file to Git.
-.env file:
-code
-Code
+
+
+Set up environment variables:
+Create a .env file in the root directory and add your Gemini API key:
+
 GEMINI_API_KEY="YOUR_API_KEY_HERE"
+
 Running the Application
-For the Google Colab Version:
+
+Google Colab Version
+
 Upload the .ipynb file to Google Colab.
-Ensure you have your Gemini API key ready to be added when prompted or stored as a Colab Secret.
-Run all the cells in the notebook. The interactive application will be displayed in the output cells.
-For the Future Web Application:
-(Instructions for running the Flask/FastAPI server will be added here.)
-code
-Sh
-# Example for Flask
+
+Add your Gemini API key (via prompt or Colab Secret).
+
+Run all cells to launch the interactive app.
+
+Future Web Application
+
+# Example (Flask)
 flask run
-🗺️ Future Roadmap
-This project is actively evolving. The next major step is to migrate from the Colab prototype to a full-featured, scalable web application.
+
+🗺️ Roadmap
 
 Phase 1: Backend & Database Migration
 
-Set up a Flask/FastAPI server with API endpoints.
+Flask/FastAPI API endpoints
 
-Migrate the database schema to PostgreSQL using SQLAlchemy.
+PostgreSQL with SQLAlchemy
 
-Implement robust user authentication.
+User authentication
 
-Phase 2: AI Integration & Background Processing
+Phase 2: AI Integration & Async Processing
 
-Set up Celery and Redis to handle API calls asynchronously.
+Celery + Redis for background tasks
 
-Refine AI prompts for higher accuracy and better performance.
+Improved AI prompts for accuracy
 
 Phase 3: Frontend Development
 
-Design and build a modern user interface using React or Vue.js.
+Modern UI with React/Vue
 
-Create a responsive dashboard for managing courses and tracking stats.
+Responsive dashboard for learning progress
 
 Phase 4: Deployment & Scaling
 
-Dockerize the application for consistent environments.
+Dockerized app
 
-Deploy the application to a cloud provider.
+Deploy on cloud (AWS/Heroku/Render)
+
 🤝 Contributing
-Contributions are what make the open-source community such an amazing place to learn, inspire, and create. Any contributions you make are greatly appreciated.
-If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
-Fork the Project
-Create your Feature Branch (git checkout -b feature/AmazingFeature)
-Commit your Changes (git commit -m 'Add some AmazingFeature')
-Push to the Branch (git push origin feature/AmazingFeature)
+
+Contributions are welcome!
+
+Fork the repo
+
+Create a feature branch (git checkout -b feature/AmazingFeature)
+
+Commit changes (git commit -m 'Add AmazingFeature')
+
+Push to branch (git push origin feature/AmazingFeature)
+
 Open a Pull Request
+
 📜 License
-Distributed under the MIT License. See LICENSE for more information.
+
+Distributed under the MIT License. See LICENSE
+ for details.
+
+
+Do you want me to also **add visuals** (like a screenshot/demo section with placeholder images/gifs) so it looks even more professional for GitHub?
