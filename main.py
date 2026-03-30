@@ -1,0 +1,2000 @@
+# === FIXED DATABASE MANAGER WITH PERSISTENCE ===
+
+import os
+import sqlite3
+import json
+import re
+from datetime import datetime, timedelta
+import ipywidgets as widgets
+from IPython.display import display, clear_output
+import random
+from google.colab import drive
+import shutil
+
+client = genai.Client(api_key="Paste Your API Key here")
+MODEL_ID = "gemini-2.5-flash"
+
+
+
+# Mount Google Drive for persistent storage
+def setup_persistent_storage():
+    """Setup Google Drive mounting for persistent database storage"""
+    try:
+        drive.mount('/content/drive')
+        print("✅ Google Drive mounted successfully")
+
+        # Create app directory in Drive if it doesn't exist
+        app_dir = '/content/drive/MyDrive/LearningApp'
+        if not os.path.exists(app_dir):
+            os.makedirs(app_dir)
+            print(f"✅ Created app directory: {app_dir}")
+
+        return app_dir
+    except Exception as e:
+        print(f"❌ Failed to mount Google Drive: {e}")
+        print("⚠️ Using local storage (data will be lost when session ends)")
+        return '/content'
+
+
+# Updated Database Manager with better persistence
+class DatabaseManager:
+    def __init__(self, db_file=None, use_drive=True):
+        if use_drive:
+            self.app_dir = setup_persistent_storage()
+            self.db_path = os.path.join(self.app_dir, "learning_colab.db")
+        else:
+            self.app_dir = '/content'
+            self.db_path = os.path.join(self.app_dir, db_file or "learning_colab.db")
+
+        print(f"📁 Database location: {self.db_path}")
+
+        # Initialize connection with better settings
+        self.conn = self._get_connection()
+        self.setup_database()
+
+    def _get_connection(self):
+        """Get database connection with optimized settings"""
+        conn = sqlite3.connect(
+            self.db_path,
+            timeout=30,  # 30 second timeout
+            check_same_thread=False  # Allow use from multiple threads
+        )
+        # Enable WAL mode for better concurrent access
+        conn.execute('PRAGMA journal_mode=WAL')
+        # Enable foreign keys
+        conn.execute('PRAGMA foreign_keys=ON')
+        # Set synchronous to NORMAL for better performance while maintaining safety
+        conn.execute('PRAGMA synchronous=NORMAL')
+        return conn
+
+    def setup_database(self):
+        """Setup database with proper error handling and backup"""
+        try:
+            cursor = self.conn.cursor()
+
+            # Create tables
+            cursor.execute('CREATE TABLE IF NOT EXISTS courses (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE)')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS videos (
+                    id INTEGER PRIMARY KEY,
+                    course_id INTEGER,
+                    title TEXT,
+                    video_id TEXT UNIQUE,
+                    summary TEXT,
+                    key_concepts TEXT,
+                    bullet_points TEXT,
+                    user_notes TEXT,
+                    transcript TEXT,
+                    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (course_id) REFERENCES courses (id)
+                )''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS quiz_questions (
+                    id INTEGER PRIMARY KEY,
+                    video_id INTEGER,
+                    question TEXT,
+                    options TEXT,
+                    answer TEXT,
+                    srs_level INTEGER DEFAULT 0,
+                    next_review_date DATE,
+                    difficulty TEXT DEFAULT "medium",
+                    times_answered INTEGER DEFAULT 0,
+                    times_correct INTEGER DEFAULT 0,
+                    created_date DATE DEFAULT CURRENT_DATE,
+                    FOREIGN KEY (video_id) REFERENCES videos (id)
+                )''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS quiz_sessions (
+                    id INTEGER PRIMARY KEY,
+                    session_date DATE DEFAULT CURRENT_DATE,
+                    questions_answered INTEGER DEFAULT 0,
+                    questions_correct INTEGER DEFAULT 0,
+                    session_type TEXT DEFAULT 'review',
+                    created_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )''')
+
+            self._migrate_database()
+            self.conn.commit()
+
+            # Create backup
+            self._create_backup()
+
+            print(f"✅ Database setup complete at {self.db_path}")
+
+        except Exception as e:
+            print(f"❌ Database setup error: {e}")
+            raise
+
+    def _migrate_database(self):
+        """Migrate database schema safely"""
+        cursor = self.conn.cursor()
+
+        try:
+            # Check existing columns in videos table
+            cursor.execute("PRAGMA table_info(videos)")
+            video_columns = [column[1] for column in cursor.fetchall()]
+
+            # Add missing columns to videos table
+            video_migrations = [
+                ('transcript', 'TEXT'),
+                ('created_date', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+            ]
+
+            for column_name, column_definition in video_migrations:
+                if column_name not in video_columns:
+                    try:
+                        cursor.execute(f'ALTER TABLE videos ADD COLUMN {column_name} {column_definition}')
+                        print(f"✅ Added column '{column_name}' to videos table")
+                    except Exception as e:
+                        print(f"⚠️ Could not add column '{column_name}': {e}")
+
+            # Check existing columns in quiz_questions table
+            cursor.execute("PRAGMA table_info(quiz_questions)")
+            quiz_columns = [column[1] for column in cursor.fetchall()]
+
+            # Add missing columns to quiz_questions table
+            quiz_migrations = [
+                ('difficulty', 'TEXT DEFAULT "medium"'),
+                ('times_answered', 'INTEGER DEFAULT 0'),
+                ('times_correct', 'INTEGER DEFAULT 0'),
+                ('created_date', 'DATE DEFAULT CURRENT_DATE')
+            ]
+
+            for column_name, column_definition in quiz_migrations:
+                if column_name not in quiz_columns:
+                    try:
+                        cursor.execute(f'ALTER TABLE quiz_questions ADD COLUMN {column_name} {column_definition}')
+                        print(f"✅ Added column '{column_name}' to quiz_questions table")
+                    except Exception as e:
+                        print(f"⚠️ Could not add column '{column_name}': {e}")
+
+        except Exception as e:
+            print(f"⚠️ Migration error: {e}")
+
+    def _create_backup(self):
+        """Create a backup of the database"""
+        try:
+            backup_path = self.db_path.replace('.db', f'_backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}.db')
+            shutil.copy2(self.db_path, backup_path)
+            print(f"✅ Backup created: {backup_path}")
+
+            # Keep only the 5 most recent backups
+            backup_dir = os.path.dirname(backup_path)
+            backup_files = [f for f in os.listdir(backup_dir) if
+                            f.startswith('learning_colab_backup_') and f.endswith('.db')]
+            backup_files.sort(reverse=True)
+
+            for old_backup in backup_files[5:]:  # Keep only 5 most recent
+                try:
+                    os.remove(os.path.join(backup_dir, old_backup))
+                    print(f"🗑️ Removed old backup: {old_backup}")
+                except:
+                    pass
+
+        except Exception as e:
+            print(f"⚠️ Backup creation failed: {e}")
+
+    def execute_query(self, query, params=(), fetch=None):
+        """Execute query with better error handling and auto-reconnection"""
+        max_retries = 3
+
+        for attempt in range(max_retries):
+            try:
+                cursor = self.conn.cursor()
+                cursor.execute(query, params)
+
+                if fetch == "one":
+                    result = cursor.fetchone()
+                elif fetch == "all":
+                    result = cursor.fetchall()
+                else:
+                    result = None
+
+                self.conn.commit()
+
+                # Force sync to disk after important operations
+                if any(keyword in query.upper() for keyword in ['INSERT', 'UPDATE', 'DELETE']):
+                    self.conn.execute('PRAGMA wal_checkpoint(FULL)')
+
+                return result
+
+            except sqlite3.OperationalError as e:
+                if "database is locked" in str(e) and attempt < max_retries - 1:
+                    print(f"⚠️ Database locked, retrying... (attempt {attempt + 1})")
+                    time.sleep(1)  # Wait 1 second before retry
+                    continue
+                else:
+                    print(f"❌ Database error: {e}")
+                    # Try to reconnect
+                    try:
+                        self.conn.close()
+                        self.conn = self._get_connection()
+                    except:
+                        pass
+                    raise
+            except Exception as e:
+                print(f"❌ Query execution error: {e}")
+                raise
+
+        return None
+
+    def close(self):
+        """Properly close the database connection"""
+        try:
+            if self.conn:
+                # Final checkpoint to ensure all data is written
+                self.conn.execute('PRAGMA wal_checkpoint(FULL)')
+                self.conn.close()
+                print("✅ Database connection closed properly")
+        except Exception as e:
+            print(f"⚠️ Error closing database: {e}")
+
+    def get_database_info(self):
+        """Get information about the database"""
+        try:
+            stats = {
+                'path': self.db_path,
+                'exists': os.path.exists(self.db_path),
+                'size': os.path.getsize(self.db_path) if os.path.exists(self.db_path) else 0,
+                'courses': self.execute_query("SELECT COUNT(*) FROM courses", fetch="one")[0],
+                'videos': self.execute_query("SELECT COUNT(*) FROM videos", fetch="one")[0],
+                'questions': self.execute_query("SELECT COUNT(*) FROM quiz_questions", fetch="one")[0]
+            }
+            return stats
+        except Exception as e:
+            print(f"❌ Error getting database info: {e}")
+            return None
+
+    # === REST OF THE METHODS REMAIN THE SAME ===
+    # (Include all the other methods from your original DatabaseManager class)
+
+    def get_or_create_course(self, name):
+        """Get or create a course, handling exact name matching"""
+        # Clean the input name: strip whitespace
+        clean_name = name.strip()
+
+        # Check if course exists with exact name match
+        course = self.execute_query(
+            "SELECT id FROM courses WHERE name = ?",
+            (clean_name,),
+            fetch="one"
+        )
+
+        if course:
+            # Return the existing course ID
+            return course[0]
+
+        # Create new course with the cleaned name
+        self.execute_query("INSERT INTO courses (name) VALUES (?)", (clean_name,))
+        return self.execute_query("SELECT last_insert_rowid()", fetch="one")[0]
+
+    def add_video_data(self, data):
+        existing = self.execute_query("SELECT id FROM videos WHERE video_id = ?", (data['video_id'],), fetch="one")
+        if existing:
+            self.execute_query("""UPDATE videos SET
+                course_id = ?, title = ?, summary = ?, key_concepts = ?, bullet_points = ?, user_notes = ?, transcript = ?
+                WHERE video_id = ?""",
+                               (data['course_id'], data['title'], data['summary'],
+                                json.dumps(data['key_concepts']), json.dumps(data['bullet_points']), '',
+                                data['transcript'], data['video_id']))
+            return existing[0]
+        else:
+            self.execute_query(
+                "INSERT INTO videos (course_id, title, video_id, summary, key_concepts, bullet_points, user_notes, transcript) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (data['course_id'], data['title'], data['video_id'], data['summary'], json.dumps(data['key_concepts']),
+                 json.dumps(data['bullet_points']), '', data['transcript']))
+            return self.execute_query("SELECT last_insert_rowid()", fetch="one")[0]
+
+    def get_video_info_for_quiz(self, video_db_id):
+        return self.execute_query("SELECT title, transcript FROM videos WHERE id = ?", (video_db_id,), fetch="one")
+
+    def add_quiz_questions(self, video_db_id, questions):
+        self.execute_query("DELETE FROM quiz_questions WHERE video_id = ?", (video_db_id,))
+        today = datetime.now().date()
+        for q in questions:
+            difficulty = q.get('difficulty', 'medium')
+            self.execute_query(
+                "INSERT INTO quiz_questions (video_id, question, options, answer, next_review_date, difficulty) VALUES (?, ?, ?, ?, ?, ?)",
+                (video_db_id, q['question'], json.dumps(q['options']), q['answer'], today, difficulty))
+
+    def get_due_review_count(self):
+        today = datetime.now().date()
+        return \
+        self.execute_query("SELECT COUNT(*) FROM quiz_questions WHERE next_review_date <= ?", (today,), fetch="one")[0]
+
+    def get_due_questions(self, limit=None):
+        today = datetime.now().date()
+        query = "SELECT id, question, options, answer FROM quiz_questions WHERE next_review_date <= ? ORDER BY RANDOM()"
+        params = (today,)
+        if limit:
+            query += " LIMIT ?"
+            params = (today, limit)
+        return self.execute_query(query, params, fetch="all")
+
+    def get_questions_by_video(self, video_id, limit=None):
+        query = "SELECT id, question, options, answer FROM quiz_questions WHERE video_id = ? ORDER BY RANDOM()"
+        params = (video_id,)
+        if limit:
+            query += " LIMIT ?"
+            params = (video_id, limit)
+        return self.execute_query(query, params, fetch="all")
+
+    def get_questions_by_course(self, course_id, limit=None):
+        query = """SELECT qq.id, qq.question, qq.options, qq.answer FROM quiz_questions qq JOIN videos v ON qq.video_id = v.id WHERE v.course_id = ? ORDER BY RANDOM()"""
+        params = (course_id,)
+        if limit:
+            query += " LIMIT ?"
+            params = (course_id, limit)
+        return self.execute_query(query, params, fetch="all")
+
+    def get_all_questions(self, limit=None):
+        query = "SELECT id, question, options, answer FROM quiz_questions ORDER BY RANDOM()"
+        params = ()
+        if limit:
+            query += " LIMIT ?"
+            params = (limit,)
+        return self.execute_query(query, params, fetch="all")
+
+    def update_srs_level(self, question_id, performance):
+        current_data = self.execute_query(
+            "SELECT srs_level, times_answered, times_correct FROM quiz_questions WHERE id = ?", (question_id,),
+            fetch="one")
+        if not current_data: return
+        level, times_answered, times_correct = current_data
+        times_answered += 1
+        if performance in ['good', 'easy']: times_correct += 1
+        if performance == 'hard':
+            level = 0
+        elif performance == 'good':
+            level = min(level + 1, len([1, 3, 7, 14, 30, 90, 180]) - 1)
+        elif performance == 'easy':
+            level = min(level + 2, len([1, 3, 7, 14, 30, 90, 180]) - 1)
+        interval_days = [1, 3, 7, 14, 30, 90, 180][level]
+        next_review = datetime.now().date() + timedelta(days=interval_days)
+        self.execute_query(
+            "UPDATE quiz_questions SET srs_level = ?, next_review_date = ?, times_answered = ?, times_correct = ? WHERE id = ?",
+            (level, next_review, times_answered, times_correct, question_id))
+
+    def get_quiz_stats(self):
+        total_questions = self.execute_query("SELECT COUNT(*) FROM quiz_questions", fetch="one")[0]
+        due_questions = self.get_due_review_count()
+        accuracy_data = self.execute_query(
+            "SELECT AVG(CASE WHEN times_answered > 0 THEN CAST(times_correct AS FLOAT) / times_answered ELSE 0 END) FROM quiz_questions WHERE times_answered > 0",
+            fetch="one")
+        accuracy = accuracy_data[0] * 100 if accuracy_data[0] else 0
+        return {'total_questions': total_questions, 'due_questions': due_questions, 'accuracy': round(accuracy, 1)}
+
+    def create_quiz_session(self):
+        self.execute_query(
+            "INSERT INTO quiz_sessions (session_date, questions_answered, questions_correct) VALUES (?, ?, ?)",
+            (datetime.now().date(), 0, 0))
+        return self.execute_query("SELECT last_insert_rowid()", fetch="one")[0]
+
+    def update_quiz_session(self, session_id, correct):
+        self.execute_query(
+            "UPDATE quiz_sessions SET questions_answered = questions_answered + 1, questions_correct = questions_correct + ? WHERE id = ?",
+            (1 if correct else 0, session_id))
+
+    def get_all_courses(self):
+        return self.execute_query("SELECT id, name FROM courses ORDER BY name", fetch="all")
+
+    def get_videos_for_course(self, course_id):
+        return self.execute_query("SELECT id, title FROM videos WHERE course_id = ? ORDER BY title", (course_id,),
+                                  fetch="all")
+
+    def get_video_details(self, video_id):
+        return self.execute_query(
+            "SELECT title, summary, key_concepts, bullet_points, user_notes FROM videos WHERE id = ?", (video_id,),
+            fetch="one")
+
+    def update_user_notes(self, video_id, notes):
+        self.execute_query("UPDATE videos SET user_notes = ? WHERE id = ?", (notes, video_id))
+
+    def delete_video(self, video_id):
+        """Delete a video and all its associated data"""
+        try:
+            # Delete quiz questions first (due to foreign key constraints)
+            self.execute_query("DELETE FROM quiz_questions WHERE video_id = ?", (video_id,))
+
+            # Delete the video
+            result = self.execute_query("DELETE FROM videos WHERE id = ?", (video_id,))
+
+            return True, "Video and all associated data deleted successfully"
+        except Exception as e:
+            return False, f"Error deleting video: {str(e)}"
+
+    def delete_course(self, course_id):
+        """Delete a course and all its videos and associated data"""
+        try:
+            # Get all videos in this course
+            videos = self.execute_query("SELECT id FROM videos WHERE course_id = ?", (course_id,), fetch="all")
+
+            # Delete quiz questions for all videos in this course
+            for video in videos:
+                self.execute_query("DELETE FROM quiz_questions WHERE video_id = ?", (video[0],))
+
+            # Delete all videos in this course
+            self.execute_query("DELETE FROM videos WHERE course_id = ?", (course_id,))
+
+            # Delete the course
+            self.execute_query("DELETE FROM courses WHERE id = ?", (course_id,))
+
+            return True, f"Course and all associated data deleted successfully"
+        except Exception as e:
+            return False, f"Error deleting course: {str(e)}"
+
+    def get_course_stats(self, course_id):
+        """Get statistics for a course"""
+        try:
+            video_count = \
+            self.execute_query("SELECT COUNT(*) FROM videos WHERE course_id = ?", (course_id,), fetch="one")[0]
+            question_count = self.execute_query(
+                "SELECT COUNT(*) FROM quiz_questions qq JOIN videos v ON qq.video_id = v.id WHERE v.course_id = ?",
+                (course_id,), fetch="one")[0]
+            return video_count, question_count
+        except Exception as e:
+            return 0, 0
+
+    def get_video_stats(self, video_id):
+        """Get statistics for a video"""
+        try:
+            question_count = \
+            self.execute_query("SELECT COUNT(*) FROM quiz_questions WHERE video_id = ?", (video_id,), fetch="one")[0]
+            return question_count
+        except Exception as e:
+            return 0
+
+# --- MODULE 2: API PROCESSOR ---
+# Replace your existing ApiProcessor class with this improved version
+
+class ApiProcessor:
+    def get_youtube_transcript(self, url):
+        try:
+            video_id_match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11}).*", url)
+            if not video_id_match: return None, "Invalid YouTube URL format"
+            video_id = video_id_match.group(1)
+            try:
+                if hasattr(YouTubeTranscriptApi, 'get_transcript'):
+                    transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
+                elif hasattr(YouTubeTranscriptApi, 'list_transcripts'):
+                    transcripts = YouTubeTranscriptApi.list_transcripts(video_id)
+                    transcript = transcripts.find_transcript(['en', 'en-US', 'en-GB'])
+                    transcript_list = transcript.fetch()
+                else:
+                    api_instance = YouTubeTranscriptApi()
+                    if hasattr(api_instance, 'get_transcript'):
+                        transcript_list = api_instance.get_transcript(video_id)
+                    else:
+                        return None, "YouTube Transcript API method not found"
+                transcript_text = " ".join([item['text'] for item in transcript_list])
+                return transcript_text, video_id
+            except Exception as transcript_error:
+                return None, f"Automatic transcript failed for video {video_id}. Error: {str(transcript_error)}"
+        except Exception as e:
+            return None, f"General Error: {str(e)}"
+
+    def get_manual_transcript(self, text, video_id):
+        return text, video_id
+
+    def _call_gemini_with_retry(self, prompt, max_retries=3):
+        """Call Gemini API with retry logic and better error handling"""
+        for attempt in range(max_retries):
+            try:
+                # Try primary API format first
+                response = client.models.generate_content(
+                    model=MODEL_ID,
+                    contents=[{"parts": [{"text": prompt}]}]
+                )
+
+                if not response or not hasattr(response, 'text'):
+                    # Try alternative format
+                    response = client.models.generate_content(
+                        model=MODEL_ID,
+                        contents=prompt
+                    )
+
+                if response and hasattr(response, 'text') and response.text:
+                    return response.text, None
+                else:
+                    if attempt < max_retries - 1:
+                        print(f"Attempt {attempt + 1} failed, retrying...")
+                        continue
+                    return None, "Gemini returned empty response"
+
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    print(f"Attempt {attempt + 1} failed: {str(e)}, retrying...")
+                    continue
+                return None, f"Gemini API Error after {max_retries} attempts: {str(e)}"
+
+        return None, f"Failed after {max_retries} attempts"
+
+    def _parse_json_response(self, response_text):
+        """Enhanced JSON parsing with multiple fallback strategies"""
+        if not response_text:
+            return None, "Empty response text"
+
+        # Clean the response
+        clean_response = response_text.replace("```json", "").replace("```", "").strip()
+
+        # Strategy 1: Direct JSON parsing
+        try:
+            return json.loads(clean_response), None
+        except json.JSONDecodeError:
+            pass
+
+        # Strategy 2: Find JSON block with regex
+        json_patterns = [
+            r'\{.*\}',  # Any content between braces
+            r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}',  # Nested braces
+        ]
+
+        for pattern in json_patterns:
+            json_match = re.search(pattern, clean_response, re.DOTALL)
+            if json_match:
+                try:
+                    return json.loads(json_match.group(0)), None
+                except json.JSONDecodeError:
+                    continue
+
+        # Strategy 3: Try to fix truncated JSON
+        if clean_response.count('{') > clean_response.count('}'):
+            # Add missing closing braces
+            missing_braces = clean_response.count('{') - clean_response.count('}')
+            fixed_response = clean_response + '}' * missing_braces
+            try:
+                return json.loads(fixed_response), None
+            except json.JSONDecodeError:
+                pass
+
+        # Strategy 4: Extract partial data if possible
+        try:
+            # Look for key fields and construct minimal JSON
+            summary_match = re.search(r'"summary":\s*"([^"]*(?:\\.[^"]*)*)"', clean_response)
+            if summary_match:
+                summary = summary_match.group(1)
+                # Create minimal valid response
+                minimal_response = {
+                    "summary": summary,
+                    "key_concepts": [],
+                    "bullet_points": []
+                }
+                return minimal_response, "Partial data extracted due to truncated response"
+        except Exception:
+            pass
+
+        return None, f"Failed to parse JSON. Response length: {len(clean_response)}. Preview: {clean_response[:200]}..."
+
+    def _call_gemini_and_parse_json(self, prompt):
+        """Main method combining API call and JSON parsing"""
+        # Truncate prompt if too long to prevent timeouts
+        max_prompt_length = 50000  # Reduced from 12000
+        if len(prompt) > max_prompt_length:
+            # Find a good truncation point (end of sentence)
+            truncation_point = prompt.rfind('.', 0, max_prompt_length)
+            if truncation_point == -1:
+                truncation_point = max_prompt_length
+            prompt = prompt[:truncation_point] + "\n\n[Content truncated for processing]"
+
+        response_text, api_error = self._call_gemini_with_retry(prompt)
+        if api_error:
+            return None, api_error
+
+        return self._parse_json_response(response_text)
+
+    def ask_video_question(self, question, transcript, title):
+        """Ask Gemini a question about specific video content"""
+        # Truncate transcript for question answering to prevent issues
+        max_transcript_length = 50000
+        truncated_transcript = transcript[:max_transcript_length]
+        if len(transcript) > max_transcript_length:
+            truncated_transcript += "... [transcript truncated]"
+
+        prompt = f"""
+        You are an expert AI tutor helping a student learn from the video "{title}". Your goal is to be as helpful as possible.
+
+        **Your Instructions:**
+
+        1.  **Prioritize the Transcript:** First, always try to answer the student's question using information directly from the video transcript provided below. If the answer is in the video, use it.
+
+        2.  **Go Beyond the Transcript (When Necessary):** If the question is related to the video's topic but the specific answer is not in the transcript, you MUST follow this two-part structure:
+            a. **Acknowledge:** Start by clearly stating that the video doesn't cover that specific detail. For example, use a phrase like, "That's a great question! The video doesn't cover that specific point, but generally..." or "While the video focuses on the main steps, it doesn't go into that. However, I can explain..."
+            b. **Provide a Helpful General Answer:** After acknowledging, use your broader knowledge to provide a clear and helpful explanation. Try to connect your answer back to the video's main themes if possible.
+
+        3.  **Handle Unrelated Questions:** If a question is completely off-topic, politely state that it's outside the scope of the video and guide the student back to the topic at hand.
+
+        **Video Title:** "{title}"
+        **Video Transcript (for context):** {truncated_transcript}
+
+        **Student's Question:** {question}
+
+        **Your Answer as an AI Tutor:**
+        """
+
+        try:
+            response_text, error = self._call_gemini_with_retry(prompt)
+            if error:
+                return None, error
+            return response_text, None
+        except Exception as e:
+            return None, f"Error: {str(e)}"
+
+    def generate_summary_and_concepts(self, transcript, title):
+        # Limit transcript length to prevent API issues
+        max_length = 10000  # Reduced from 12000
+        truncated_transcript = transcript[:max_length]
+        if len(transcript) > max_length:
+            truncated_transcript += "... [content continues]"
+
+        prompt = f"""
+        Analyze the video transcript for "{title}" and extract the most important educational content. Focus strictly on the main topic and core subject matter discussed in the video.
+
+        Return a single, valid JSON object with these keys:
+        - "summary": A detailed summary (3-4 paragraphs) that captures the main themes, arguments, and conclusions. Include specific examples mentioned in the video.
+        - "key_concepts": An array of exactly 10 objects, each with "concept" (the term/idea) and "definition" (a detailed explanation in 2-3 sentences).
+        - "bullet_points": An array of exactly 12 specific, actionable takeaways. Each should be a complete sentence focusing on practical insights or key learning points.
+
+        Guidelines:
+        - Stay focused on the video's main subject matter
+        - Avoid generic or superficial points
+        - Include specific details and context from the transcript
+        - Make definitions comprehensive but concise
+        - Ensure bullet points are substantial and educational
+
+        Important: Return ONLY valid JSON. Do not include any text before or after the JSON object.
+
+        Transcript: {truncated_transcript}
+        """
+        return self._call_gemini_and_parse_json(prompt)
+
+    def generate_quiz_questions(self, transcript, title, num_questions=5):
+        # Improved transcript handling for long videos
+        processed_transcript = self._process_long_transcript(transcript, target_length=25000)
+
+        prompt = f"""
+        You are an educational expert creating a quiz for the video "{title}".
+
+        CRITICAL INSTRUCTION: Generate questions ONLY about the SUBSTANTIVE CONTENT and KEY CONCEPTS explained in this video.
+
+        FORBIDDEN TOPICS (DO NOT create questions about):
+        - Prerequisites or background knowledge needed to understand the topic
+        - Comparisons to other subjects, courses, or educational content
+        - General learning advice or study strategies
+        - How difficult or easy the topic is to learn
+        - What viewers should know before watching
+        - Career applications or job prospects related to the topic
+        - Personal anecdotes or experiences from the presenter
+        - Channel information, video series, or content recommendations
+        - Technical details about video production or presentation style
+
+        REQUIRED FOCUS: Create questions about the ACTUAL SUBJECT MATTER:
+        - Core concepts, principles, and theories explained
+        - Scientific facts, phenomena, or processes described  
+        - Technical mechanisms or how things work
+        - Historical events, dates, or developments mentioned
+        - Key terminology and definitions provided
+        - Cause-and-effect relationships explained
+        - Examples, case studies, or demonstrations shown
+        - Problem-solving methods or analytical approaches
+        - Data, statistics, or research findings presented
+        - Step-by-step processes or procedures described
+
+        For "{title}", focus on testing understanding of the MAIN EDUCATIONAL CONTENT - whether it's about black holes, technology, history, science, mathematics, or any other subject.
+
+        Return a single, valid JSON object with ONLY ONE key: "quiz_questions".
+        The value should be an array of {num_questions} multiple-choice question objects.
+        Each question object must have these exact keys: "question", "options" (array of 4 choices), "answer", and "difficulty".
+
+        QUALITY REQUIREMENTS:
+        - Questions must test comprehension of the substantive content from the video
+        - Focus on educational concepts that enhance understanding of the topic
+        - Wrong answers should be plausible but factually incorrect
+        - Test understanding of key ideas, not minor details
+        - Options should be plain text without prefixes (no "A.", "B)", etc.)
+        - Answer should exactly match one of the options
+
+        Difficulty levels: easy, medium, hard
+        - EASY: Basic facts and fundamental concepts directly stated
+        - MEDIUM: Understanding relationships and applying knowledge from the content
+        - HARD: Analysis and synthesis of complex ideas presented
+
+        Important: Return ONLY valid JSON. Do not include any text before or after the JSON object.
+
+        Video Transcript: {processed_transcript}
+        """
+        return self._call_gemini_and_parse_json(prompt)
+
+    def generate_quiz_questions_with_difficulty(self, transcript, title, num_questions=5,
+                                                allowed_difficulties=['easy', 'medium', 'hard']):
+        # Improved transcript handling for long videos
+        processed_transcript = self._process_long_transcript(transcript, target_length=25000)
+
+        difficulty_str = ', '.join(allowed_difficulties)
+
+        prompt = f"""
+        You are an educational expert creating a focused quiz for "{title}".
+
+        ABSOLUTE REQUIREMENT: Generate questions EXCLUSIVELY about the CORE EDUCATIONAL CONTENT of this video.
+
+        BANNED QUESTION TYPES (Never create questions about):
+        - What background knowledge is needed to understand this topic
+        - Comparisons between different subjects or educational materials
+        - General advice about learning or studying this subject
+        - How challenging or accessible the topic is for learners
+        - What prerequisites viewers should have
+        - Professional or career implications of the subject
+        - Personal stories or presenter experiences
+        - Video production details or presentation methods
+        - Recommendations for further learning or related content
+
+        MANDATORY FOCUS: Questions must be about the SUBSTANTIVE TOPIC CONTENT:
+        - Scientific principles, laws, or phenomena explained
+        - Historical facts, events, or chronological developments
+        - Technical processes, mechanisms, or operations described
+        - Mathematical concepts, formulas, or calculations shown
+        - Key definitions, terminology, or vocabulary introduced
+        - Cause-and-effect relationships in the subject matter
+        - Research findings, data, or experimental results presented
+        - Theoretical frameworks or conceptual models explained
+        - Real-world examples or case studies analyzed
+        - Problem-solving approaches specific to the topic
+
+        Examples for different video types:
+        - Black holes video: "What happens to time near the event horizon of a black hole?"
+        - Technology video: "How does the processor architecture affect computing performance?"
+        - History video: "What were the primary causes of the Industrial Revolution?"
+        - Biology video: "What is the function of mitochondria in cellular respiration?"
+
+        AVOID examples like: "How much physics knowledge do you need to understand black holes?"
+
+        Return a single, valid JSON object with key "quiz_questions" containing {num_questions} questions.
+        Each question must have: "question", "options" (4 choices), "answer", "difficulty".
+
+        ONLY use these difficulty levels: {difficulty_str}
+
+        Difficulty guidelines:
+        - EASY: Direct recall of key facts and basic concepts clearly explained
+        - MEDIUM: Understanding relationships and applying knowledge from the content
+        - HARD: Analysis of complex ideas and synthesis of multiple concepts
+
+        Quality standards:
+        - Questions must be answerable by someone who understood the video
+        - Focus on educational value of the actual subject matter
+        - Distractors should be contextually plausible but factually wrong
+        - Test comprehension of important concepts, not trivial details
+        - No prefix labels on options (just the choice text)
+
+        Distribute questions across the allowed difficulty levels.
+
+        Return ONLY valid JSON without any additional text.
+
+        Video Content: {processed_transcript}
+        """
+        return self._call_gemini_and_parse_json(prompt)
+
+    def _process_long_transcript(self, transcript, target_length=80000):
+        """
+        Intelligently process long transcripts to preserve the most important content
+        while staying within reasonable token limits for the API.
+        """
+        if len(transcript) <= target_length:
+            return transcript
+
+        print(f"📊 Original transcript: {len(transcript)} characters, processing for optimal API usage...")
+
+        # Strategy 1: Extract key sections (works well for educational content)
+        key_sections = self._extract_key_sections(transcript, target_length)
+        if key_sections:
+            print(f"✅ Extracted key sections: {len(key_sections)} characters")
+            return key_sections
+
+        # Strategy 2: Smart truncation - take beginning, middle, and end
+        return self._smart_truncate(transcript, target_length)
+
+    def _extract_key_sections(self, transcript, target_length):
+        """
+        Extract the most content-rich sections from the transcript
+        """
+        try:
+            # Split transcript into sentences
+            sentences = transcript.replace('\n', ' ').split('. ')
+            if len(sentences) < 10:  # Too short to process
+                return None
+
+            # Score sentences based on educational keywords
+            educational_keywords = [
+                # Science keywords
+                'definition', 'explain', 'theory', 'principle', 'concept', 'example', 'because',
+                'therefore', 'however', 'mechanism', 'process', 'function', 'structure',
+                'equation', 'formula', 'calculation', 'data', 'result', 'experiment',
+
+                # Technical keywords
+                'algorithm', 'method', 'technique', 'system', 'design', 'implement',
+                'architecture', 'framework', 'protocol', 'interface',
+
+                # General educational keywords
+                'important', 'key', 'main', 'primary', 'fundamental', 'essential',
+                'remember', 'note that', 'in other words', 'specifically', 'particularly'
+            ]
+
+            scored_sentences = []
+            for i, sentence in enumerate(sentences):
+                sentence = sentence.strip()
+                if len(sentence) < 20:  # Skip very short sentences
+                    continue
+
+                score = 0
+                sentence_lower = sentence.lower()
+
+                # Score based on educational keywords
+                for keyword in educational_keywords:
+                    if keyword in sentence_lower:
+                        score += 1
+
+                # Boost score for sentences with definitions or explanations
+                if any(phrase in sentence_lower for phrase in ['is defined as', 'refers to', 'means that', 'is the']):
+                    score += 3
+
+                # Boost score for sentences with examples
+                if any(phrase in sentence_lower for phrase in ['for example', 'such as', 'like', 'including']):
+                    score += 2
+
+                scored_sentences.append((score, sentence, i))
+
+            # Sort by score (highest first)
+            scored_sentences.sort(key=lambda x: x[0], reverse=True)
+
+            # Select top sentences that fit within target length
+            selected_sentences = []
+            current_length = 0
+
+            for score, sentence, original_index in scored_sentences:
+                sentence_with_period = sentence + '. '
+                if current_length + len(sentence_with_period) <= target_length:
+                    selected_sentences.append((sentence_with_period, original_index))
+                    current_length += len(sentence_with_period)
+
+                if current_length >= target_length * 0.9:  # Stop when we're close to target
+                    break
+
+            if not selected_sentences:
+                return None
+
+            # Sort selected sentences by original order to maintain context
+            selected_sentences.sort(key=lambda x: x[1])
+
+            # Combine selected sentences
+            result = ''.join([sentence for sentence, _ in selected_sentences])
+
+            # Add note about processing
+            result = f"[Content extracted from full transcript - key educational sections]\n\n{result}"
+
+            return result
+
+        except Exception as e:
+            print(f"⚠️ Key section extraction failed: {e}")
+            return None
+
+    def _smart_truncate(self, transcript, target_length):
+        """
+        Fallback method: take content from beginning, middle, and end
+        """
+        print("📝 Using smart truncation method...")
+
+        # Divide target length into three parts
+        part_length = target_length // 3
+
+        # Beginning (first part)
+        beginning = transcript[:part_length]
+
+        # Middle (from center)
+        middle_start = len(transcript) // 2 - part_length // 2
+        middle_end = middle_start + part_length
+        middle = transcript[middle_start:middle_end]
+
+        # End (last part)
+        end = transcript[-part_length:]
+
+        result = f"""[Content sampled from full transcript - beginning, middle, and end sections]
+
+    BEGINNING SECTION:
+    {beginning}
+
+    MIDDLE SECTION:
+    {middle}
+
+    END SECTION:
+    {end}"""
+
+        print(f"✅ Smart truncation complete: {len(result)} characters")
+        return result
+
+    def generate_summary_and_concepts(self, transcript, title):
+        # Use the same improved processing for summaries
+        processed_transcript = self._process_long_transcript(transcript,
+                                                             target_length=30000)  # Slightly higher limit for summaries
+
+        prompt = f"""
+        Analyze the video transcript for "{title}" and extract the most important educational content. Focus strictly on the main topic and core subject matter discussed in the video.
+
+        Return a single, valid JSON object with these keys:
+        - "summary": A detailed summary (3-4 paragraphs) that captures the main themes, arguments, and conclusions. Include specific examples mentioned in the video.
+        - "key_concepts": An array of exactly 10 objects, each with "concept" (the term/idea) and "definition" (a detailed explanation in 2-3 sentences).
+        - "bullet_points": An array of exactly 12 specific, actionable takeaways. Each should be a complete sentence focusing on practical insights or key learning points.
+
+        Guidelines:
+        - Stay focused on the video's main subject matter
+        - Avoid generic or superficial points
+        - Include specific details and context from the transcript
+        - Make definitions comprehensive but concise
+        - Ensure bullet points are substantial and educational
+
+        Important: Return ONLY valid JSON. Do not include any text before or after the JSON object.
+
+        Transcript: {processed_transcript}
+        """
+        return self._call_gemini_and_parse_json(prompt)
+
+
+# --- MODULE 3: THE IPYWIDGETS GUI APPLICATION ---
+# Replace your existing ColabLearningApp class with this one.
+
+class ColabLearningApp:
+    def __init__(self, db, api):
+        self.db = db
+        self.api = api
+        self.main_output = widgets.Output()
+
+        # Enhanced header with better styling
+        self.header = widgets.HTML("""
+            <div style='
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 25px;
+                border-radius: 15px;
+                text-align: center;
+                box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+                margin-bottom: 20px;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            '>
+                <h1 style='margin: 0; font-size: 2.2em; font-weight: 300; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);'>
+                    🎓 Personal Learning Companion
+                </h1>
+                <p style='margin: 10px 0 0 0; font-size: 1.1em; opacity: 0.9;'>
+                    Master any subject with AI-powered learning and spaced repetition
+                </p>
+            </div>
+        """)
+
+        # Enhanced navigation buttons with modern styling
+        button_style = {
+            'width': '180px',
+            'height': '60px',
+            'margin': '5px',
+            'border_radius': '12px',
+            'font_weight': 'bold',
+            'font_size': '14px'
+        }
+
+        self.add_button = widgets.Button(
+            description="Add New Video",
+            icon="plus",
+            button_style='info',
+            layout=widgets.Layout(**button_style),
+            tooltip="Process YouTube videos with AI analysis"
+        )
+
+        self.browse_button = widgets.Button(
+            description="Browse Content",
+            icon="book-open",
+            button_style='primary',
+            layout=widgets.Layout(**button_style),
+            tooltip="Explore your saved videos and summaries"
+        )
+
+        self.review_button = widgets.Button(
+            description="Daily Review (0)",
+            icon="clock",
+            button_style='warning',
+            layout=widgets.Layout(**button_style),
+            tooltip="Review items using spaced repetition"
+        )
+
+        self.quiz_button = widgets.Button(
+            description="Practice Quiz",
+            icon="question-circle",
+            button_style='success',
+            layout=widgets.Layout(**button_style),
+            tooltip="Test your knowledge with AI-generated quizzes"
+        )
+
+        self.stats_button = widgets.Button(
+            description="Statistics",
+            icon="chart-line",
+            button_style='',  # Default style
+            layout=widgets.Layout(**button_style),
+            tooltip="View your learning progress and analytics"
+        )
+
+        # Add this button after your stats_button definition
+        self.management_button = widgets.Button(
+            description="Manage Content",
+            icon="trash",
+            button_style='danger',
+            layout=widgets.Layout(**button_style),
+            tooltip="Delete courses and videos"
+        )
+
+        # Add this line after connecting other button events
+        self.management_button.on_click(self._show_management_view)
+
+        # Connect button events
+        self.add_button.on_click(self._show_add_view)
+        self.browse_button.on_click(self._show_browse_view)
+        self.review_button.on_click(self._show_srs_view)
+        self.quiz_button.on_click(self._show_quiz_view)
+        self.stats_button.on_click(self._show_stats_view)
+
+        # Enhanced menu layout
+        # Replace your existing self.menu definition with this:
+        self.menu = widgets.HBox(
+            [self.add_button, self.browse_button, self.review_button, self.quiz_button, self.stats_button,
+             self.management_button],
+            layout=widgets.Layout(
+                justify_content='center',
+                flex_wrap='wrap',  # Allows buttons to wrap on smaller screens
+                margin='20px 0',
+                padding='15px',
+                background_color='#f8f9fa',
+                border_radius='15px',
+                box_shadow='0 4px 12px rgba(0,0,0,0.1)'
+            )
+        )
+
+        # Main container with enhanced styling
+        self.main_output.layout = widgets.Layout(
+            padding='20px',
+            border_radius='12px',
+            min_height='400px'
+        )
+
+        self.app_layout = widgets.VBox([
+            self.header,
+            self.menu,
+            self.main_output
+        ], layout=widgets.Layout(
+            padding='20px',
+            background_color='#ffffff',
+            border_radius='20px',
+            box_shadow='0 10px 30px rgba(0,0,0,0.1)'
+        ))
+
+        self._update_review_button()
+
+    def display_app(self):
+        display(self.app_layout)
+        self._show_add_view()
+
+    def _update_review_button(self):
+        due_count = self.db.get_due_review_count()
+        self.review_button.description = f"Daily Review ({due_count})"
+        self.review_button.button_style = 'warning' if due_count > 0 else 'info'
+
+    def _create_card_layout(self, title, content, icon="", color="#007bff"):
+        """Create a professional card layout"""
+        return widgets.HTML(f"""
+            <div style='
+                background: white;
+                border-radius: 12px;
+                padding: 25px;
+                margin: 15px 0;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+                border-left: 4px solid {color};
+            '>
+                <div style='display: flex; align-items: center; margin-bottom: 15px;'>
+                    <div style='font-size: 24px; margin-right: 12px;'>{icon}</div>
+                    <h3 style='margin: 0; color: {color}; font-weight: 600;'>{title}</h3>
+                </div>
+                <div style='color: #555; line-height: 1.6;'>{content}</div>
+            </div>
+        """)
+
+    def _create_input_group(self, label, widget, help_text=""):
+        """Create a styled input group"""
+        help_html = f"<small style='color: #6c757d; margin-top: 5px; display: block;'>{help_text}</small>" if help_text else ""
+
+        label_widget = widgets.HTML(f"""
+            <label style='
+                display: block;
+                margin-bottom: 8px;
+                font-weight: 600;
+                color: #2c3e50;
+                font-size: 14px;
+            '>{label}</label>
+            {help_html}
+        """)
+
+        widget.layout.margin = '0 0 20px 0'
+        widget.layout.border_radius = '8px'
+
+        return widgets.VBox([label_widget, widget], layout=widgets.Layout(margin='0 0 15px 0'))
+
+    def _show_add_view(self, b=None):
+        self.main_output.clear_output()
+
+        url_input = widgets.Text(placeholder="https://www.youtube.com/watch?v=...",
+                                 layout=widgets.Layout(width='100%', height='45px'))
+        course_input = widgets.Text(placeholder="e.g., Machine Learning, Physics 101",
+                                    layout=widgets.Layout(width='100%', height='45px'))
+        title_input = widgets.Text(placeholder="Descriptive title for this video",
+                                   layout=widgets.Layout(width='100%', height='45px'))
+        manual_transcript = widgets.Textarea(placeholder="Paste transcript here if automatic extraction fails...",
+                                             layout=widgets.Layout(width='100%', height='120px', border_radius='8px'))
+        submit_button = widgets.Button(description="🚀 Process Video", button_style='primary',
+                                       layout=widgets.Layout(width='200px', height='50px', margin='20px 0',
+                                                             border_radius='25px'))
+        log_output = widgets.Output(
+            layout=widgets.Layout(border='2px solid #e9ecef', border_radius='12px', height='250px', overflow_y='auto',
+                                  padding='15px', background_color='#f8f9fa',
+                                  font_family='Monaco, Consolas, monospace'))
+
+        def on_submit(b):
+            b.disabled = True
+            b.description = "⏳ Processing..."
+            with log_output:
+                log_output.clear_output()
+
+                def log(message, level="info"):
+                    timestamp = datetime.now().strftime('%H:%M:%S')
+                    colors = {"info": "#17a2b8", "success": "#28a745", "warning": "#ffc107", "error": "#dc3545"}
+                    color = colors.get(level, "#17a2b8")
+                    print(
+                        f"\033[38;2;{int(color[1:3], 16)};{int(color[3:5], 16)};{int(color[5:7], 16)}m[{timestamp}] {message}\033[0m")
+
+                log("🚀 Starting video processing...", "info")
+                transcript, video_id = self.api.get_youtube_transcript(url_input.value)
+                if not transcript and manual_transcript.value.strip():
+                    log("⚠️  Automatic transcript failed, using manual transcript...", "warning")
+                    video_id_match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11}).*", url_input.value)
+                    video_id = video_id_match.group(
+                        1) if video_id_match else f"manual_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                    transcript = manual_transcript.value.strip()
+
+                if not transcript:
+                    log(f"❌ ERROR: Could not obtain transcript for video", "error")
+                    b.disabled = False
+                    b.description = "🚀 Process Video"
+                    return
+
+                log(f"✅ Transcript obtained successfully (ID: {video_id})", "success")
+                log("🤖 Analyzing content with Gemini AI...", "info")
+                analysis, error = self.api.generate_summary_and_concepts(transcript, title_input.value)
+                if error:
+                    log(f"❌ AI Analysis failed: {error}", "error")
+                    b.disabled = False
+                    b.description = "🚀 Process Video"
+                    return
+                log("✅ AI analysis completed successfully", "success")
+                log("💾 Saving to database...", "info")
+                course_id = self.db.get_or_create_course(course_input.value)
+                video_data = {'course_id': course_id, 'title': title_input.value, 'video_id': video_id,
+                              'summary': analysis.get('summary'), 'key_concepts': analysis.get('key_concepts'),
+                              'bullet_points': analysis.get('bullet_points'), 'transcript': transcript}
+                self.db.add_video_data(video_data)
+                log("🎉 Success! Video processed and saved successfully", "success")
+                log("💡 Tip: Generate quizzes in the 'Browse Content' section", "info")
+                url_input.value = title_input.value = manual_transcript.value = ""
+            b.disabled = False
+            b.description = "🚀 Process Video"
+            self._update_review_button()
+
+        submit_button.on_click(on_submit)
+        with self.main_output:
+            form_content = widgets.VBox([
+                self._create_input_group("YouTube URL", url_input,
+                                         "Enter the full YouTube video URL you want to process"),
+                self._create_input_group("Course Name", course_input,
+                                         "Organize your content by course or subject area"),
+                self._create_input_group("Video Title", title_input,
+                                         "Provide a descriptive title for easy identification"),
+                self._create_input_group("Manual Transcript (Optional)", manual_transcript,
+                                         "Backup option if automatic transcript extraction fails"),
+                widgets.HBox([submit_button], layout=widgets.Layout(justify_content='center')),
+            ], layout=widgets.Layout(padding='25px', background_color='white', border_radius='15px',
+                                     box_shadow='0 4px 20px rgba(0,0,0,0.1)'))
+            header_card = self._create_card_layout("Add New Learning Content",
+                                                   "Process YouTube videos with AI-powered analysis to extract summaries, key concepts, and generate quiz questions automatically.",
+                                                   "📚", "#007bff")
+            display(header_card, form_content)
+            log_card = widgets.VBox([widgets.HTML(
+                "<h4 style='margin: 20px 0 10px 0; color: #495057; font-weight: 600;'>📊 Processing Log</h4>"),
+                                     log_output], layout=widgets.Layout(margin='20px 0 0 0'))
+            display(log_card)
+
+    def _show_browse_view(self, b=None):
+        self.main_output.clear_output()
+
+        course_dd = widgets.Dropdown(description="", layout=widgets.Layout(width='300px', height='45px'))
+        video_dd = widgets.Dropdown(description="", layout=widgets.Layout(width='400px', height='45px'))
+        details_output = widgets.Output()
+
+        def populate_courses():
+            course_dd.options = [("📂 Select a course...", None)] + [(f"📚 {c[1]}", c[0]) for c in
+                                                                    self.db.get_all_courses()]
+
+        def on_course_change(change):
+            details_output.clear_output()
+            if not change.new:
+                video_dd.options = [("🎥 Select a video...", None)]
+                return
+            videos = self.db.get_videos_for_course(change.new)
+            video_dd.options = [("🎥 Select a video...", None)] + [(f"▶️ {v[1]}", v[0]) for v in videos]
+
+        def on_video_change(change):
+            details_output.clear_output()
+            if not change.new: return
+            video_id = change.new
+            video_details = self.db.get_video_details(video_id)
+            if not video_details: return
+            title, summary, concepts, bullets, notes = video_details
+            tab = widgets.Tab(
+                layout=widgets.Layout(border='1px solid #dee2e6', border_radius='12px', overflow='hidden'))
+            try:
+                concepts_data = json.loads(concepts) if concepts else []
+                bullets_data = json.loads(bullets) if bullets else []
+            except json.JSONDecodeError:
+                concepts_data, bullets_data = [], []
+
+            summary_widget = widgets.HTML(
+                f"<div style='padding: 25px; line-height: 1.8; color: #FFFFFF; font-size: 16px;'>{summary or '<p style=\"color: #6c757d; font-style: italic;\">No summary available</p>'}</div>")
+            concepts_html = "<div style='padding: 25px;'>"
+            for i, c in enumerate(concepts_data, 1):
+                concepts_html += f"<div style='margin-bottom: 20px; padding: 20px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 10px; border-left: 4px solid #007bff;'><h4 style='color: #007bff; margin: 0 0 10px 0; font-weight: 600;'>{i}. {c.get('concept', '')}</h4><p style='margin: 0; color: #495057; line-height: 1.6;'>{c.get('definition', '')}</p></div>"
+            concepts_html += "</div>"
+            concepts_widget = widgets.HTML(concepts_html)
+            bullets_html = "<div style='padding: 25px;'><ul style='list-style: none; padding: 0;'>"
+            for i, bullet in enumerate(bullets_data, 1):
+                bullets_html += f"<li style='margin-bottom: 15px; padding: 15px 20px; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border-left: 3px solid #28a745; color: #2c3e50; line-height: 1.5;'><strong style='color: #28a745;'>{i}.</strong> {bullet}</li>"
+            bullets_html += "</ul></div>"
+            bullets_widget = widgets.HTML(bullets_html)
+            notes_area = widgets.Textarea(value=notes or "", placeholder="Add your personal notes and insights here...",
+                                          layout=widgets.Layout(width='95%', height='200px', border_radius='8px',
+                                                                margin='10px'))
+            save_button = widgets.Button(description="💾 Save Notes", button_style='info',
+                                         layout=widgets.Layout(width='150px', height='40px', border_radius='20px',
+                                                               margin='10px'))
+            notes_widget = widgets.VBox([widgets.HTML(
+                "<div style='padding: 20px 25px 10px 25px;'><h4 style='color: #495057; margin: 0;'>✏️ Personal Notes</h4><p style='color: #6c757d; margin: 10px 0;'>Add your thoughts, insights, and additional information</p></div>"),
+                                         notes_area, save_button])
+            quiz_display_area = widgets.HTML()
+
+            def refresh_quiz_display(v_id):
+                quiz_questions = self.db.get_questions_by_video(v_id)
+                if quiz_questions:
+                    difficulty_counts = {'easy': 0, 'medium': 0, 'hard': 0}
+                    for q_id, _, _, _ in quiz_questions:
+                        difficulty = \
+                        self.db.execute_query("SELECT difficulty FROM quiz_questions WHERE id = ?", (q_id,),
+                                              fetch="one")[0] or "medium"
+                        difficulty_counts[difficulty] += 1
+                    total_questions = len(quiz_questions)
+                    quiz_display_area.value = f"<div style='padding: 25px; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; border-radius: 15px; text-align: center; margin: 20px;'><h3 style='margin: 0 0 15px 0;'>🧠 Quiz Ready!</h3><div style='font-size: 2em; font-weight: bold; margin: 15px 0;'>{total_questions} Questions</div><div style='margin: 20px 0;'><span style='background: rgba(255,255,255,0.2); padding: 8px 16px; margin: 0 8px; border-radius: 20px; font-size: 14px;'>EASY: {difficulty_counts['easy']}</span><span style='background: rgba(255,255,255,0.2); padding: 8px 16px; margin: 0 8px; border-radius: 20px; font-size: 14px;'>MEDIUM: {difficulty_counts['medium']}</span><span style='background: rgba(255,255,255,0.2); padding: 8px 16px; margin: 0 8px; border-radius: 20px; font-size: 14px;'>HARD: {difficulty_counts['hard']}</span></div><p style='margin: 15px 0 0 0; opacity: 0.9;'>Take the quiz in the Practice Quiz tab</p></div>"
+                else:
+                    quiz_display_area.value = "<div style='padding: 25px; background: #f8f9fa; border: 2px dashed #dee2e6; border-radius: 15px; text-align: center; margin: 20px; color: #6c757d;'><h4>📝 No Quiz Available</h4><p>Generate quiz questions using the controls below</p></div>"
+
+            num_questions_slider = widgets.IntSlider(value=5, min=3, max=20, step=1, description="Questions:",
+                                                     style={'description_width': '100px'},
+                                                     layout=widgets.Layout(width='300px'))
+            difficulty_selector = widgets.SelectMultiple(
+                options=[('Easy', 'easy'), ('Medium', 'medium'), ('Hard', 'hard')], value=['easy', 'medium', 'hard'],
+                description='Difficulties:', style={'description_width': '100px'},
+                layout=widgets.Layout(width='300px', height='80px'))
+            generate_quiz_button = widgets.Button(description="🎯 Generate Quiz", button_style='primary',
+                                                  layout=widgets.Layout(width='180px', height='45px',
+                                                                        border_radius='25px'))
+            quiz_gen_status = widgets.HTML()
+
+            def generate_quiz_click(b_quiz):
+                b_quiz.disabled = True
+                b_quiz.description = "⏳ Generating..."
+                quiz_gen_status.value = "<div style='color: #007bff; padding: 10px; text-align: center;'>🤖 AI is creating your quiz questions...</div>"
+                video_info = self.db.get_video_info_for_quiz(video_id)
+                if not video_info or not video_info[1]:
+                    quiz_gen_status.value = "<div style='color: #dc3545; padding: 10px; text-align: center;'>❌ Error: Transcript not found</div>"
+                    b_quiz.disabled = False
+                    b_quiz.description = "🎯 Generate Quiz"
+                    return
+                v_title, transcript = video_info
+                selected_difficulties = list(difficulty_selector.value)
+                quiz_data, error = self.api.generate_quiz_questions_with_difficulty(transcript, v_title,
+                                                                                    num_questions_slider.value,
+                                                                                    selected_difficulties)
+                if error:
+                    quiz_gen_status.value = f"<div style='color: #dc3545; padding: 10px; text-align: center;'>❌ Error: {error}</div>"
+                else:
+                    new_questions = quiz_data.get('quiz_questions', [])
+                    self.db.add_quiz_questions(video_id, new_questions)
+                    quiz_gen_status.value = f"<div style='color: #28a745; padding: 10px; text-align: center;'>✅ Success! {len(new_questions)} questions generated</div>"
+                    refresh_quiz_display(video_id)
+                    self._update_review_button()
+                b_quiz.disabled = False
+                b_quiz.description = "🎯 Generate Quiz"
+
+            generate_quiz_button.on_click(generate_quiz_click)
+            quiz_generation_controls = widgets.VBox([widgets.HTML(
+                "<div style='padding: 20px 25px 10px 25px; border-top: 2px solid #e9ecef; margin-top: 20px;'><h4 style='color: #495057; margin: 0 0 15px 0;'>⚙️ Quiz Generation</h4></div>"),
+                                                     widgets.HBox(
+                                                         [widgets.VBox([num_questions_slider, difficulty_selector]),
+                                                          widgets.VBox([generate_quiz_button], layout=widgets.Layout(
+                                                              justify_content='center'))],
+                                                         layout=widgets.Layout(align_items='center', padding='0 25px')),
+                                                     quiz_gen_status])
+            quiz_widget = widgets.VBox([quiz_display_area, quiz_generation_controls])
+            chat_history = widgets.HTML(
+                "<div style='padding: 20px; background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%); color: white; border-radius: 15px; text-align: center; margin: 20px 0;'><h4 style='margin: 0;'>🤖 AI Tutor Ready</h4><p style='margin: 10px 0 0 0; opacity: 0.9;'>Ask me anything about this video content!</p></div>")
+            chat_input = widgets.Text(placeholder="Ask about concepts, examples, or request clarifications...",
+                                      layout=widgets.Layout(width='85%', height='45px', border_radius='25px'))
+            ask_button = widgets.Button(description="Ask", button_style='primary',
+                                        layout=widgets.Layout(width='100px', height='45px', border_radius='25px'))
+
+            def handle_question(b):
+                question = chat_input.value.strip()
+                if not question: return
+                b.disabled = True
+                b.description = "🤔"
+                video_info = self.db.get_video_info_for_quiz(video_id)
+                if not video_info or not video_info[1]:
+                    chat_history.value += "<div style='margin: 15px 0; padding: 15px; background: #f8d7da; color: #721c24; border-radius: 10px;'>Error: Video content not available</div>"
+                    b.disabled = False
+                    b.description = "Ask"
+                    return
+                v_title, transcript = video_info
+                answer, error = self.api.ask_video_question(question, transcript, v_title)
+                new_entry = f"<div style='margin: 20px 0;'><div style='background: #e3f2fd; padding: 15px 20px; border-radius: 20px 20px 5px 20px; margin-bottom: 10px; color: #1565c0; font-weight: 500;'>You: {question}</div><div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 20px 20px 20px 5px; color: white; line-height: 1.6;'><strong>🤖 AI Tutor:</strong><br>{answer if answer else f'Sorry, I encountered an error: {error}'}</div></div>"
+                chat_history.value = chat_history.value.replace(
+                    "<p style='margin: 10px 0 0 0; opacity: 0.9;'>Ask me anything about this video content!</p>",
+                    '') + new_entry
+                chat_input.value = ""
+                b.disabled = False
+                b.description = "Ask"
+
+            ask_button.on_click(handle_question)
+
+            def on_enter(text_widget):
+                if chat_input.value.strip(): handle_question(ask_button)
+
+            chat_input.on_submit(on_enter)
+            ai_chat_widget = widgets.VBox([chat_history, widgets.HBox([chat_input, ask_button],
+                                                                      layout=widgets.Layout(align_items='flex-end',
+                                                                                            padding='20px'))])
+            refresh_quiz_display(video_id)
+            tab.children = [summary_widget, concepts_widget, bullets_widget, notes_widget, quiz_widget, ai_chat_widget]
+            for i, title_text in enumerate(
+                    ['📄 Summary', '🔑 Key Concepts', '📌 Key Points', '📝 My Notes', '❓ Quiz Questions', '🤖 AI Tutor']):
+                tab.set_title(i, title_text)
+
+            def save_notes_click(b_note):
+                self.db.update_user_notes(video_id, notes_area.value)
+                b_note.description = "✅ Saved!"
+                b_note.button_style = 'success'
+
+            save_button.on_click(save_notes_click)
+            with details_output:
+                display(widgets.HTML(
+                    f"<div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 15px; margin-bottom: 20px; text-align: center;'><h2 style='margin: 0; font-weight: 300;'>{title}</h2></div>"),
+                        tab)
+
+        course_dd.observe(on_course_change, names='value')
+        video_dd.observe(on_video_change, names='value')
+        populate_courses()
+        with self.main_output:
+            header_card = self._create_card_layout("Browse Your Content",
+                                                   "Select a course and video to review summaries, concepts, notes, and manage quizzes.",
+                                                   "📖", "#6f42c1")
+            controls = widgets.HBox([
+                self._create_input_group("Select Course", course_dd),
+                self._create_input_group("Select Video", video_dd)
+            ], layout=widgets.Layout(padding='25px', background='white', border_radius='15px',
+                                     box_shadow='0 4px 20px rgba(0,0,0,0.1)'))
+            display(header_card, controls, details_output)
+
+    def _show_quiz_view(self, b=None):
+        self.main_output.clear_output()
+        quiz_type = widgets.Dropdown(
+            options=[('Random Mix', 'random'), ('All Questions', 'all'), ('By Course', 'course'),
+                     ('By Video', 'video')], description='', layout=widgets.Layout(width='100%', height='45px'))
+        course_selector = widgets.Dropdown(description="", layout=widgets.Layout(width='100%', height='45px'))
+        video_selector = widgets.Dropdown(description="", layout=widgets.Layout(width='100%', height='45px'))
+        num_questions = widgets.IntSlider(value=10, min=5, max=50, step=5, description="No. of Questions:",
+                                          style={'description_width': 'initial'}, layout=widgets.Layout(width='100%'))
+        start_quiz_button = widgets.Button(description="🚀 Start Quiz", button_style='success',
+                                           layout=widgets.Layout(width='200px', height='50px', border_radius='25px'))
+        quiz_content = widgets.Output()
+
+        def update_course_options():
+            courses = self.db.get_all_courses()
+            course_selector.options = [("📂 Select course...", None)] + [(f"📚 {c[1]}", c[0]) for c in courses]
+
+        def update_video_options(course_id):
+            if course_id:
+                videos = self.db.get_videos_for_course(course_id)
+                video_selector.options = [("🎥 Select video...", None)] + [(f"▶️ {v[1]}", v[0]) for v in videos]
+            else:
+                video_selector.options = [("🎥 Select video...", None)]
+
+        # Initialize the dropdowns with data
+        update_course_options()
+
+        course_container = self._create_input_group("Select Course", course_selector)
+        video_container = self._create_input_group("Select Video", video_selector)
+
+        def on_quiz_type_change(change):
+            course_container.layout.display = 'block' if change.new in ['course', 'video'] else 'none'
+            video_container.layout.display = 'block' if change.new == 'video' else 'none'
+
+        def on_course_change(change):
+            update_video_options(change.new)
+
+        quiz_type.observe(on_quiz_type_change, names='value')
+        course_selector.observe(on_course_change, names='value')
+
+        def start_quiz(b):
+            quiz_content.clear_output()
+            q_type = quiz_type.value
+            limit = num_questions.value
+
+            questions = []
+            if q_type == 'all':
+                questions = self.db.get_all_questions(limit)
+            elif q_type == 'course' and course_selector.value:
+                questions = self.db.get_questions_by_course(course_selector.value, limit)
+            elif q_type == 'video' and video_selector.value:
+                questions = self.db.get_questions_by_video(video_selector.value, limit)
+            else:
+                questions = self.db.get_all_questions(limit)
+
+            if not questions:
+                with quiz_content:
+                    display(widgets.HTML(
+                        "<div style='padding: 20px; background: #fff3cd; color: #856404; border-radius: 10px; text-align: center;'>⚠️ No questions found for the selected criteria. Please add content or adjust your selection.</div>"))
+                return
+
+            self._run_practice_quiz(questions, quiz_content)
+
+        start_quiz_button.on_click(start_quiz)
+
+        with self.main_output:
+            header_card = self._create_card_layout("Practice Quiz",
+                                                   "Test your knowledge with custom quizzes. Select your criteria and start practicing!",
+                                                   "🧠", "#28a745")
+            form_card = widgets.VBox([
+                self._create_input_group("Quiz Type", quiz_type),
+                course_container, video_container,
+                self._create_input_group("Number of Questions", num_questions),
+                widgets.HBox([start_quiz_button], layout=widgets.Layout(justify_content='center'))
+            ], layout=widgets.Layout(padding='25px', background='white', border_radius='15px',
+                                     box_shadow='0 4px 20px rgba(0,0,0,0.1)'))
+            display(header_card, form_card, quiz_content)
+
+    def _run_practice_quiz(self, questions, output_widget):
+        with output_widget:
+            output_widget.clear_output()
+            self.current_quiz_questions = questions.copy()
+            self.quiz_score, self.quiz_total, self.current_quiz_index = 0, len(questions), 0
+            self.current_session_id = self.db.create_quiz_session()
+
+            self.quiz_progress = widgets.HTML()
+            self.quiz_question = widgets.HTML()
+            self.quiz_options = widgets.VBox()
+            self.quiz_feedback = widgets.HTML()
+            self.quiz_next_button = widgets.Button(description="Next Question ➡️", button_style='info',
+                                                   layout={'width': '200px', 'height': '45px', 'border_radius': '25px'})
+            self.quiz_results = widgets.Output()
+
+            # Helper to clean prefixes like "A)", "1." and trim whitespace
+            def sanitize_text(text):
+                return re.sub(r'^[A-Da-d][\)\.]\s*|^[1-4][\)\.]\s*', '', text).strip()
+
+            def show_next_question():
+                if self.current_quiz_index >= self.quiz_total: self._show_quiz_results(); return
+                self.quiz_feedback.value, self.quiz_next_button.layout.visibility = "", 'hidden'
+                q_id, question, options_json, correct_answer = self.current_quiz_questions[self.current_quiz_index]
+                self.quiz_progress.value = f"<div style='text-align: center; margin-bottom: 20px; font-weight: bold; color: #495057;'>Question {self.current_quiz_index + 1} of {self.quiz_total} | Score: {self.quiz_score}/{self.current_quiz_index}</div>"
+                self.quiz_question.value = f"<div style='padding: 20px; background: #f8f9fa; border-radius: 12px; text-align: center;'><h4 style='margin:0; color: #2c3e50;'>{question}</h4></div>"
+
+                # BUG FIX: Sanitize, shuffle, and re-label options
+                options_raw = json.loads(options_json)
+                sanitized_options = [sanitize_text(opt) for opt in options_raw]
+                random.shuffle(sanitized_options)
+
+                option_buttons = []
+                labels = ['A', 'B', 'C', 'D']
+                for i, opt_text in enumerate(sanitized_options):
+                    label = f"{labels[i]})" if i < len(labels) else ""
+                    btn = widgets.Button(description=f"{label} {opt_text}",
+                                         layout={'width': '95%', 'height': '50px', 'margin': '5px 0',
+                                                 'border_radius': '10px'})
+                    option_buttons.append(btn)
+
+                def check_answer(b):
+                    for btn in option_buttons: btn.disabled = True
+
+                    clicked_answer_text = sanitize_text(b.description)
+                    correct_answer_text = sanitize_text(correct_answer)
+
+                    is_correct = clicked_answer_text == correct_answer_text
+                    self.db.update_quiz_session(self.current_session_id, is_correct)
+
+                    if is_correct:
+                        self.quiz_score += 1
+                        b.button_style = 'success'
+                        self.quiz_feedback.value = "<div style='padding: 15px; background: #d4edda; color: #155724; border-radius: 10px; text-align: center; margin-top: 15px;'><strong>✅ Correct!</strong></div>"
+                    else:
+                        b.button_style = 'danger'
+                        for btn in option_buttons:
+                            btn_text = sanitize_text(btn.description)
+                            if btn_text == correct_answer_text:
+                                btn.button_style = 'success'
+                        self.quiz_feedback.value = f"<div style='padding: 15px; background: #f8d7da; color: #721c24; border-radius: 10px; text-align: center; margin-top: 15px;'><strong>❌ Incorrect.</strong> Correct answer: <strong>{correct_answer}</strong></div>"
+
+                    self.quiz_next_button.layout.visibility = 'visible'
+                    self.current_quiz_index += 1
+
+                for btn in option_buttons: btn.on_click(check_answer)
+                self.quiz_options.children = tuple(option_buttons)
+
+            self.quiz_next_button.on_click(lambda b: show_next_question())
+            quiz_container = widgets.VBox(
+                [self.quiz_progress, self.quiz_question, self.quiz_options, self.quiz_feedback,
+                 widgets.HBox([self.quiz_next_button], layout=widgets.Layout(justify_content='center')),
+                 self.quiz_results], layout=widgets.Layout(padding='25px', background='white', border_radius='15px',
+                                                           box_shadow='0 4px 20px rgba(0,0,0,0.1)', margin='20px 0'))
+            display(quiz_container)
+            show_next_question()
+
+    def _show_quiz_results(self):
+        with self.quiz_results:
+            self.quiz_results.clear_output()
+            # Avoid division by zero if quiz has 0 questions
+            if self.quiz_total == 0: return
+            percentage = (self.quiz_score / self.quiz_total) * 100
+            if percentage >= 90:
+                msg, color = "🏆 Excellent! Outstanding performance!", "#28a745"
+            elif percentage >= 70:
+                msg, color = "👍 Great job! You have a solid understanding.", "#007bff"
+            else:
+                msg, color = "📚 Keep studying! Practice makes perfect.", "#ffc107"
+            results_html = f"<div style='text-align: center; padding: 30px; border: 4px solid {color}; border-radius: 15px; background: #f8f9fa;'><h3 style='margin-bottom: 15px;'>Quiz Complete!</h3><h2 style='color: {color}; font-size: 2.5em; margin: 10px 0;'>{self.quiz_score} / {self.quiz_total} ({percentage:.1f}%)</h2><p style='color: {color}; font-weight: bold; font-size: 1.2em;'>{msg}</p></div>"
+            display(widgets.HTML(results_html))
+
+    def _show_stats_view(self, b=None):
+        self.main_output.clear_output()
+        stats = self.db.get_quiz_stats()
+
+        def create_stat_card(title, value, icon, color):
+            return widgets.HTML(
+                f"""<div style='background: linear-gradient(135deg, {color} 0%, {color}bf 100%); color: white; padding: 25px; border-radius: 15px; text-align: center; width: 200px; box-shadow: 0 6px 20px {color}60;'>
+                <div style='font-size: 2.5em;'>{icon}</div>
+                <h4 style='margin: 10px 0 5px 0; font-weight: 300;'>{title}</h4>
+                <div style='font-size: 2em; font-weight: bold;'>{value}</div></div>""")
+
+        stat_cards = widgets.HBox([
+            create_stat_card("Total Questions", stats['total_questions'], '📚', '#007bff'),
+            create_stat_card("Due for Review", stats['due_questions'], '⏰', '#ffc107'),
+            create_stat_card("Overall Accuracy", f"{stats['accuracy']:.1f}%", '🎯', '#28a745')
+        ], layout=widgets.Layout(justify_content='space-around', margin='20px 0'))
+
+        recent_sessions = self.db.execute_query(
+            "SELECT session_date, questions_answered, questions_correct FROM quiz_sessions ORDER BY id DESC LIMIT 10",
+            fetch="all")
+        sessions_html = ""
+        if recent_sessions:
+            sessions_html = "<table style='width:100%; border-collapse: collapse; margin-top: 20px; font-size: 14px;'><tr style='border-bottom: 2px solid #6c757d; color: #495057;'><th>Date</th><th>Answered</th><th>Correct</th><th>Accuracy</th></tr>"
+            for date, answered, correct in recent_sessions:
+                accuracy = (correct / answered * 100) if answered > 0 else 0
+                sessions_html += f"<tr style='border-bottom: 1px solid #dee2e6; text-align: center; line-height: 2.5;'><td style='padding: 5px;'>{date}</td><td>{answered}</td><td>{correct}</td><td><strong style='color: {'#28a745' if accuracy > 70 else '#dc3545'};'>{accuracy:.1f}%</strong></td></tr>"
+            sessions_html += "</table>"
+        else:
+            sessions_html = "<p style='text-align: center; color: #6c757d; margin-top: 20px;'>No quiz sessions recorded yet.</p>"
+
+        sessions_card = self._create_card_layout("Recent Quiz Sessions", sessions_html, "📊", "#6c757d")
+
+        with self.main_output:
+            header_card = self._create_card_layout("Your Learning Statistics",
+                                                   "Track your progress, overall accuracy, and review history to stay on top of your goals.",
+                                                   "📈", "#17a2b8")
+            display(header_card, stat_cards, sessions_card)
+
+    def _show_management_view(self, b=None):
+        self.main_output.clear_output()
+
+        # Management type selector
+        management_type = widgets.Dropdown(
+            options=[('🗂️ Manage Courses', 'courses'), ('🎥 Manage Videos', 'videos')],
+            description='',
+            layout=widgets.Layout(width='100%', height='45px')
+        )
+
+        # Content area
+        management_content = widgets.Output()
+
+        def show_course_management():
+            management_content.clear_output()
+            courses = self.db.get_all_courses()
+
+            if not courses:
+                with management_content:
+                    display(widgets.HTML(
+                        "<div style='padding: 20px; background: #fff3cd; color: #856404; border-radius: 10px; text-align: center;'>⚠️ No courses found. Add some content first!</div>"
+                    ))
+                return
+
+            # Create course cards
+            course_cards = []
+            for course_id, course_name in courses:
+                video_count, question_count = self.db.get_course_stats(course_id)
+
+                # Delete button for this course
+                delete_btn = widgets.Button(
+                    description=f"🗑️ Delete Course",
+                    button_style='danger',
+                    layout=widgets.Layout(width='150px', height='40px', border_radius='20px')
+                )
+
+                # Status area for feedback - using Output widget instead of HTML
+                status_area = widgets.Output()
+
+                def create_delete_handler(c_id, c_name, btn, status):
+                    def confirm_delete(b):
+                        status.clear_output()
+
+                        # Create confirmation dialog
+                        confirm_btn = widgets.Button(
+                            description="✅ Yes, Delete",
+                            button_style='danger',
+                            layout=widgets.Layout(width='120px', height='35px', border_radius='15px')
+                        )
+                        cancel_btn = widgets.Button(
+                            description="❌ Cancel",
+                            button_style='info',
+                            layout=widgets.Layout(width='120px', height='35px', border_radius='15px')
+                        )
+
+                        def actual_delete(b_confirm):
+                            status.clear_output()
+                            success, message = self.db.delete_course(c_id)
+                            with status:
+                                if success:
+                                    display(widgets.HTML(
+                                        f"<div style='color: #28a745; font-weight: bold; margin-top: 10px;'>✅ {message}</div>"))
+                                    btn.disabled = True
+                                    btn.description = "Deleted"
+                                    # Refresh the view after a delay
+                                    import threading
+                                    def refresh_after_delay():
+                                        import time
+                                        time.sleep(1.5)
+                                        show_course_management()
+
+                                    threading.Thread(target=refresh_after_delay).start()
+                                else:
+                                    display(widgets.HTML(
+                                        f"<div style='color: #dc3545; font-weight: bold; margin-top: 10px;'>❌ {message}</div>"))
+
+                        def cancel_delete(b_cancel):
+                            status.clear_output()
+
+                        confirm_btn.on_click(actual_delete)
+                        cancel_btn.on_click(cancel_delete)
+
+                        with status:
+                            warning_html = widgets.HTML(
+                                f"<div style='background: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px; margin-top: 10px;'><strong>⚠️ Confirm Deletion</strong><br>This will delete the course '<strong>{c_name}</strong>' and all its videos and quiz questions.</div>")
+                            button_area = widgets.HBox([confirm_btn, cancel_btn],
+                                                       layout=widgets.Layout(justify_content='center', margin='10px 0'))
+                            display(warning_html, button_area)
+
+                    return confirm_delete
+
+                delete_btn.on_click(create_delete_handler(course_id, course_name, delete_btn, status_area))
+
+                # Course card HTML
+                card_html = f"""
+                <div style='
+                    background: white;
+                    border-radius: 12px;
+                    padding: 20px;
+                    margin: 10px 0;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                    border-left: 4px solid #007bff;
+                '>
+                    <h4 style='margin: 0 0 15px 0; color: #007bff; font-weight: 600;'>📚 {course_name}</h4>
+                    <div style='color: #6c757d; margin-bottom: 15px;'>
+                        <span style='margin-right: 20px;'>🎥 {video_count} videos</span>
+                        <span>❓ {question_count} quiz questions</span>
+                    </div>
+                </div>
+                """
+
+                card_widget = widgets.VBox([
+                    widgets.HTML(card_html),
+                    widgets.HBox([delete_btn], layout=widgets.Layout(justify_content='center')),
+                    status_area
+                ])
+                course_cards.append(card_widget)
+
+            with management_content:
+                if course_cards:
+                    for card in course_cards:
+                        display(card)
+
+        def show_video_management():
+            management_content.clear_output()
+
+            # Course selector for videos
+            course_selector = widgets.Dropdown(
+                description="",
+                layout=widgets.Layout(width='100%', height='45px')
+            )
+
+            video_list_area = widgets.Output()
+
+            def populate_courses():
+                courses = self.db.get_all_courses()
+                course_selector.options = [("📂 Select a course...", None)] + [(f"📚 {c[1]}", c[0]) for c in courses]
+
+            def show_videos_for_course(course_id):
+                video_list_area.clear_output()
+                if not course_id:
+                    return
+
+                videos = self.db.get_videos_for_course(course_id)
+                if not videos:
+                    with video_list_area:
+                        display(widgets.HTML(
+                            "<div style='padding: 20px; background: #fff3cd; color: #856404; border-radius: 10px; text-align: center;'>⚠️ No videos found in this course.</div>"
+                        ))
+                    return
+
+                video_cards = []
+                for video_id, video_title in videos:
+                    question_count = self.db.get_video_stats(video_id)
+
+                    # Delete button
+                    delete_btn = widgets.Button(
+                        description=f"🗑️ Delete Video",
+                        button_style='danger',
+                        layout=widgets.Layout(width='150px', height='40px', border_radius='20px')
+                    )
+
+                    # Status area - using Output widget
+                    status_area = widgets.Output()
+
+                    def create_video_delete_handler(v_id, v_title, btn, status):
+                        def confirm_delete(b):
+                            status.clear_output()
+
+                            confirm_btn = widgets.Button(
+                                description="✅ Yes, Delete",
+                                button_style='danger',
+                                layout=widgets.Layout(width='120px', height='35px', border_radius='15px')
+                            )
+                            cancel_btn = widgets.Button(
+                                description="❌ Cancel",
+                                button_style='info',
+                                layout=widgets.Layout(width='120px', height='35px', border_radius='15px')
+                            )
+
+                            def actual_delete(b_confirm):
+                                status.clear_output()
+                                success, message = self.db.delete_video(v_id)
+                                with status:
+                                    if success:
+                                        display(widgets.HTML(
+                                            f"<div style='color: #28a745; font-weight: bold; margin-top: 10px;'>✅ {message}</div>"))
+                                        btn.disabled = True
+                                        btn.description = "Deleted"
+                                        # Refresh after delay
+                                        import threading
+                                        def refresh_after_delay():
+                                            import time
+                                            time.sleep(1.5)
+                                            show_videos_for_course(course_selector.value)
+
+                                        threading.Thread(target=refresh_after_delay).start()
+                                    else:
+                                        display(widgets.HTML(
+                                            f"<div style='color: #dc3545; font-weight: bold; margin-top: 10px;'>❌ {message}</div>"))
+
+                            def cancel_delete(b_cancel):
+                                status.clear_output()
+
+                            confirm_btn.on_click(actual_delete)
+                            cancel_btn.on_click(cancel_delete)
+
+                            with status:
+                                warning_html = widgets.HTML(
+                                    f"<div style='background: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px; margin-top: 10px;'><strong>⚠️ Confirm Deletion</strong><br>This will delete the video '<strong>{v_title}</strong>' and all its quiz questions.</div>")
+                                button_area = widgets.HBox([confirm_btn, cancel_btn],
+                                                           layout=widgets.Layout(justify_content='center',
+                                                                                 margin='10px 0'))
+                                display(warning_html, button_area)
+
+                        return confirm_delete
+
+                    delete_btn.on_click(create_video_delete_handler(video_id, video_title, delete_btn, status_area))
+
+                    # Video card HTML
+                    card_html = f"""
+                    <div style='
+                        background: white;
+                        border-radius: 12px;
+                        padding: 20px;
+                        margin: 10px 0;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                        border-left: 4px solid #28a745;
+                    '>
+                        <h5 style='margin: 0 0 10px 0; color: #28a745; font-weight: 600;'>🎥 {video_title}</h5>
+                        <div style='color: #6c757d;'>❓ {question_count} quiz questions</div>
+                    </div>
+                    """
+
+                    card_widget = widgets.VBox([
+                        widgets.HTML(card_html),
+                        widgets.HBox([delete_btn], layout=widgets.Layout(justify_content='center')),
+                        status_area
+                    ])
+                    video_cards.append(card_widget)
+
+                with video_list_area:
+                    for card in video_cards:
+                        display(card)
+
+            def on_course_change(change):
+                show_videos_for_course(change.new)
+
+            course_selector.observe(on_course_change, names='value')
+            populate_courses()
+
+            with management_content:
+                course_input = self._create_input_group("Select Course", course_selector)
+                display(course_input, video_list_area)
+
+        def on_management_type_change(change):
+            if change.new == 'courses':
+                show_course_management()
+            elif change.new == 'videos':
+                show_video_management()
+
+        management_type.observe(on_management_type_change, names='value')
+
+        with self.main_output:
+            header_card = self._create_card_layout(
+                "Manage Your Content",
+                "Delete courses or individual videos along with all their associated quiz questions and data.",
+                "🗂️", "#dc3545"
+            )
+
+            type_selector = self._create_input_group("Management Type", management_type)
+
+            display(header_card, type_selector, management_content)
+
+            # Show courses by default
+            show_course_management()
+
+    def _show_srs_view(self, b=None):
+        self.main_output.clear_output()
+        self.srs_questions = self.db.get_due_questions()
+
+        with self.main_output:
+            header_card = self._create_card_layout("Daily Spaced Repetition Review",
+                                                   "Strengthen your memory by reviewing questions that are due. Answer first, then rate your confidence.",
+                                                   "🧠", "#ffc107")
+            display(header_card)
+
+            if not self.srs_questions:
+                display(widgets.HTML(
+                    "<div style='padding: 30px; background: #d4edda; color: #155724; border-radius: 12px; text-align: center; font-size: 1.2em;'>🎉 All done! No items due for review today. Great work!</div>"))
+                return
+
+            self.question_label = widgets.HTML()
+            self.options_box = widgets.VBox()
+            self.feedback_label = widgets.HTML()
+            self.srs_buttons = widgets.HBox([
+                widgets.Button(description="Hard", button_style='danger',
+                               layout={'width': '120px', 'height': '45px', 'border_radius': '25px'}),
+                widgets.Button(description="Good", button_style='warning',
+                               layout={'width': '120px', 'height': '45px', 'border_radius': '25px'}),
+                widgets.Button(description="Easy", button_style='success',
+                               layout={'width': '120px', 'height': '45px', 'border_radius': '25px'})
+            ], layout={'justify_content': 'center', 'margin': '20px 0'})
+
+            def process_srs_rating(b_srs):
+                self.db.update_srs_level(self.current_q[0], b_srs.description.lower())
+                self._update_review_button()
+                display_next_question()
+
+            for btn in self.srs_buttons.children: btn.on_click(process_srs_rating)
+
+            # Helper to clean prefixes like "A)", "1." and trim whitespace
+            def sanitize_text(text):
+                return re.sub(r'^[A-Da-d][\)\.]\s*|^[1-4][\)\.]\s*', '', text).strip()
+
+            def display_next_question():
+                self.options_box.children, self.feedback_label.value, self.srs_buttons.layout.visibility = (), "", 'hidden'
+                if not self.srs_questions:
+                    self.question_label.value = "<div style='padding: 30px; background: #d4edda; color: #155724; border-radius: 12px; text-align: center; font-size: 1.2em;'>✅ Review session complete! Excellent job!</div>"
+                    return
+                self.current_q = self.srs_questions.pop(0)
+                q_id, question, options_json, self.answer = self.current_q
+                self.question_label.value = f"<div style='text-align: center; margin-bottom: 10px; color: #495057;'><h4>{question}</h4><p><em>Questions remaining: {len(self.srs_questions) + 1}</em></p></div>"
+
+                # BUG FIX: Sanitize, shuffle, and re-label options
+                options_raw = json.loads(options_json)
+                sanitized_options = [sanitize_text(opt) for opt in options_raw]
+                random.shuffle(sanitized_options)
+
+                option_buttons = []
+                labels = ['A', 'B', 'C', 'D']
+                for i, opt_text in enumerate(sanitized_options):
+                    label = f"{labels[i]})" if i < len(labels) else ""
+                    btn = widgets.Button(description=f"{label} {opt_text}",
+                                         layout={'width': '95%', 'height': '50px', 'margin': '5px 0',
+                                                 'border_radius': '10px'})
+                    option_buttons.append(btn)
+
+                for btn in option_buttons: btn.on_click(check_answer)
+                self.options_box.children = tuple(option_buttons)
+
+            def check_answer(b_ans):
+                for btn in self.options_box.children: btn.disabled = True
+
+                clicked_answer_text = sanitize_text(b_ans.description)
+                correct_answer_text = sanitize_text(self.answer)
+
+                if clicked_answer_text == correct_answer_text:
+                    self.feedback_label.value = "<div style='padding: 15px; background: #d4edda; color: #155724; border-radius: 10px; text-align: center; margin-top: 15px;'><strong>✅ Correct!</strong> How well did you know it?</div>"
+                    b_ans.button_style = 'success'
+                else:
+                    self.feedback_label.value = f"<div style='padding: 15px; background: #f8d7da; color: #721c24; border-radius: 10px; text-align: center; margin-top: 15px;'><strong>❌ Incorrect.</strong> Correct answer: <strong>{self.answer}</strong>. How hard was this?</div>"
+                    b_ans.button_style = 'danger'
+                    for btn in self.options_box.children:
+                        btn_text = sanitize_text(btn.description)
+                        if btn_text == correct_answer_text:
+                            btn.button_style = 'success'
+                self.srs_buttons.layout.visibility = 'visible'
+
+            review_container = widgets.VBox(
+                [self.question_label, self.options_box, self.feedback_label, self.srs_buttons],
+                layout=widgets.Layout(padding='25px', background='white', border_radius='15px',
+                                      box_shadow='0 4px 20px rgba(0,0,0,0.1)'))
+            display(review_container)
+            display_next_question()
+
+db = DatabaseManager(use_drive=True)
+api = ApiProcessor()
+app = ColabLearningApp(db, api)
+app.display_app()
