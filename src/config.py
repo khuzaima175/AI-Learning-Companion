@@ -7,7 +7,12 @@ import google.genai as genai
 CONFIG_DIR = Path(os.getenv("APPDATA", Path.home())) / "AILearningCompanion"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
-MODEL_ID = "gemini-2.5-flash"
+# Model fallback chain — tried in order; falls back on quota / rate-limit errors
+MODEL_CHAIN = [
+    "gemini-3.1-flash-lite-preview", # primary
+    "gemini-2.5-flash",              # fallback 1
+    "gemini-2.0-flash",              # fallback 2 (last resort)
+]
 
 
 def get_config_dir() -> Path:
@@ -48,5 +53,11 @@ def get_client() -> genai.Client | None:
     return genai.Client(api_key=key)
 
 
+def get_model_chain() -> list[str]:
+    """Returns the ordered list of models to try (primary → fallbacks)."""
+    return MODEL_CHAIN
+
+
 def get_model_id() -> str:
-    return MODEL_ID
+    """Returns the primary model (backward-compat shim)."""
+    return MODEL_CHAIN[0]

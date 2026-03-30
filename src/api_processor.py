@@ -13,35 +13,43 @@ class ApiProcessor:
     def _get_client(self):
         return config.get_client()
 
-    def _get_model_id(self):
-        return config.get_model_id()
-
     # ------------------------------------------------------------------
     # Transcript helpers
     # ------------------------------------------------------------------
 
     def get_youtube_transcript(self, url: str):
+        """Fetch transcript using youtube-transcript-api v1.0+."""
         try:
             from youtube_transcript_api import YouTubeTranscriptApi
+            from youtube_transcript_api._errors import (
+                NoTranscriptFound,
+                TranscriptsDisabled,
+                VideoUnavailable,
+            )
 
             m = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11}).*", url)
             if not m:
                 return None, "Invalid YouTube URL format"
             video_id = m.group(1)
+
             try:
-                if hasattr(YouTubeTranscriptApi, "get_transcript"):
-                    transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
-                elif hasattr(YouTubeTranscriptApi, "list_transcripts"):
-                    transcripts = YouTubeTranscriptApi.list_transcripts(video_id)
-                    transcript = transcripts.find_transcript(["en", "en-US", "en-GB"])
-                    transcript_list = transcript.fetch()
-                else:
-                    api_instance = YouTubeTranscriptApi()
-                    transcript_list = api_instance.get_transcript(video_id)
-                text = " ".join(item["text"] for item in transcript_list)
+                # v1.0+ uses an instance-based API with .fetch()
+                ytt_api = YouTubeTranscriptApi()
+                fetched = ytt_api.fetch(video_id, languages=["en", "en-US", "en-GB"])
+                # FetchedTranscript is iterable; each item has a .text attribute
+                text = " ".join(
+                    item.text if hasattr(item, "text") else item["text"]
+                    for item in fetched
+                )
                 return text, video_id
+            except (NoTranscriptFound, TranscriptsDisabled) as e:
+                return None, f"No transcript available for {video_id}: {e}"
+            except VideoUnavailable as e:
+                return None, f"Video unavailable: {e}"
             except Exception as e:
                 return None, f"Transcript failed for {video_id}: {e}"
+        except ImportError:
+            return None, "youtube-transcript-api is not installed. Run: pip install youtube-transcript-api>=1.0.0"
         except Exception as e:
             return None, f"General error: {e}"
 
@@ -52,30 +60,47 @@ class ApiProcessor:
     # Gemini helpers
     # ------------------------------------------------------------------
 
-    def _call_gemini_with_retry(self, prompt: str, max_retries: int = 3):
+    def _call_gemini_with_retry(self, prompt: str, max_retries: int = 2):
+        """
+        Try each model in the fallback chain.
+        Falls back to the next model on quota / rate-limit errors (429, 503,
+        ResourceExhausted, etc.). Hard errors surface immediately after retries.
+        """
         client = self._get_client()
         if not client:
             return None, "No API key configured. Please add your Gemini API key in the sidebar."
-        model_id = self._get_model_id()
 
-        for attempt in range(max_retries):
-            try:
-                response = client.models.generate_content(
-                    model=model_id,
-                    contents=[{"parts": [{"text": prompt}]}],
-                )
-                if not response or not hasattr(response, "text"):
-                    response = client.models.generate_content(model=model_id, contents=prompt)
-                if response and hasattr(response, "text") and response.text:
-                    return response.text, None
-                if attempt < max_retries - 1:
+        model_chain = config.get_model_chain()
+        last_error = "Unknown error"
+
+        for model_id in model_chain:
+            for attempt in range(max_retries):
+                try:
+                    response = client.models.generate_content(
+                        model=model_id,
+                        contents=[{"parts": [{"text": prompt}]}],
+                    )
+                    if not response or not hasattr(response, "text"):
+                        response = client.models.generate_content(model=model_id, contents=prompt)
+                    if response and hasattr(response, "text") and response.text:
+                        return response.text, None
+                    # Empty response — retry same model
+                    last_error = f"[{model_id}] returned empty response"
                     continue
-                return None, "Gemini returned an empty response"
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    continue
-                return None, f"Gemini API error after {max_retries} attempts: {e}"
-        return None, "Failed after retries"
+                except Exception as e:
+                    err_str = str(e).lower()
+                    # Quota / rate-limit → fall back to next model immediately
+                    if any(kw in err_str for kw in ("429", "quota", "rate", "resource exhausted", "503", "unavailable")):
+                        last_error = f"[{model_id}] quota/rate-limit: {e}"
+                        break  # break retry loop → try next model
+                    # Other error → retry same model
+                    last_error = f"[{model_id}] error: {e}"
+                    if attempt < max_retries - 1:
+                        continue
+                    # Exhausted retries for this model → try next
+                    break
+
+        return None, f"All models failed. Last error: {last_error}"
 
     def _parse_json_response(self, response_text: str):
         if not response_text:
