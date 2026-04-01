@@ -130,9 +130,11 @@ function renderVideoList(course, filter = '') {
     el.style.cursor = 'pointer';
     el.style.animationDelay = `${i * 45}ms`;
     el.style.transition = 'all 0.18s ease';
+    const qCount = v.question_count ?? 0;
     el.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
         <div style="font-weight:600;font-size:.875rem;flex:1">${v.title}</div>
+        <span class="badge badge-amber" style="flex-shrink:0;font-size:.72rem">${qCount} Q${qCount !== 1 ? 's' : ''}</span>
         <span style="color:var(--text-3);font-size:.8rem;flex-shrink:0">→</span>
       </div>`;
     el.addEventListener('click', () => loadVideoDetail(v));
@@ -145,6 +147,13 @@ async function loadVideoDetail(v) {
   _selectedVideo = v;
   const panel = document.getElementById('video-panel');
   panel.innerHTML = '<div class="loading-state"><div class="spinner"></div></div>';
+
+  // Expand video panel to full width
+  const grid = document.getElementById('browse-grid');
+  const coursePanel = document.getElementById('course-panel');
+  if (grid) grid.style.gridTemplateColumns = '1fr';
+  if (coursePanel) coursePanel.style.display = 'none';
+
   try {
     _videoData = await API.get(`/api/videos/${v.id}`);
     renderVideoDetail(panel);
@@ -172,8 +181,11 @@ function renderVideoDetail(panel) {
 
     <!-- Summary -->
     <div id="tab-summary" class="tab-panel active">
-      <div class="card card-sm" style="line-height:1.75;font-size:.875rem;color:var(--text-2)">
-        ${d.summary || '<em style="color:var(--text-3)">No summary available</em>'}
+      <div class="summary-prose">
+        ${d.summary
+          ? d.summary.split(/\n+/).map(p => p.trim()).filter(p => p.length > 0).map(p => `<p>${p}</p>`).join('')
+          : '<em style="color:var(--text-3)">No summary available</em>'
+        }
       </div>
     </div>
 
@@ -232,8 +244,14 @@ function renderVideoDetail(panel) {
     });
   });
 
-  // Back
-  document.getElementById('back-btn').addEventListener('click', () => renderVideoList(_selectedCourse));
+  // Back — restore two-column layout
+  document.getElementById('back-btn').addEventListener('click', () => {
+    const grid = document.getElementById('browse-grid');
+    const coursePanel = document.getElementById('course-panel');
+    if (grid) grid.style.gridTemplateColumns = '';
+    if (coursePanel) coursePanel.style.display = '';
+    renderVideoList(_selectedCourse);
+  });
 
   // Notes
   document.getElementById('save-notes-btn').addEventListener('click', async () => {

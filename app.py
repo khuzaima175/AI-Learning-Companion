@@ -124,8 +124,12 @@ async def list_courses():
     for cid, name in courses:
         videos = db.get_videos_for_course(cid)
         v_count, q_count = db.get_course_stats(cid)
+        videos_with_counts = []
+        for vid, t in videos:
+            vq = db.get_video_stats(vid)
+            videos_with_counts.append({"id": vid, "title": t, "question_count": vq})
         result.append({"id": cid, "name": name, "video_count": v_count, "question_count": q_count,
-                        "videos": [{"id": vid, "title": t} for vid, t in videos]})
+                        "videos": videos_with_counts})
     return result
 
 
@@ -252,8 +256,10 @@ async def generate_quiz(req: GenerateQuizRequest):
     if err or not data:
         raise HTTPException(500, f"Could not generate quiz: {err}")
     questions = data.get("quiz_questions", [])
-    db.add_quiz_questions(req.video_id, questions)
-    return {"ok": True, "count": len(questions)}
+    if not questions:
+        raise HTTPException(500, "AI returned no questions. Try again or check your API key.")
+    inserted = db.add_quiz_questions(req.video_id, questions)
+    return {"ok": True, "count": inserted, "generated": len(questions)}
 
 
 @app.post("/api/quiz/start-session")

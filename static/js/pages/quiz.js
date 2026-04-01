@@ -65,6 +65,61 @@ export async function renderQuiz(container) {
         <button class="btn btn-teal btn-full btn-lg" id="start-btn" style="margin-top:8px">
           <span class="btn-text">🚀 Start Quiz</span>
         </button>
+
+        <!-- ── Generate More Questions ── -->
+        <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:16px">
+          <button id="gen-toggle-btn" style="display:flex;align-items:center;justify-content:space-between;width:100%;background:none;border:none;cursor:pointer;padding:0;text-align:left">
+            <div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:1.05rem">⚡</span>
+                <span style="font-weight:700;font-size:.9rem;color:var(--text-1)">Generate More Questions</span>
+                <span class="badge badge-teal" style="font-size:.68rem;padding:2px 7px">AI</span>
+              </div>
+              <div style="margin-top:3px;font-size:.76rem;color:var(--text-3);padding-left:30px">Use Gemini to create new questions and save them to the DB</div>
+            </div>
+            <span id="gen-chevron" style="color:var(--teal);font-size:.8rem;transition:transform .25s;display:inline-block;flex-shrink:0;margin-left:10px">▼</span>
+          </button>
+
+          <div id="gen-panel" style="display:none;margin-top:16px">
+            <div style="background:var(--glass);border:1px solid var(--border);border-radius:var(--r-md);padding:18px;display:flex;flex-direction:column;gap:14px">
+
+              <div class="form-group" style="margin-bottom:0">
+                <label class="form-label">📹 Generate questions for</label>
+                <select id="gen-video" class="form-select">
+                  <option value="">Loading videos…</option>
+                </select>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+                <div class="form-group" style="margin-bottom:0">
+                  <label class="form-label">How many</label>
+                  <select id="gen-count" class="form-select">
+                    <option value="5">5 questions</option>
+                    <option value="10" selected>10 questions</option>
+                    <option value="15">15 questions</option>
+                    <option value="20">20 questions</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin-bottom:0">
+                  <label class="form-label">Difficulty</label>
+                  <div style="display:flex;flex-direction:column;gap:6px;padding-top:6px">
+                    ${['easy','medium','hard'].map((d,i) => `
+                      <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:.82rem;color:var(--text-2)">
+                        <input type="checkbox" class="gen-diff" value="${d}" ${i<2?'checked':''} style="accent-color:var(--teal);width:14px;height:14px" />
+                        <span>${d.charAt(0).toUpperCase()+d.slice(1)}</span>
+                      </label>`).join('')}
+                  </div>
+                </div>
+              </div>
+
+              <div id="gen-result" style="display:none;padding:10px 14px;border-radius:var(--r-sm);font-size:.82rem;font-weight:600"></div>
+
+              <button id="gen-btn" class="btn btn-teal btn-full" style="margin-top:2px">
+                <span class="btn-text">⚡ Generate &amp; Save to Database</span>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -74,6 +129,7 @@ export async function renderQuiz(container) {
 
   await populateScopes();
   document.getElementById('start-btn').addEventListener('click', startQuiz);
+  setupGeneratePanel();
 }
 
 async function populateScopes() {
@@ -88,7 +144,90 @@ async function populateScopes() {
       }
       sel.appendChild(g);
     }
+    // Also populate the generate panel video dropdown
+    populateGenVideoDropdown(courses);
   } catch { /**/ }
+}
+
+function populateGenVideoDropdown(courses) {
+  const sel = document.getElementById('gen-video');
+  if (!sel) return;
+  sel.innerHTML = '';
+  for (const c of courses) {
+    const grp = document.createElement('optgroup');
+    grp.label = `📚 ${c.name}`;
+    for (const v of c.videos) {
+      const opt = document.createElement('option');
+      opt.value = v.id;
+      opt.textContent = v.title;
+      grp.appendChild(opt);
+    }
+    sel.appendChild(grp);
+  }
+  if (!sel.options.length) {
+    sel.innerHTML = '<option value="">No videos found</option>';
+  }
+}
+
+function setupGeneratePanel() {
+  const toggleBtn = document.getElementById('gen-toggle-btn');
+  const panel     = document.getElementById('gen-panel');
+  const chevron   = document.getElementById('gen-chevron');
+  const genBtn    = document.getElementById('gen-btn');
+  let open = false;
+
+  toggleBtn.addEventListener('click', () => {
+    open = !open;
+    panel.style.display   = open ? '' : 'none';
+    chevron.style.transform = open ? 'rotate(180deg)' : '';
+  });
+
+  genBtn.addEventListener('click', generateQuestions);
+}
+
+async function generateQuestions() {
+  const videoId = document.getElementById('gen-video')?.value;
+  const count   = parseInt(document.getElementById('gen-count')?.value || '10');
+  const diffs   = [...document.querySelectorAll('.gen-diff:checked')].map(x => x.value);
+  const resultEl = document.getElementById('gen-result');
+  const btn      = document.getElementById('gen-btn');
+
+  if (!videoId) { showToast('Please select a video first', 'error'); return; }
+  if (!diffs.length) { showToast('Select at least one difficulty level', 'error'); return; }
+
+  btn.classList.add('btn-loading'); btn.disabled = true;
+  if (resultEl) { resultEl.style.display = 'none'; resultEl.textContent = ''; }
+
+  try {
+    const res = await API.post('/api/quiz/generate', {
+      video_id: parseInt(videoId),
+      num_questions: count,
+      difficulties: diffs,
+    });
+    const diffLabel = diffs.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(', ');
+    if (resultEl) {
+      resultEl.style.display = '';
+      resultEl.style.background = 'rgba(0,229,204,.12)';
+      resultEl.style.color = 'var(--teal)';
+      resultEl.style.border = '1px solid rgba(0,229,204,.25)';
+      const skipped = (res.generated || res.count) - res.count;
+      let msg = `✅ Generated ${res.generated ?? res.count} · Saved <strong>${res.count}</strong> new ${diffLabel} questions to database!`;
+      if (skipped > 0) msg += ` <span style="color:var(--text-3);font-weight:400">(${skipped} skipped — already existed)</span>`;
+      resultEl.innerHTML = msg;
+    }
+    showToast(`✅ ${res.count} new questions saved!`, 'success');
+  } catch (e) {
+    if (resultEl) {
+      resultEl.style.display = '';
+      resultEl.style.background = 'rgba(239,68,68,.12)';
+      resultEl.style.color = 'var(--coral)';
+      resultEl.style.border = '1px solid rgba(239,68,68,.25)';
+      resultEl.textContent = `❌ ${e.message}`;
+    }
+    showToast(e.message, 'error');
+  } finally {
+    btn.classList.remove('btn-loading'); btn.disabled = false;
+  }
 }
 
 async function startQuiz() {

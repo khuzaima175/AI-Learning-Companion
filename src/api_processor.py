@@ -234,19 +234,27 @@ Transcript: {processed}"""
         processed = self._process_long_transcript(transcript, target_length=25_000)
         diff_str = ", ".join(allowed_difficulties)
 
-        prompt = f"""You are an educational expert creating a quiz for "{title}".
+        prompt = f"""You are an expert educator creating quiz questions about the TOPIC "{title}".
 
-Generate questions EXCLUSIVELY about the CORE EDUCATIONAL CONTENT of this video.
+STRICT RULES:
+1. Questions must test understanding of the SUBJECT MATTER (concepts, facts, processes, mechanisms) taught in the content.
+2. NEVER ask about the video itself (e.g. do NOT write "According to the video..." or "What does the video say...").
+3. Each question must be genuinely educational and unique — no two questions should test the same concept.
+4. Vary the question style: use "What is...", "How does...", "Which of the following...", "Why does...", scenario-based, etc.
+5. ONLY use difficulty levels from: {diff_str}. Distribute evenly across the requested difficulties.
+6. Wrong options must be plausible but clearly incorrect to someone who understands the topic.
 
-Return a single, valid JSON object with key "quiz_questions" containing {num_questions} questions.
-Each question must have: "question", "options" (4 choices), "answer", "difficulty".
-ONLY use these difficulty levels: {diff_str}
-No prefix labels on options (just the choice text).
-Answer must exactly match one of the options.
+Return a single valid JSON object with key "quiz_questions" containing EXACTLY {num_questions} question objects.
+Each question object MUST have:
+- "question": string (the question text, not referencing the video)
+- "options": array of exactly 4 strings (no A/B/C/D prefixes)
+- "answer": string (must exactly match one of the 4 options)
+- "difficulty": one of {diff_str}
 
-Return ONLY valid JSON.
+Return ONLY valid JSON, no markdown, no explanation.
 
-Video Content: {processed}"""
+Educational Content:
+{processed}"""
         return self._call_gemini_and_parse_json(prompt)
 
     def ask_video_question(self, question: str, transcript: str, title: str):

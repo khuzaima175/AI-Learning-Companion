@@ -653,6 +653,28 @@ button { font-family: inherit; }
 .concept-name { font-weight: 700; color: var(--teal); font-size: 0.875rem; margin-bottom: 5px; }
 .concept-def  { color: var(--text-2); font-size: 0.84rem; line-height: 1.6; }
 
+/* ── Summary prose ──────────────────────────────────────────────── */
+.summary-prose {
+  font-size: 1rem;
+  line-height: 1.9;
+  color: var(--text-2);
+  padding: 28px 32px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  border-left: 3px solid var(--teal);
+}
+.summary-prose p {
+  margin-bottom: 1.4em;
+}
+.summary-prose p:first-child {
+  font-size: 1.05rem;
+  color: var(--text);
+  font-weight: 500;
+}
+.summary-prose p:last-child { margin-bottom: 0; }
+.summary-prose strong { color: var(--text); font-weight: 600; }
+
 /* ── Bullet list ────────────────────────────────────────────────── */
 .bullet-list { list-style: none; display: flex; flex-direction: column; gap: 9px; }
 .bullet-list li { display: flex; align-items: flex-start; gap: 10px; font-size: 0.875rem; line-height: 1.65; color: var(--text-2); }

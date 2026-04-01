@@ -321,17 +321,39 @@ class DatabaseManager:
     # Quiz CRUD
     # ------------------------------------------------------------------
 
-    def add_quiz_questions(self, video_db_id: int, questions: list):
-        self.execute_query("DELETE FROM quiz_questions WHERE video_id = ?", (video_db_id,))
+    def add_quiz_questions(self, video_db_id: int, questions: list) -> int:
+        """Append new questions without deleting existing ones.
+        Skips duplicates by comparing lowercased question text.
+        Returns the number of questions actually inserted.
+        """
+        # Fetch existing question texts for this video (lowercased for comparison)
+        existing_rows = self.execute_query(
+            "SELECT LOWER(question) FROM quiz_questions WHERE video_id = ?",
+            (video_db_id,), fetch="all"
+        ) or []
+        existing_texts = {row[0].strip() for row in existing_rows}
+
         today = datetime.now().date()
+        inserted = 0
         for q in questions:
-            difficulty = q.get("difficulty", "medium")
+            q_text = q.get("question", "").strip()
+            if not q_text:
+                continue
+            # Skip if a very similar question already exists
+            if q_text.lower() in existing_texts:
+                continue
+            difficulty = q.get("difficulty", "medium").lower()
+            if difficulty not in ("easy", "medium", "hard"):
+                difficulty = "medium"
             self.execute_query(
                 """INSERT INTO quiz_questions
                    (video_id, question, options, answer, next_review_date, difficulty)
                    VALUES (?, ?, ?, ?, ?, ?)""",
-                (video_db_id, q["question"], json.dumps(q["options"]), q["answer"], today, difficulty),
+                (video_db_id, q_text, json.dumps(q.get("options", [])), q.get("answer", ""), today, difficulty),
             )
+            existing_texts.add(q_text.lower())  # prevent duplicates within same batch
+            inserted += 1
+        return inserted
 
     def get_due_review_count(self) -> int:
         today = datetime.now().date()
