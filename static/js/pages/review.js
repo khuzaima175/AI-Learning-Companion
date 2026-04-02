@@ -116,17 +116,23 @@ async function onAnswer(btn, q) {
   `;
 
   fb.querySelectorAll('.srs-btn').forEach(b => {
-    b.addEventListener('click', async () => {
+    b.addEventListener('click', () => {
       fb.querySelectorAll('.srs-btn').forEach(x => x.disabled = true);
-      try {
-        await API.post('/api/review/answer', {
-          session_id: _sessionId, question_id: q.id,
-          is_correct: correct, performance: b.dataset.perf,
-        });
-      } catch { /**/ }
+      
+      const currentQ = q; // capture current question before incrementing
+      const perf = b.dataset.perf;
+
       _idx++;
       if (_idx < _questions.length) renderRevQ();
       else renderDone();
+
+      // Defer network request & cache busting to prevent UI thread jank
+      setTimeout(() => {
+        API.post('/api/review/answer', {
+          session_id: _sessionId, question_id: currentQ.id,
+          is_correct: correct, performance: perf,
+        }).catch(e => console.error("Failed to save answer", e));
+      }, 50);
     });
   });
 }
