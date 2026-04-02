@@ -1,49 +1,27 @@
-import json
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
 import google.genai as genai
 
-CONFIG_DIR = Path(os.getenv("APPDATA", Path.home())) / "AILearningCompanion"
-CONFIG_FILE = CONFIG_DIR / "config.json"
+load_dotenv()
 
 # Model fallback chain — tried in order; falls back on quota / rate-limit errors
 MODEL_CHAIN = [
-    "gemini-3.1-flash-lite-preview", # primary
-    "gemini-2.5-flash",              # fallback 1
-    "gemini-2.0-flash",              # fallback 2 (last resort)
+    "gemini-3.1-flash-lite-preview",  # primary
+    "gemini-2.5-flash",               # fallback 1
+    "gemini-2.0-flash",               # fallback 2 (last resort)
 ]
 
 
-def get_config_dir() -> Path:
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    return CONFIG_DIR
-
-
-def load_config() -> dict:
-    if CONFIG_FILE.exists():
-        try:
-            with open(CONFIG_FILE, "r") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {}
-
-
-def save_config(data: dict):
-    get_config_dir()
-    existing = load_config()
-    existing.update(data)
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(existing, f, indent=2)
-
-
 def get_api_key() -> str | None:
-    return load_config().get("api_key")
+    """Read Gemini API key from environment variable only (Vercel-compatible)."""
+    return os.environ.get("GEMINI_API_KEY")
 
 
 def save_api_key(api_key: str):
-    save_config({"api_key": api_key})
+    """No-op in production — key is set as an env var in Vercel dashboard."""
+    pass
 
 
 def get_client() -> genai.Client | None:

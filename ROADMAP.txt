@@ -1,0 +1,52 @@
+# 🗺️ Future Roadmap & Learning Plan
+
+This document tracks the future architectural changes and strategic ideas to keep you (the user) engaged and learning without letting laziness get in the way! 
+
+---
+
+## 🏗️ Phase 1: Architecture Migration
+
+To support mobile devices and cloud accessibility, we need to transition away from local storage.
+
+1. **Database**: Migrate from local SQLite (`learning.db`) to **PostgreSQL via Supabase**.
+   - Requires rewriting `database.py` to use a Postgres driver or the Supabase API.
+2. **Backend/Frontend Hosting**: Deploy the FastAPI app and static files to **Vercel** or **Render**.
+   - Vercel works great for serverless Python functions + static frontends.
+
+---
+
+## 🚀 Phase 2: Solving the "Laziness" Problem
+
+You asked for ideas on how to prevent yourself from forgetting to use the app or getting lazy. Here are the best strategies, ranked from easiest to hardest:
+
+### 1. The PWA (Progressive Web App) Approach 🌟 *(Highly Recommended)*
+Instead of building a full Android app from scratch (which takes a lot of time), we can turn this current web app into a **PWA**.
+- **How it works:** You "install" the website directly to your phone's home screen.
+- **Why it's great:** It looks and feels exactly like a native app, and we can easily send **Web Push Notifications** straight to your phone.
+
+### 2. Telegram / Discord Bot Integration 🤖 *(Easiest automation)*
+Instead of dealing with email servers, we can wire the backend to a simple Telegram Bot.
+- Every morning at 9 AM, your bot messages you: *"Hey! You have 15 practice questions due today for Computer Graphics. Click here to start: [Link]"* 
+- You already check your messaging apps daily, so it naturally fits your habits.
+
+### 3. Email Automation 📧
+We can use a free service like **Resend** or **SendGrid** coupled with a daily Cron job.
+- Sends you a daily summary: *"Today's tasks: 1 Video to Review, 10 Flashcards due."*
+- **Pros:** Reliable. 
+- **Cons:** Emails often get ignored or routed to spam promotions over time.
+
+### 4. Native Android / iOS App 📱
+Building a dedicated mobile app using React Native or Flutter, and using Firebase/Supabase for push notifications. 
+- **Pros:** Maximum control, app store presence.
+- **Cons:** High development overhead just for personal use.
+
+---
+
+## 🧠 Your Learning Sandbox
+
+*As the code changes, log your learnings or AHA! moments here so you don't forget the concepts we implemented.*
+
+- **FastAPI**: Used for lightweight API routing (`app.py`).
+- **Gemini API**: Generates the AI summaries, quizzes, and chat responses (`api_processor.py`).
+- **Vanilla JS + CSS**: We used no frontend frameworks! Just pure HTML, JavaScript, and a premium CSS design system (Neon Sunset).
+- **SQLite**: Local relational database handling our persistence (soon to be Migrated!).

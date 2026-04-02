@@ -23,6 +23,9 @@ env/
 *.db-wal
 config.json
 
+# Environment variables — NEVER commit .env with real secrets!
+.env
+
 # IDE
 .vscode/
 .idea/
@@ -34,3 +37,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Vercel
+.vercel/
