@@ -194,20 +194,17 @@ export function navigate(page) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// API Key modal
+// Status bar (cloud connection check)
 // ══════════════════════════════════════════════════════════════════
 async function refreshStatus() {
+  const dot  = document.getElementById('status-dot');
+  const text = document.getElementById('status-text');
   try {
-    const cfg = await API.get('/api/config');
-    const dot  = document.getElementById('status-dot');
-    const text = document.getElementById('status-text');
-    if (cfg.has_api_key) {
-      dot.className  = 'status-dot ok';
-      text.textContent = cfg.masked_key || 'Key configured ✓';
-    } else {
-      dot.className  = 'status-dot bad';
-      text.textContent = 'No API key set';
-    }
+    await API.get('/api/courses');
+    dot.className    = 'status-dot ok';
+    text.textContent = 'Connected ☑️';
+
+    // Update daily review badge
     try {
       const rev = await API.get('/api/review/due?limit=0');
       const badge = document.getElementById('review-badge');
@@ -219,34 +216,9 @@ async function refreshStatus() {
       }
     } catch { /**/ }
   } catch {
-    document.getElementById('status-text').textContent = 'Server offline';
+    dot.className    = 'status-dot bad';
+    text.textContent = 'Server offline';
   }
-}
-
-function initModal() {
-  const modal    = document.getElementById('api-key-modal');
-  const openBtn  = document.getElementById('configure-key-btn');
-  const cancelBtn= document.getElementById('cancel-key-btn');
-  const saveBtn  = document.getElementById('save-key-btn');
-  const input    = document.getElementById('api-key-input');
-
-  openBtn.addEventListener('click', () => { input.value = ''; modal.style.display = 'flex'; setTimeout(()=>input.focus(),80); });
-  cancelBtn.addEventListener('click', () => { modal.style.display = 'none'; });
-  modal.addEventListener('click', e => { if (e.target === modal) modal.style.display = 'none'; });
-
-  saveBtn.addEventListener('click', async () => {
-    const key = input.value.trim();
-    if (!key) { showToast('Enter a valid API key', 'error'); return; }
-    saveBtn.classList.add('btn-loading');
-    try {
-      await API.post('/api/config/api-key', { api_key: key });
-      modal.style.display = 'none';
-      showToast('API key saved!', 'success');
-      refreshStatus();
-    } catch (e) { showToast(e.message, 'error'); }
-    finally { saveBtn.classList.remove('btn-loading'); }
-  });
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') saveBtn.click(); });
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -263,7 +235,6 @@ function initMobile() {
 // Boot
 // ══════════════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
-  initModal();
   initMobile();
   refreshStatus();
   Streak.bump(); // bump streak on daily open
