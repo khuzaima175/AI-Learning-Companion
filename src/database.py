@@ -113,6 +113,55 @@ class DatabaseManager:
         )
         return [(row["id"], row["title"]) for row in result.data]
 
+    def get_all_courses_full(self) -> list:
+        """Single-pass fetch of all courses + videos + question counts.
+        Replaces the N+1 loop in /api/courses — 3 queries instead of 1+2N+V.
+        """
+        # 1. All courses
+        courses_res = self.sb.table("courses").select("id, name").order("name").execute()
+        if not courses_res.data:
+            return []
+
+        course_map = {c["id"]: {"id": c["id"], "name": c["name"], "videos": [], "video_count": 0, "question_count": 0}
+                     for c in courses_res.data}
+        course_ids = list(course_map.keys())
+
+        # 2. All videos for those courses (one query)
+        videos_res = (
+            self.sb.table("videos")
+            .select("id, title, course_id")
+            .in_("course_id", course_ids)
+            .order("title")
+            .execute()
+        )
+        video_map = {}  # video_id -> course_id
+        for v in videos_res.data:
+            cid = v["course_id"]
+            course_map[cid]["videos"].append({"id": v["id"], "title": v["title"], "question_count": 0})
+            course_map[cid]["video_count"] += 1
+            video_map[v["id"]] = cid
+
+        # 3. All question counts for those videos (one query)
+        if video_map:
+            q_res = (
+                self.sb.table("quiz_questions")
+                .select("video_id", count="exact")
+                .in_("video_id", list(video_map.keys()))
+                .execute()
+            )
+            # Count per video_id from returned rows
+            from collections import Counter
+            q_counts = Counter(r["video_id"] for r in q_res.data)
+            for vid_id, count in q_counts.items():
+                cid = video_map[vid_id]
+                course_map[cid]["question_count"] += count
+                for v in course_map[cid]["videos"]:
+                    if v["id"] == vid_id:
+                        v["question_count"] = count
+                        break
+
+        return list(course_map.values())
+
     def delete_video(self, video_id: int):
         try:
             self.sb.table("quiz_questions").delete().eq("video_id", video_id).execute()
@@ -353,19 +402,27 @@ class DatabaseManager:
         return result.data[0]["id"]
 
     def update_quiz_session(self, session_id: int, correct: bool):
-        result = (
-            self.sb.table("quiz_sessions")
-            .select("questions_answered, questions_correct")
-            .eq("id", session_id)
-            .execute()
-        )
-        if not result.data:
-            return
-        row = result.data[0]
-        self.sb.table("quiz_sessions").update({
-            "questions_answered": (row["questions_answered"] or 0) + 1,
-            "questions_correct":  (row["questions_correct"] or 0) + (1 if correct else 0),
-        }).eq("id", session_id).execute()
+        # Use Supabase RPC for atomic increment to avoid read-then-write
+        try:
+            self.sb.rpc("increment_session", {
+                "s_id": session_id,
+                "add_correct": 1 if correct else 0,
+            }).execute()
+        except Exception:
+            # Fallback: read-then-write if RPC not available
+            result = (
+                self.sb.table("quiz_sessions")
+                .select("questions_answered, questions_correct")
+                .eq("id", session_id)
+                .execute()
+            )
+            if not result.data:
+                return
+            row = result.data[0]
+            self.sb.table("quiz_sessions").update({
+                "questions_answered": (row["questions_answered"] or 0) + 1,
+                "questions_correct":  (row["questions_correct"] or 0) + (1 if correct else 0),
+            }).eq("id", session_id).execute()
 
     def get_recent_sessions(self, limit: int = 10):
         result = (
@@ -381,15 +438,15 @@ class DatabaseManager:
         ]
 
     def get_database_info(self) -> dict:
-        courses = (
-            self.sb.table("courses").select("id", count="exact").execute().count or 0
-        )
-        videos = (
-            self.sb.table("videos").select("id", count="exact").execute().count or 0
-        )
-        questions = (
-            self.sb.table("quiz_questions").select("id", count="exact").execute().count or 0
-        )
+        # Fire all three count queries concurrently via threads to avoid serial round trips
+        from concurrent.futures import ThreadPoolExecutor
+        def _count(table):
+            return self.sb.table(table).select("id", count="exact").execute().count or 0
+        with ThreadPoolExecutor(max_workers=3) as ex:
+            fc = ex.submit(_count, "courses")
+            fv = ex.submit(_count, "videos")
+            fq = ex.submit(_count, "quiz_questions")
+            courses, videos, questions = fc.result(), fv.result(), fq.result()
         return {
             "path":      "Supabase (cloud)",
             "size_kb":   0,

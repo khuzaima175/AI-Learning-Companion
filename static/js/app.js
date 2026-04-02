@@ -13,16 +13,58 @@ import { renderStats }      from './pages/stats.js';
 import { renderManage }     from './pages/manage.js';
 
 // ══════════════════════════════════════════════════════════════════
+// In-memory API cache  (TTL-based, busted on mutations)
+// ══════════════════════════════════════════════════════════════════
+const _cache = new Map();   // path → { data, expiresAt }
+
+function _cacheGet(path) {
+  const entry = _cache.get(path);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) { _cache.delete(path); return null; }
+  return entry.data;
+}
+function _cacheSet(path, data, ttlMs) {
+  _cache.set(path, { data, expiresAt: Date.now() + ttlMs });
+}
+function _cacheBust(prefix) {
+  for (const key of _cache.keys()) {
+    if (prefix === '*' || key.startsWith(prefix)) _cache.delete(key);
+  }
+}
+
+// TTL config per path prefix (ms)
+const CACHE_TTL = {
+  '/api/courses':         20_000,   // 20s  — most expensive call
+  '/api/stats':           15_000,   // 15s
+  '/api/review/due':      10_000,   // 10s
+  '/api/quiz/questions':  10_000,   // 10s
+  '/api/videos/':         30_000,   // 30s  — rarely changes
+  'default':              10_000,
+};
+
+function _getTtl(path) {
+  for (const [prefix, ttl] of Object.entries(CACHE_TTL)) {
+    if (prefix !== 'default' && path.startsWith(prefix)) return ttl;
+  }
+  return CACHE_TTL['default'];
+}
+
+// ══════════════════════════════════════════════════════════════════
 // API Client
 // ══════════════════════════════════════════════════════════════════
 export const API = {
   async get(path) {
+    const cached = _cacheGet(path);
+    if (cached !== null) return cached;
+
     const r = await fetch(path);
     if (!r.ok) {
       const e = await r.json().catch(() => ({ detail: r.statusText }));
       throw new Error(e.detail || `HTTP ${r.status}`);
     }
-    return r.json();
+    const data = await r.json();
+    _cacheSet(path, data, _getTtl(path));
+    return data;
   },
   async post(path, body) {
     const r = await fetch(path, {
@@ -34,6 +76,10 @@ export const API = {
       const e = await r.json().catch(() => ({ detail: r.statusText }));
       throw new Error(e.detail || `HTTP ${r.status}`);
     }
+    // Bust related caches after any write
+    _cacheBust('/api/courses');
+    _cacheBust('/api/stats');
+    _cacheBust('/api/review/due');
     return r.json();
   },
   async del(path) {
@@ -42,9 +88,11 @@ export const API = {
       const e = await r.json().catch(() => ({ detail: r.statusText }));
       throw new Error(e.detail || `HTTP ${r.status}`);
     }
+    _cacheBust('*');   // full bust on delete
     return r.json();
   },
 };
+
 
 // ══════════════════════════════════════════════════════════════════
 // Toast
@@ -189,7 +237,9 @@ export function navigate(page) {
     content.style.transform = 'translateY(0)';
   }, 120);
 
-  document.getElementById('sidebar').classList.remove('open');
+  // Close sidebar on mobile when navigating
+  if (window._closeMobileSidebar) window._closeMobileSidebar();
+  else document.getElementById('sidebar').classList.remove('open');
   window.location.hash = page;
 }
 
@@ -222,13 +272,118 @@ async function refreshStatus() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// Mobile sidebar
+// Mobile sidebar – toggle · overlay · swipe gestures
 // ══════════════════════════════════════════════════════════════════
 function initMobile() {
-  document.getElementById('mobile-menu-btn')
-    .addEventListener('click', () =>
-      document.getElementById('sidebar').classList.toggle('open')
-    );
+  const sidebar  = document.getElementById('sidebar');
+  const btn      = document.getElementById('mobile-menu-btn');
+  const overlay  = document.getElementById('sidebar-overlay');
+  const iconHam  = document.getElementById('menu-icon-ham');
+  const iconX    = document.getElementById('menu-icon-close');
+
+  function openSidebar() {
+    sidebar.classList.add('open');
+    overlay.classList.add('active');
+    btn.classList.add('sidebar-open');
+    btn.setAttribute('aria-expanded', 'true');
+    iconHam.style.display  = 'none';
+    iconX.style.display    = '';
+  }
+
+  function closeSidebar() {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('active');
+    btn.classList.remove('sidebar-open');
+    btn.setAttribute('aria-expanded', 'false');
+    iconHam.style.display  = '';
+    iconX.style.display    = 'none';
+  }
+
+  function toggleSidebar() {
+    sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+  }
+
+  // Hamburger button
+  btn.addEventListener('click', toggleSidebar);
+
+  // Tap overlay to close
+  overlay.addEventListener('click', closeSidebar);
+
+  // ── Swipe gestures ──────────────────────────────────────────────
+  const SWIPE_THRESHOLD   = 48;   // px minimum horizontal travel
+  const EDGE_ZONE         = 28;   // px from left edge to start open-swipe
+  const VELOCITY_MIN      = 0.25; // px/ms minimum speed
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touchStartTime = 0;
+  let swipeIntent = null;         // 'open' | 'close' | null
+
+  document.addEventListener('touchstart', e => {
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0];
+    touchStartX    = t.clientX;
+    touchStartY    = t.clientY;
+    touchStartTime = Date.now();
+
+    const sidebarOpen = sidebar.classList.contains('open');
+    // Only capture relevant starting zones
+    if (!sidebarOpen && touchStartX <= EDGE_ZONE) {
+      swipeIntent = 'open';
+    } else if (sidebarOpen) {
+      swipeIntent = 'close';
+    } else {
+      swipeIntent = null;
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchmove', e => {
+    // provide live visual drag preview while swiping
+    if (!swipeIntent) return;
+    const dx = e.touches[0].clientX - touchStartX;
+    const dy = Math.abs(e.touches[0].clientY - touchStartY);
+    if (dy > 50) { swipeIntent = null; return; } // vertical scroll – cancel
+
+    if (swipeIntent === 'open' && dx > 0) {
+      const progress = Math.min(dx / 272, 1);
+      sidebar.style.transition = 'none';
+      sidebar.style.transform  = `translateX(calc(-272px + ${dx}px))`;
+      overlay.style.display    = 'block';
+      overlay.style.opacity    = String(progress * 0.55);
+    } else if (swipeIntent === 'close' && dx < 0) {
+      const progress = Math.min(-dx / 272, 1);
+      sidebar.style.transition = 'none';
+      sidebar.style.transform  = `translateX(${dx}px)`;
+      overlay.style.opacity    = String((1 - progress) * 0.55);
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchend', e => {
+    if (!swipeIntent) return;
+    const t    = e.changedTouches[0];
+    const dx   = t.clientX - touchStartX;
+    const dy   = Math.abs(t.clientY - touchStartY);
+    const dt   = Date.now() - touchStartTime;
+    const vx   = Math.abs(dx) / (dt || 1);
+
+    // Reset inline styles so CSS transitions take over
+    sidebar.style.transition = '';
+    sidebar.style.transform  = '';
+    overlay.style.opacity    = '';
+    overlay.style.display    = '';
+
+    if (dy > 60) { swipeIntent = null; return; } // was a scroll
+
+    const isSwipe = Math.abs(dx) >= SWIPE_THRESHOLD || vx >= VELOCITY_MIN;
+
+    if (swipeIntent === 'open'  && dx > 0 && isSwipe) openSidebar();
+    else if (swipeIntent === 'close' && dx < 0 && isSwipe) closeSidebar();
+    // If swipe was too short, sidebar snaps back via CSS transition
+
+    swipeIntent = null;
+  }, { passive: true });
+
+  // Expose closeSidebar so navigate() can call it
+  window._closeMobileSidebar = closeSidebar;
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -245,4 +400,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const hash = window.location.hash.replace('#', '');
   navigate(PAGES[hash] ? hash : 'dashboard');
+
+  // ── Keep-alive ping ─────────────────────────────────────────────
+  // When the user returns to the tab after being away, fire a silent
+  // ping so Vercel warms up BEFORE they interact (hides cold start).
+  let _lastPing = 0;
+  const PING_INTERVAL = 4 * 60 * 1000; // 4 minutes
+
+  function _maybePing() {
+    const now = Date.now();
+    if (now - _lastPing > PING_INTERVAL) {
+      _lastPing = now;
+      fetch('/api/ping').catch(() => {}); // fire-and-forget
+    }
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') _maybePing();
+  });
+
+  _maybePing(); // also ping on first load
 });

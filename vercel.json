@@ -5,6 +5,7 @@
       "src": "api/index.py",
       "use": "@vercel/python",
       "config": {
+        "maxDuration": 30,
         "includeFiles": ["src/**", "app.py", "static/**"]
       }
     },
@@ -17,6 +18,10 @@
     {
       "src": "/static/(.*)",
       "dest": "/static/$1"
+    },
+    {
+      "src": "/api/ping",
+      "dest": "/api/index.py"
     },
     {
       "src": "/(.*)",

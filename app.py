@@ -43,9 +43,28 @@ STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
+# ── Startup: pre-warm DB singleton so first real request is fast ──
+@app.on_event("startup")
+async def _warmup():
+    import asyncio
+    import threading
+    def _init():
+        try:
+            get_db()  # creates and caches the Supabase client
+        except Exception:
+            pass  # don't crash startup if env vars are missing
+    threading.Thread(target=_init, daemon=True).start()
+
+
 @app.get("/")
 async def index():
     return FileResponse(str(STATIC_DIR / "index.html"))
+
+
+@app.get("/api/ping")
+async def ping():
+    """Lightweight keep-alive endpoint — no DB hit."""
+    return {"ok": True}
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -119,18 +138,11 @@ async def save_api_key(req: ApiKeyRequest):
 @app.get("/api/courses")
 async def list_courses():
     db = get_db()
-    courses = db.get_all_courses()
-    result = []
-    for cid, name in courses:
-        videos = db.get_videos_for_course(cid)
-        v_count, q_count = db.get_course_stats(cid)
-        videos_with_counts = []
-        for vid, t in videos:
-            vq = db.get_video_stats(vid)
-            videos_with_counts.append({"id": vid, "title": t, "question_count": vq})
-        result.append({"id": cid, "name": name, "video_count": v_count, "question_count": q_count,
-                        "videos": videos_with_counts})
-    return result
+    result = db.get_all_courses_full()   # 3 queries instead of 1+2N+V
+    response = JSONResponse(content=result)
+    # 15s client cache — avoids re-fetching on every page switch
+    response.headers["Cache-Control"] = "public, max-age=15, stale-while-revalidate=30"
+    return response
 
 
 @app.get("/api/videos/{video_id}")
