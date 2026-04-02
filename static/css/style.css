@@ -821,6 +821,23 @@ button { font-family: inherit; }
 }
 .search-input::placeholder { color: var(--text-3); }
 
+/* ── Skeleton shimmer ───────────────────────────────────────────── */
+.skel {
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0.04) 25%,
+    rgba(255,255,255,0.09) 50%,
+    rgba(255,255,255,0.04) 75%);
+  background-size: 200% 100%;
+  animation: skelShimmer 1.4s ease-in-out infinite;
+}
+@keyframes skelShimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@media (max-width: 800px) {
+  .skel { animation: none; background: rgba(255,255,255,0.06); }
+}
+
 /* ── Empty / Loading states ─────────────────────────────────────── */
 .empty-state { text-align: center; padding: 56px 20px; color: var(--text-2); }
 .empty-icon  { font-size: 2.8rem; margin-bottom: 14px; opacity: 0.3; }

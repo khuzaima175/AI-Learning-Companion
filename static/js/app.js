@@ -13,33 +13,25 @@ import { renderStats }      from './pages/stats.js';
 import { renderManage }     from './pages/manage.js';
 
 // ══════════════════════════════════════════════════════════════════
-// In-memory API cache  (TTL-based, busted on mutations)
+// Two-layer API cache:
+//   L1 = in-memory Map        (instant, same page session)
+//   L2 = localStorage         (persists across page refreshes)
+// Strategy: stale-while-revalidate
+//   → Return cached data immediately (even if slightly old)
+//   → Simultaneously fetch fresh data in background
+//   → Update UI when fresh data arrives (if different)
 // ══════════════════════════════════════════════════════════════════
-const _cache = new Map();   // path → { data, expiresAt }
+const _memCache = new Map();
+const LS_PREFIX = 'alc_cache_';
 
-function _cacheGet(path) {
-  const entry = _cache.get(path);
-  if (!entry) return null;
-  if (Date.now() > entry.expiresAt) { _cache.delete(path); return null; }
-  return entry.data;
-}
-function _cacheSet(path, data, ttlMs) {
-  _cache.set(path, { data, expiresAt: Date.now() + ttlMs });
-}
-function _cacheBust(prefix) {
-  for (const key of _cache.keys()) {
-    if (prefix === '*' || key.startsWith(prefix)) _cache.delete(key);
-  }
-}
-
-// TTL config per path prefix (ms)
+// TTL config (ms) — L1 strict TTL, L2 soft TTL (stale ok, revalidate)
 const CACHE_TTL = {
-  '/api/courses':         20_000,   // 20s  — most expensive call
-  '/api/stats':           15_000,   // 15s
-  '/api/review/due':      10_000,   // 10s
-  '/api/quiz/questions':  10_000,   // 10s
-  '/api/videos/':         30_000,   // 30s  — rarely changes
-  'default':              10_000,
+  '/api/courses':         { l1: 20_000, l2: 5 * 60_000  },  // 20s / 5 min
+  '/api/stats':           { l1: 15_000, l2: 3 * 60_000  },  // 15s / 3 min
+  '/api/review/due':      { l1: 10_000, l2: 2 * 60_000  },  // 10s / 2 min
+  '/api/quiz/questions':  { l1: 10_000, l2: 2 * 60_000  },
+  '/api/videos/':         { l1: 60_000, l2: 10 * 60_000 },  // 1 min / 10 min
+  'default':              { l1: 10_000, l2: 60_000 },
 };
 
 function _getTtl(path) {
@@ -49,23 +41,98 @@ function _getTtl(path) {
   return CACHE_TTL['default'];
 }
 
+// L1
+function _l1Get(path) {
+  const e = _memCache.get(path);
+  if (!e || Date.now() > e.ex) { _memCache.delete(path); return null; }
+  return e.data;
+}
+function _l1Set(path, data, ttlMs) {
+  _memCache.set(path, { data, ex: Date.now() + ttlMs });
+}
+
+// L2 (localStorage)
+function _l2Get(path) {
+  try {
+    const raw = localStorage.getItem(LS_PREFIX + btoa(path));
+    if (!raw) return null;
+    const e = JSON.parse(raw);
+    // Return data even if stale — caller decides whether to revalidate
+    return e;
+  } catch { return null; }
+}
+function _l2Set(path, data, ttlMs) {
+  try {
+    localStorage.setItem(LS_PREFIX + btoa(path), JSON.stringify({
+      data, ex: Date.now() + ttlMs, fresh: Date.now(),
+    }));
+  } catch { /* storage full — ignore */ }
+}
+
+// Bust both layers
+function _cacheBust(prefix) {
+  for (const key of _memCache.keys()) {
+    if (prefix === '*' || key.startsWith(prefix)) _memCache.delete(key);
+  }
+  if (prefix === '*') {
+    Object.keys(localStorage).filter(k => k.startsWith(LS_PREFIX))
+      .forEach(k => localStorage.removeItem(k));
+  } else {
+    try {
+      const encoded = btoa(prefix);
+      Object.keys(localStorage).filter(k => k.startsWith(LS_PREFIX) && k.includes(encoded.slice(0,10)))
+        .forEach(k => localStorage.removeItem(k));
+    } catch { /**/ }
+  }
+}
+
+// Subscriber callbacks for stale-while-revalidate updates
+const _swr_listeners = new Map();
+export function onFreshData(path, cb) { _swr_listeners.set(path, cb); }
+
 // ══════════════════════════════════════════════════════════════════
 // API Client
 // ══════════════════════════════════════════════════════════════════
 export const API = {
-  async get(path) {
-    const cached = _cacheGet(path);
-    if (cached !== null) return cached;
+  async get(path, { revalidate = true } = {}) {
+    const ttl = _getTtl(path);
 
+    // 1. L1 hit → return immediately (no network)
+    const l1 = _l1Get(path);
+    if (l1 !== null) return l1;
+
+    // 2. L2 hit → return stale data immediately, revalidate in background
+    const l2 = _l2Get(path);
+    if (l2 !== null) {
+      _l1Set(path, l2.data, ttl.l1);   // warm L1 too
+      const isStale = Date.now() > l2.ex;
+      if (revalidate && isStale) {
+        // Background revalidation — don't block the caller
+        fetch(path).then(async r => {
+          if (!r.ok) return;
+          const fresh = await r.json();
+          _l1Set(path, fresh, ttl.l1);
+          _l2Set(path, fresh, ttl.l2);
+          // Notify any registered listener so the page can update
+          const cb = _swr_listeners.get(path);
+          if (cb) cb(fresh);
+        }).catch(() => {});
+      }
+      return l2.data;
+    }
+
+    // 3. No cache → fetch, populate both layers
     const r = await fetch(path);
     if (!r.ok) {
       const e = await r.json().catch(() => ({ detail: r.statusText }));
       throw new Error(e.detail || `HTTP ${r.status}`);
     }
     const data = await r.json();
-    _cacheSet(path, data, _getTtl(path));
+    _l1Set(path, data, ttl.l1);
+    _l2Set(path, data, ttl.l2);
     return data;
   },
+
   async post(path, body) {
     const r = await fetch(path, {
       method: 'POST',
@@ -76,22 +143,23 @@ export const API = {
       const e = await r.json().catch(() => ({ detail: r.statusText }));
       throw new Error(e.detail || `HTTP ${r.status}`);
     }
-    // Bust related caches after any write
     _cacheBust('/api/courses');
     _cacheBust('/api/stats');
     _cacheBust('/api/review/due');
     return r.json();
   },
+
   async del(path) {
     const r = await fetch(path, { method: 'DELETE' });
     if (!r.ok) {
       const e = await r.json().catch(() => ({ detail: r.statusText }));
       throw new Error(e.detail || `HTTP ${r.status}`);
     }
-    _cacheBust('*');   // full bust on delete
+    _cacheBust('*');
     return r.json();
   },
 };
+
 
 
 // ══════════════════════════════════════════════════════════════════

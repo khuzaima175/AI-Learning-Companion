@@ -5,6 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Learning Companion</title>
   <meta name="description" content="Your personal AI-powered study companion — summaries, flashcards, spaced repetition, and quizzes." />
+
+  <!-- Preload critical assets -->
+  <link rel="preload" href="/static/css/style.css" as="style" />
+  <link rel="preload" href="/static/js/app.js" as="script" crossorigin />
+
+  <!-- Parallel-load ALL JS modules (eliminates waterfall) -->
+  <link rel="modulepreload" href="/static/js/app.js" />
+  <link rel="modulepreload" href="/static/js/pages/dashboard.js" />
+  <link rel="modulepreload" href="/static/js/pages/browse.js" />
+  <link rel="modulepreload" href="/static/js/pages/add_video.js" />
+  <link rel="modulepreload" href="/static/js/pages/flashcards.js" />
+  <link rel="modulepreload" href="/static/js/pages/quiz.js" />
+  <link rel="modulepreload" href="/static/js/pages/review.js" />
+  <link rel="modulepreload" href="/static/js/pages/stats.js" />
+  <link rel="modulepreload" href="/static/js/pages/manage.js" />
+
+  <!-- DNS prefetch for external origins -->
+  <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
+
   <link rel="stylesheet" href="/static/css/style.css" />
 </head>
 <body>

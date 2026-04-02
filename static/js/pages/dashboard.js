@@ -14,6 +14,7 @@ export async function renderDashboard(container) {
   const quote = QUOTES[Math.floor(Math.random() * QUOTES.length)];
   const streak = Streak.get();
 
+  // Render full skeleton immediately — user sees layout in <16ms
   container.innerHTML = `
     <div class="page-header enter" style="animation-delay:0ms">
       <div class="page-icon-wrap">🏠</div>
@@ -38,7 +39,7 @@ export async function renderDashboard(container) {
       </div>
     </div>
 
-    <!-- Metrics -->
+    <!-- Metrics skeleton -->
     <div class="metric-grid stagger-children" id="metric-grid">
       ${metric('📚','courses','Courses','teal')}
       ${metric('🎬','videos','Videos','teal')}
@@ -77,7 +78,7 @@ export async function renderDashboard(container) {
       </div>
     </div>
 
-    <!-- Recent activity -->
+    <!-- Recent courses -->
     <div class="section-hdr enter" style="margin-top:28px">
       <div>
         <div class="section-title">Recent Courses</div>
@@ -85,35 +86,43 @@ export async function renderDashboard(container) {
       </div>
       <button class="btn btn-ghost btn-sm" onclick="window.navigate && navigate('browse')">View all →</button>
     </div>
-    <div id="recent-courses" class="stagger-children">
-      <div class="loading-state" style="padding:30px"><div class="spinner"></div></div>
+    <div id="recent-courses">
+      <!-- Skeleton rows -->
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${[1,2,3].map(() => `
+          <div class="card card-sm skel-row" style="display:flex;justify-content:space-between;align-items:center">
+            <div class="skel" style="width:140px;height:14px;border-radius:6px"></div>
+            <div class="skel" style="width:50px;height:20px;border-radius:99px"></div>
+          </div>`).join('')}
+      </div>
     </div>
   `;
 
-  // Stagger delays
+  // Wire up interactions immediately (no awaiting)
   staggerElements('#metric-grid .metric-card', 70);
   staggerElements('#quick-actions .quick-card', 60);
-
-  // Animate streak
   setTimeout(() => animateCount(document.getElementById('streak-num'), streak.count, 600), 200);
-
-  // Quick action clicks
   document.querySelectorAll('.quick-card[data-goto]').forEach(el => {
     el.addEventListener('click', () => navigate(el.dataset.goto));
   });
 
-  // Load stats
+  // Load stats & courses in parallel (not sequentially!)
   try {
-    const s = await API.get('/api/stats');
+    const [s, courses] = await Promise.all([
+      API.get('/api/stats'),
+      API.get('/api/courses'),
+    ]);
+
+    // Fill metrics
     fillMetric('courses',   s.courses || 0);
     fillMetric('videos',    s.videos  || 0);
     fillMetric('questions', s.total_questions || 0);
     fillMetric('due',       s.due_questions   || 0);
     fillMetric('accuracy',  s.accuracy || 0, '%');
 
-    // Recent courses
-    const courses = await API.get('/api/courses');
+    // Recent courses — replace skeletons
     const rc = document.getElementById('recent-courses');
+    if (!rc) return;
     if (!courses.length) {
       rc.innerHTML = `<div class="card card-sm" style="color:var(--text-2);text-align:center;padding:28px">
         No content yet — <span class="link" style="cursor:pointer" id="add-first">add your first video!</span>
@@ -141,6 +150,7 @@ export async function renderDashboard(container) {
 }
 
 function metric(icon, id, label, color, suffix = '') {
+
   return `
     <div class="metric-card card-tilt">
       <div class="metric-icon">${icon}</div>
