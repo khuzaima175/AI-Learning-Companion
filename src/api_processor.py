@@ -327,7 +327,7 @@ class ApiProcessor:
     # ------------------------------------------------------------------
 
     def generate_summary_and_concepts(self, transcript: str, title: str):
-        processed = self._process_long_transcript(transcript, target_length=400_000)
+        processed = self._process_long_transcript(transcript, target_length=500_000)
         prompt = f"""Analyze the video transcript for "{title}" and extract the most important educational content.
 
 Return a single, valid JSON object with these keys:
@@ -346,7 +346,7 @@ Transcript: {processed}"""
     ):
         if allowed_difficulties is None:
             allowed_difficulties = ["easy", "medium", "hard"]
-        processed = self._process_long_transcript(transcript, target_length=400_000)
+        processed = self._process_long_transcript(transcript, target_length=500_000)
         diff_str = ", ".join(allowed_difficulties)
 
         prompt = f"""You are an expert educator creating quiz questions about the TOPIC "{title}".
@@ -373,8 +373,8 @@ Educational Content:
         return self._call_gemini_and_parse_json(prompt)
 
     def ask_video_question(self, question: str, transcript: str, title: str):
-        truncated = transcript[:400_000]
-        if len(transcript) > 400_000:
+        truncated = transcript[:500_000]
+        if len(transcript) > 500_000:
             truncated += "... [transcript truncated]"
 
         prompt = f"""You are an expert AI tutor for the video "{title}".
