@@ -47,11 +47,63 @@ class ApiProcessor:
             except VideoUnavailable as e:
                 return None, f"Video unavailable: {e}"
             except Exception as e:
-                return None, f"Transcript failed for {video_id}: {e}"
+                # If youtube-transcript-api fails (e.g. IP block on Vercel), fallback to yt-dlp
+                fallback_text, fallback_err = self._get_transcript_ytdlp(video_id)
+                if fallback_text:
+                    return fallback_text, video_id
+                return None, f"Transcript failed for {video_id}: {e}. Fallback error: {fallback_err}"
         except ImportError:
-            return None, "youtube-transcript-api is not installed. Run: pip install youtube-transcript-api>=1.0.0"
+            return None, "youtube-transcript-api is not installed."
         except Exception as e:
             return None, f"General error: {e}"
+
+    def _get_transcript_ytdlp(self, video_id: str):
+        """Fallback method using yt-dlp to bypass cloud IP blocks."""
+        try:
+            import yt_dlp
+            import json
+            import urllib.request
+        except ImportError:
+            return None, "yt-dlp is not installed"
+
+        ydl_opts = {
+            'skip_download': True,
+            'quiet': True,
+            'nocheckcertificate': True,
+        }
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+                
+                subs = info.get('subtitles', {})
+                auto = info.get('automatic_captions', {})
+                
+                # Prioritize manual english, then auto english
+                target_subs = subs.get('en') or subs.get('en-US') or subs.get('en-GB')
+                if not target_subs:
+                    target_subs = auto.get('en') or auto.get('en-US') or auto.get('en-GB')
+                    
+                if not target_subs:
+                    return None, "No english subtitles or automatic captions found."
+                    
+                json3_url = next((s['url'] for s in target_subs if s.get('ext') == 'json3'), None)
+                if not json3_url:
+                    return None, "No usable subtitle format found by yt-dlp."
+                    
+                req = urllib.request.Request(json3_url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    data = json.loads(resp.read().decode('utf-8'))
+                    events = data.get('events', [])
+                    text_lines = []
+                    for ev in events:
+                        segs = ev.get('segs', [])
+                        line = "".join([s.get('utf8', '') for s in segs if 'utf8' in s])
+                        if line.strip() and line.strip() != '\n':
+                            text_lines.append(line.replace('\n', ' ').strip())
+                    
+                    return " ".join(text_lines), None
+        except Exception as e:
+            return None, str(e)
 
     def get_manual_transcript(self, text: str, video_id: str):
         return text, video_id
