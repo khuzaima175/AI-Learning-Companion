@@ -17,41 +17,6 @@ class ApiProcessor:
     # Transcript helpers
     # ------------------------------------------------------------------
 
-    def _get_transcript_supadata(self, video_id: str):
-        try:
-            import urllib.request
-            import os
-
-            api_key = os.environ.get("SUPADATA_API_KEY", "sd_83eff41ba2f6336f8eaff268e2c80a5a")
-            if not api_key:
-                return None, "SUPADATA_API_KEY not set"
-
-            url = f"https://api.supadata.ai/v1/youtube/transcript?videoId={video_id}&lang=en"
-            req = urllib.request.Request(url, headers={
-                "x-api-key": api_key,
-                "Accept": "application/json"
-            })
-
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                # Supadata may return either "content" or "transcript" key
-                chunks = data.get("content") or data.get("transcript") or []
-                if not chunks:
-                    return None, f"Supadata empty. Raw keys: {list(data.keys())}"
-                # Each chunk may have "text" or "content" key
-                text = " ".join(
-                    item.get("text") or item.get("content") or ""
-                    for item in chunks
-                )
-                return text if text.strip() else None, None
-
-        except urllib.error.HTTPError as e:
-            body = e.read().decode("utf-8") if hasattr(e, "read") else ""
-            return None, f"Supadata HTTP {e.code}: {body[:200]}"
-        except Exception as e:
-            return None, f"Supadata error: {e}"
-
-
     def get_youtube_transcript(self, url: str):
         """Fetch transcript using youtube-transcript-api v1.0+."""
         try:
@@ -77,10 +42,12 @@ class ApiProcessor:
                     for item in fetched
                 )
                 return text, video_id
+
             except (NoTranscriptFound, TranscriptsDisabled, VideoUnavailable) as e:
                 return None, str(e)
+
             except Exception:
-                # Fallback 1: Supadata API (cloud-friendly)
+                # Fallback 1: Supadata API (cloud-friendly, works on Vercel)
                 text, err = self._get_transcript_supadata(video_id)
                 if text:
                     return text, video_id
@@ -91,16 +58,68 @@ class ApiProcessor:
                     return text, video_id
 
                 return None, f"All transcript methods failed. Supadata: {err} | yt-dlp: {err2}"
+
         except ImportError:
             return None, "youtube-transcript-api is not installed."
         except Exception as e:
             return None, f"General error: {e}"
 
+    def _get_transcript_supadata(self, video_id: str):
+        """Fetch transcript via Supadata API - works on cloud IPs."""
+        try:
+            import os
+            try:
+                import requests as req_lib
+                use_requests = True
+            except ImportError:
+                use_requests = False
+            import urllib.request
+
+            api_key = os.environ.get("SUPADATA_API_KEY", "sd_83eff41ba2f6336f8eaff268e2c80a5a")
+            if not api_key:
+                return None, "SUPADATA_API_KEY not set in environment"
+
+            url = f"https://api.supadata.ai/v1/youtube/transcript?videoId={video_id}&lang=en"
+
+            headers = {
+                "x-api-key": api_key,
+                "Accept": "application/json",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Origin": "https://supadata.ai",
+                "Referer": "https://supadata.ai/",
+            }
+
+            if use_requests:
+                resp = req_lib.get(url, headers=headers, timeout=20)
+                if resp.status_code != 200:
+                    return None, f"Supadata HTTP {resp.status_code}: {resp.text[:300]}"
+                data = resp.json()
+            else:
+                request = urllib.request.Request(url, headers=headers)
+                with urllib.request.urlopen(request, timeout=20) as r:
+                    data = json.loads(r.read().decode("utf-8"))
+
+            # Handle both response shapes Supadata may return
+            chunks = data.get("content") or data.get("transcript") or data.get("segments") or []
+            if not chunks:
+                if isinstance(data.get("text"), str):
+                    return data["text"], None
+                return None, f"Supadata empty response. Keys: {list(data.keys())}"
+
+            text = " ".join(
+                item.get("text") or item.get("content") or ""
+                for item in chunks
+                if isinstance(item, dict)
+            )
+            return text.strip() or None, None
+
+        except Exception as e:
+            return None, f"Supadata error: {e}"
+
     def _get_transcript_ytdlp(self, video_id: str):
         """Fallback method using yt-dlp to bypass cloud IP blocks."""
         try:
             import yt_dlp
-            import json
             import urllib.request
         except ImportError:
             return None, "yt-dlp is not installed"
@@ -118,22 +137,22 @@ class ApiProcessor:
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
-                
+
                 subs = info.get('subtitles', {})
                 auto = info.get('automatic_captions', {})
-                
+
                 # Prioritize manual english, then auto english
                 target_subs = subs.get('en') or subs.get('en-US') or subs.get('en-GB')
                 if not target_subs:
                     target_subs = auto.get('en') or auto.get('en-US') or auto.get('en-GB')
-                    
+
                 if not target_subs:
                     return None, "No english subtitles or automatic captions found."
-                    
+
                 json3_url = next((s['url'] for s in target_subs if s.get('ext') == 'json3'), None)
                 if not json3_url:
                     return None, "No usable subtitle format found by yt-dlp."
-                    
+
                 req = urllib.request.Request(json3_url, headers={'User-Agent': 'Mozilla/5.0'})
                 with urllib.request.urlopen(req, timeout=10) as resp:
                     data = json.loads(resp.read().decode('utf-8'))
@@ -144,7 +163,7 @@ class ApiProcessor:
                         line = "".join([s.get('utf8', '') for s in segs if 'utf8' in s])
                         if line.strip() and line.strip() != '\n':
                             text_lines.append(line.replace('\n', ' ').strip())
-                    
+
                     return " ".join(text_lines), None
         except Exception as e:
             return None, str(e)
