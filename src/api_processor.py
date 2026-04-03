@@ -328,14 +328,26 @@ class ApiProcessor:
 
     def generate_summary_and_concepts(self, transcript: str, title: str):
         processed = self._process_long_transcript(transcript, target_length=500_000)
-        prompt = f"""Analyze the video transcript for "{title}" and extract the most important educational content.
+        prompt = f"""You are an expert educator and curriculum designer analyzing a lecture on "{title}".
 
-Return a single, valid JSON object with these keys:
-- "summary": A detailed summary (4-6 paragraphs).
-- "key_concepts": An array of exactly 16 objects, each with "concept" and "definition".
-- "bullet_points": An array of exactly 20 specific, actionable takeaways.
+Your goal is to extract content that will help a student deeply understand and retain this material.
 
-Important: Return ONLY valid JSON.
+Return a single valid JSON object with these exact keys:
+
+"summary": A detailed summary in 4-6 paragraphs. Each paragraph should cover a distinct theme or section of the content. Write it as if explaining to an intelligent student who has never seen this material. Use clear cause-and-effect language.
+
+"key_concepts": An array of exactly 16 objects, each with:
+  - "concept": the term or idea (concise)
+  - "definition": a clear, precise explanation in 2-3 sentences. Include WHY it matters or HOW it connects to other concepts. Avoid vague definitions.
+
+"bullet_points": An array of exactly 20 takeaways. Each must:
+  - Start with an action verb (Understand, Apply, Recognize, Distinguish, Calculate, etc.)
+  - State a specific insight, not a vague generality
+  - Be something a student could actually USE in an exam or real situation
+  - BAD example: "Machine learning is important"
+  - GOOD example: "Distinguish supervised from unsupervised learning by asking: does the training data have labeled outputs?"
+
+Important: Return ONLY valid JSON. No markdown, no explanation outside the JSON.
 
 Transcript: {processed}"""
         return self._call_gemini_and_parse_json(prompt)
@@ -349,24 +361,40 @@ Transcript: {processed}"""
         processed = self._process_long_transcript(transcript, target_length=500_000)
         diff_str = ", ".join(allowed_difficulties)
 
-        prompt = f"""You are an expert educator creating quiz questions about the TOPIC "{title}".
+        prompt = f"""You are an expert educator and exam writer specializing in "{title}".
 
-STRICT RULES:
-1. Questions must test understanding of the SUBJECT MATTER (concepts, facts, processes, mechanisms) taught in the content.
-2. NEVER ask about the video itself (e.g. do NOT write "According to the video..." or "What does the video say...").
-3. Each question must be genuinely educational and unique — no two questions should test the same concept.
-4. Vary the question style: use "What is...", "How does...", "Which of the following...", "Why does...", scenario-based, etc.
-5. ONLY use difficulty levels from: {diff_str}. Distribute evenly across the requested difficulties.
-6. Wrong options must be plausible but clearly incorrect to someone who understands the topic.
+Your mission: create quiz questions that don't just test memory — they build genuine understanding and expose common misconceptions.
 
-Return a single valid JSON object with key "quiz_questions" containing EXACTLY {num_questions} question objects.
-Each question object MUST have:
-- "question": string (the question text, not referencing the video)
-- "options": array of exactly 4 strings (no A/B/C/D prefixes)
-- "answer": string (must exactly match one of the 4 options)
-- "difficulty": one of {diff_str}
+QUESTION DESIGN RULES:
+1. Test CONCEPTS, REASONING, and APPLICATION — not trivia or surface recall.
+2. NEVER reference the video/lecture (no "According to the video...", "The speaker said...").
+3. Each question must target a DIFFERENT concept — no overlap between questions.
+4. Use a MIX of question styles:
+   - Conceptual: "What is the key difference between X and Y?"
+   - Application: "A system does Z. Which approach best explains this?"
+   - Cause & Effect: "Why does X happen when Y occurs?"
+   - Misconception trap: Design one wrong answer that a student who half-understands would pick.
+   - Scenario-based: Give a real-world mini-scenario, ask what applies.
+5. WRONG OPTIONS must be:
+   - Plausible to someone who half-understands the topic
+   - Based on real common misconceptions, NOT random nonsense
+   - Similar in length and grammatical form to the correct answer
+6. The CORRECT answer must be unambiguously right — not just "most correct".
+7. Difficulty guidelines:
+   - easy: Tests direct definitions or single facts a student should know cold.
+   - medium: Requires connecting two concepts or applying a rule to a situation.
+   - hard: Requires multi-step reasoning, distinguishing between closely related ideas, or handling an edge case.
+8. Distribute difficulties evenly across: {diff_str}.
 
-Return ONLY valid JSON, no markdown, no explanation.
+Return a single valid JSON object with key "quiz_questions" containing EXACTLY {num_questions} objects.
+Each object MUST have:
+- "question": string — clear, specific, no video references
+- "options": array of exactly 4 strings — no A/B/C/D prefixes, similar length
+- "answer": string — must EXACTLY match one option
+- "difficulty": one of [{diff_str}]
+- "explanation": string — 1-2 sentences explaining WHY the answer is correct and why the main distractor is wrong. This helps the student learn from mistakes.
+
+Return ONLY valid JSON. No markdown, no text outside the JSON object.
 
 Educational Content:
 {processed}"""
