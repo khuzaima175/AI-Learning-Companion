@@ -18,33 +18,39 @@ class ApiProcessor:
     # ------------------------------------------------------------------
 
     def _get_transcript_supadata(self, video_id: str):
-        """Fetch transcript via Supadata API - works on cloud IPs."""
         try:
             import urllib.request
-            import json
             import os
 
-            api_key = os.environ.get("SUPADATA_API_KEY")
+            api_key = os.environ.get("SUPADATA_API_KEY", "sd_83eff41ba2f6336f8eaff268e2c80a5a")
             if not api_key:
-                return None, "SUPADATA_API_KEY not set in environment"
+                return None, "SUPADATA_API_KEY not set"
 
             url = f"https://api.supadata.ai/v1/youtube/transcript?videoId={video_id}&lang=en"
             req = urllib.request.Request(url, headers={
-                "x-api-key": api_key
+                "x-api-key": api_key,
+                "Accept": "application/json"
             })
 
             with urllib.request.urlopen(req, timeout=15) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
-                chunks = data.get("content", [])
+                # Supadata may return either "content" or "transcript" key
+                chunks = data.get("content") or data.get("transcript") or []
                 if not chunks:
-                    return None, "Supadata returned empty transcript"
-                text = " ".join(item.get("text", "") for item in chunks)
-                return text, None
+                    return None, f"Supadata empty. Raw keys: {list(data.keys())}"
+                # Each chunk may have "text" or "content" key
+                text = " ".join(
+                    item.get("text") or item.get("content") or ""
+                    for item in chunks
+                )
+                return text if text.strip() else None, None
 
         except urllib.error.HTTPError as e:
-            return None, f"Supadata HTTP error: {e.code} {e.reason}"
+            body = e.read().decode("utf-8") if hasattr(e, "read") else ""
+            return None, f"Supadata HTTP {e.code}: {body[:200]}"
         except Exception as e:
             return None, f"Supadata error: {e}"
+
 
     def get_youtube_transcript(self, url: str):
         """Fetch transcript using youtube-transcript-api v1.0+."""
