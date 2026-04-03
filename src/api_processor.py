@@ -17,6 +17,35 @@ class ApiProcessor:
     # Transcript helpers
     # ------------------------------------------------------------------
 
+    def _get_transcript_supadata(self, video_id: str):
+        """Fetch transcript via Supadata API - works on cloud IPs."""
+        try:
+            import urllib.request
+            import json
+            import os
+
+            api_key = os.environ.get("SUPADATA_API_KEY")
+            if not api_key:
+                return None, "SUPADATA_API_KEY not set in environment"
+
+            url = f"https://api.supadata.ai/v1/youtube/transcript?videoId={video_id}&lang=en"
+            req = urllib.request.Request(url, headers={
+                "x-api-key": api_key
+            })
+
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                chunks = data.get("content", [])
+                if not chunks:
+                    return None, "Supadata returned empty transcript"
+                text = " ".join(item.get("text", "") for item in chunks)
+                return text, None
+
+        except urllib.error.HTTPError as e:
+            return None, f"Supadata HTTP error: {e.code} {e.reason}"
+        except Exception as e:
+            return None, f"Supadata error: {e}"
+
     def get_youtube_transcript(self, url: str):
         """Fetch transcript using youtube-transcript-api v1.0+."""
         try:
@@ -42,16 +71,20 @@ class ApiProcessor:
                     for item in fetched
                 )
                 return text, video_id
-            except (NoTranscriptFound, TranscriptsDisabled) as e:
-                return None, f"No transcript available for {video_id}: {e}"
-            except VideoUnavailable as e:
-                return None, f"Video unavailable: {e}"
-            except Exception as e:
-                # If youtube-transcript-api fails (e.g. IP block on Vercel), fallback to yt-dlp
-                fallback_text, fallback_err = self._get_transcript_ytdlp(video_id)
-                if fallback_text:
-                    return fallback_text, video_id
-                return None, f"Transcript failed for {video_id}: {e}. Fallback error: {fallback_err}"
+            except (NoTranscriptFound, TranscriptsDisabled, VideoUnavailable) as e:
+                return None, str(e)
+            except Exception:
+                # Fallback 1: Supadata API (cloud-friendly)
+                text, err = self._get_transcript_supadata(video_id)
+                if text:
+                    return text, video_id
+
+                # Fallback 2: yt-dlp (last resort)
+                text, err2 = self._get_transcript_ytdlp(video_id)
+                if text:
+                    return text, video_id
+
+                return None, f"All transcript methods failed. Supadata: {err} | yt-dlp: {err2}"
         except ImportError:
             return None, "youtube-transcript-api is not installed."
         except Exception as e:
