@@ -216,9 +216,9 @@ class ApiProcessor:
         prompt = f"""Analyze the video transcript for "{title}" and extract the most important educational content.
 
 Return a single, valid JSON object with these keys:
-- "summary": A detailed summary (3-4 paragraphs).
-- "key_concepts": An array of exactly 10 objects, each with "concept" and "definition".
-- "bullet_points": An array of exactly 12 specific, actionable takeaways.
+- "summary": A detailed summary (4-6 paragraphs).
+- "key_concepts": An array of exactly 16 objects, each with "concept" and "definition".
+- "bullet_points": An array of exactly 20 specific, actionable takeaways.
 
 Important: Return ONLY valid JSON.
 

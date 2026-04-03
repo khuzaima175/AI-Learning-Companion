@@ -64,7 +64,6 @@ function renderData(s) {
         ${mcard('🎬','videos',  s.videos||0, 'Videos','teal')}
         ${mcard('❓','questions',s.total_questions||0,'Questions','amber')}
         ${mcard('🔔','due',     s.due_questions||0,'Due Today','amber')}
-        ${mcard('💾','size',    s.size_kb||0,'DB (KB)','teal')}
       </div>
     </div>
 
@@ -102,14 +101,13 @@ function renderData(s) {
           }).join('')}
     </div>
 
-    <!-- Leaderboard / streaks placeholder -->
     <div class="card enter" style="margin-top:18px;animation-delay:160ms;border-color:var(--border-a)">
       <div class="section-hdr" style="margin-bottom:0">
         <div>
-          <div class="section-title" style="color:var(--amber)">📁 Database</div>
-          <div class="section-sub">Local file: ${s.path || '—'}</div>
+          <div class="section-title" style="color:var(--amber)">☁️ Database</div>
+          <div class="section-sub">Connection: ${s.path || '—'}</div>
         </div>
-        <span class="badge badge-amber">${s.size_kb || 0} KB</span>
+        <span class="badge badge-amber">Online</span>
       </div>
     </div>
   `;
@@ -117,7 +115,7 @@ function renderData(s) {
   // Animate metrics
   staggerElements('#metric-grid .metric-card', 70);
   setTimeout(() => {
-    ['courses','videos','questions','due','size'].forEach(id => {
+    ['courses','videos','questions','due'].forEach(id => {
       const el = document.getElementById(`mv-${id}`);
       if (el) animateCount(el, parseFloat(el.getAttribute('data-val')), 900);
     });
