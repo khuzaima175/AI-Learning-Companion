@@ -70,6 +70,11 @@ class ApiProcessor:
             'skip_download': True,
             'quiet': True,
             'nocheckcertificate': True,
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['ios', 'android']
+                }
+            }
         }
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
