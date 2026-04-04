@@ -458,49 +458,47 @@ function showLoginScreen() {
 }
 
 // ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
 // Boot
 // ══════════════════════════════════════════════════════════════════
-document.addEventListener('DOMContentLoaded', async () => {
-  // Get initial session state ONCE (getSession is faster for boot than getUser)
-  const session = await getSession();
-  const user = session?.user || null;
-  console.log('Boot: user =', user);
-
-  if (!user) {
-    // Not logged in — show login screen
-    showLoginScreen();
-
-    // Listen ONLY for a sign-in event to boot the app (no reload loop)
-    onAuthChange((event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        // User just logged in — do a clean reload to boot the full app
-        window.location.reload();
-      }
-    });
-    return;
+document.addEventListener('DOMContentLoaded', () => {
+  // Show a minimal loading state while Supabase restores session
+  const pageContent = document.getElementById('page-content');
+  if (pageContent) {
+    pageContent.innerHTML = `
+      <div style="min-height:100vh;display:flex;align-items:center;
+                  justify-content:center;flex-direction:column;gap:16px">
+        <div style="font-size:2rem">🎓</div>
+        <div style="color:var(--text-3);font-size:.9rem">Loading…</div>
+      </div>`;
   }
 
-  // ── User is authenticated — boot the full app ─────────────────
-  // Listen for sign-out or token changes
-  onAuthChange((event, session) => {
+  let booted = false;
+
+  onAuthChange(async (event, session) => {
+    // INITIAL_SESSION fires once on load with the persisted session (or null)
+    if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+      if (booted) return; // prevent double-boot if both events fire
+      booted = true;
+
+      if (!session?.user) {
+        showLoginScreen();
+        return;
+      }
+      await bootApp();
+    }
+
     if (event === 'SIGNED_OUT') {
       window.location.reload();
     }
-    // TOKEN_REFRESHED, USER_UPDATED etc. — do nothing, stay on current page
   });
+});
 
-  // Restore sidebar and main layout to defaults
+async function bootApp() {
   const sidebar   = document.getElementById('sidebar');
   const mobileBtn = document.getElementById('mobile-menu-btn');
-
-  if (sidebar) {
-    sidebar.style.visibility = 'visible';
-    sidebar.style.display    = '';
-  }
-  if (mobileBtn) {
-    mobileBtn.style.visibility = 'visible';
-    mobileBtn.style.display    = '';
-  }
+  if (sidebar)   { sidebar.style.visibility = 'visible'; sidebar.style.display = ''; }
+  if (mobileBtn) { mobileBtn.style.visibility = 'visible'; mobileBtn.style.display = ''; }
 
   initMobile();
   refreshStatus();
@@ -516,7 +514,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const logoutBtn = document.getElementById('logout-btn');
   if (logoutBtn) logoutBtn.addEventListener('click', () => signOut());
 
-  // ── Keep-alive ping ──────────────────────────────────────────────
   let _lastPing = 0;
   const PING_INTERVAL = 4 * 60 * 1000;
   function _maybePing() {
@@ -530,4 +527,4 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (document.visibilityState === 'visible') _maybePing();
   });
   _maybePing();
-});
+}
