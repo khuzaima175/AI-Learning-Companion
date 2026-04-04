@@ -501,6 +501,9 @@ async function bootApp() {
   if (sidebar) { sidebar.style.visibility = 'visible'; sidebar.style.display = ''; }
   if (mobileBtn) { mobileBtn.style.visibility = 'visible'; mobileBtn.style.display = ''; }
 
+  // Force browser to recalculate layout with sidebar visible BEFORE rendering page
+  if (sidebar) void sidebar.offsetWidth;
+
   initMobile();
   refreshStatus();
   Streak.bump();
