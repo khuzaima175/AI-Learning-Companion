@@ -466,8 +466,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const pageContent = document.getElementById('page-content');
   if (pageContent) {
     pageContent.innerHTML = `
-      <div style="min-height:100vh;display:flex;align-items:center;
-                  justify-content:center;flex-direction:column;gap:16px">
+      <div style="display:flex;align-items:center;
+                  justify-content:center;flex-direction:column;gap:16px;
+                  padding-top:120px">
         <div style="font-size:2rem">🎓</div>
         <div style="color:var(--text-3);font-size:.9rem">Loading…</div>
       </div>`;
