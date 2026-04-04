@@ -502,6 +502,21 @@ async function bootApp() {
   if (sidebar) { sidebar.style.visibility = 'visible'; sidebar.style.display = ''; }
   if (mobileBtn) { mobileBtn.style.visibility = 'visible'; mobileBtn.style.display = ''; }
 
+  // Reset any inline styles set by showLoginScreen()
+  const mainEl = document.getElementById('main-content');
+  if (mainEl) {
+    mainEl.style.marginLeft = '';
+    mainEl.style.padding = '';
+    mainEl.style.minHeight = '';
+    mainEl.style.display = '';
+    mainEl.style.alignItems = '';
+    mainEl.style.justifyContent = '';
+  }
+  const appEl = document.getElementById('app');
+  if (appEl) appEl.style.display = '';
+  const pageContent = document.getElementById('page-content');
+  if (pageContent) pageContent.style.width = '';
+
   // Force browser to recalculate layout with sidebar visible BEFORE rendering page
   if (sidebar) void sidebar.offsetWidth;
 
