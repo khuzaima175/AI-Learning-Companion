@@ -8,12 +8,16 @@ import json
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from src import config
+from src.auth import verify_token
 from src.api_processor import ApiProcessor
 from src.database import DatabaseManager
 
@@ -136,9 +140,9 @@ async def save_api_key(req: ApiKeyRequest):
 # ══════════════════════════════════════════════════════════════════════════
 
 @app.get("/api/courses")
-async def list_courses():
+async def list_courses(user: dict = Depends(verify_token)):
     db = get_db()
-    result = db.get_all_courses_full()   # 3 queries instead of 1+2N+V
+    result = db.get_all_courses_full(user_id=user["id"])   # 3 queries instead of 1+2N+V
     response = JSONResponse(content=result)
     # 15s client cache — avoids re-fetching on every page switch
     response.headers["Cache-Control"] = "public, max-age=15, stale-while-revalidate=30"
@@ -146,9 +150,9 @@ async def list_courses():
 
 
 @app.get("/api/videos/{video_id}")
-async def get_video(video_id: int):
+async def get_video(video_id: int, user: dict = Depends(verify_token)):
     db = get_db()
-    row = db.get_video_details(video_id)
+    row = db.get_video_details(video_id, user_id=user["id"])
     if not row:
         raise HTTPException(404, "Video not found")
     title, summary, key_concepts_raw, bullet_points_raw, user_notes = row
@@ -160,7 +164,7 @@ async def get_video(video_id: int):
         bullet_points = json.loads(bullet_points_raw) if bullet_points_raw else []
     except Exception:
         bullet_points = []
-    q_count = db.get_video_stats(video_id)
+    q_count = db.get_video_stats(video_id, user_id=user["id"])
     return {
         "id": video_id, "title": title, "summary": summary,
         "key_concepts": key_concepts, "bullet_points": bullet_points,
@@ -169,7 +173,7 @@ async def get_video(video_id: int):
 
 
 @app.post("/api/add-video")
-async def add_video(req: AddVideoRequest):
+async def add_video(req: AddVideoRequest, user: dict = Depends(verify_token)):
     db = get_db()
     api = get_api()
 
@@ -187,7 +191,7 @@ async def add_video(req: AddVideoRequest):
         raise HTTPException(500, f"AI processing failed: {err}")
 
     # 3. Save to DB
-    course_id = db.get_or_create_course(req.course)
+    course_id = db.get_or_create_course(req.course, user_id=user["id"])
     video_db_id = db.add_video_data({
         "course_id": course_id,
         "title": req.title,
@@ -196,27 +200,27 @@ async def add_video(req: AddVideoRequest):
         "key_concepts": data.get("key_concepts", []),
         "bullet_points": data.get("bullet_points", []),
         "transcript": transcript,
-    })
+    }, user_id=user["id"])
 
     # 4. Auto-generate quiz questions
-    q_data, _ = api.generate_quiz_questions_with_difficulty(transcript, req.title, num_questions=10)
+    q_data, _ = api.generate_quiz_questions_with_difficulty(transcript, req.title, num_questions=20)
     if q_data and "quiz_questions" in q_data:
-        db.add_quiz_questions(video_db_id, q_data["quiz_questions"])
+        db.add_quiz_questions(video_db_id, q_data["quiz_questions"], user_id=user["id"])
 
     return {"ok": True, "video_id": video_db_id, "title": req.title}
 
 
 @app.post("/api/notes")
-async def update_notes(req: UpdateNotesRequest):
-    get_db().update_user_notes(req.video_id, req.notes)
+async def update_notes(req: UpdateNotesRequest, user: dict = Depends(verify_token)):
+    get_db().update_user_notes(req.video_id, req.notes, user_id=user["id"])
     return {"ok": True}
 
 
 @app.post("/api/ask")
-async def ask_question(req: AskQuestionRequest):
+async def ask_question(req: AskQuestionRequest, user: dict = Depends(verify_token)):
     db = get_db()
     api = get_api()
-    row = db.get_video_info_for_quiz(req.video_id)
+    row = db.get_video_info_for_quiz(req.video_id, user_id=user["id"])
     if not row:
         raise HTTPException(404, "Video not found")
     title, transcript = row
@@ -235,14 +239,15 @@ async def get_quiz_questions(
     scope: str = "all",
     scope_id: int = 0,
     limit: int = 10,
+    user: dict = Depends(verify_token)
 ):
     db = get_db()
     if scope == "video":
-        rows = db.get_questions_by_video(scope_id, limit)
+        rows = db.get_questions_by_video(scope_id, user_id=user["id"], limit=limit)
     elif scope == "course":
-        rows = db.get_questions_by_course(scope_id, limit)
+        rows = db.get_questions_by_course(scope_id, user_id=user["id"], limit=limit)
     else:
-        rows = db.get_all_questions(limit)
+        rows = db.get_all_questions(user_id=user["id"], limit=limit)
 
     questions = []
     for qid, question, options_raw, answer in rows:
@@ -255,10 +260,10 @@ async def get_quiz_questions(
 
 
 @app.post("/api/quiz/generate")
-async def generate_quiz(req: GenerateQuizRequest):
+async def generate_quiz(req: GenerateQuizRequest, user: dict = Depends(verify_token)):
     db = get_db()
     api = get_api()
-    row = db.get_video_info_for_quiz(req.video_id)
+    row = db.get_video_info_for_quiz(req.video_id, user_id=user["id"])
     if not row:
         raise HTTPException(404, "Video not found")
     title, transcript = row
@@ -270,21 +275,21 @@ async def generate_quiz(req: GenerateQuizRequest):
     questions = data.get("quiz_questions", [])
     if not questions:
         raise HTTPException(500, "AI returned no questions. Try again or check your API key.")
-    inserted = db.add_quiz_questions(req.video_id, questions)
+    inserted = db.add_quiz_questions(req.video_id, questions, user_id=user["id"])
     return {"ok": True, "count": inserted, "generated": len(questions)}
 
 
 @app.post("/api/quiz/start-session")
-async def start_quiz_session():
-    sid = get_db().create_quiz_session()
+async def start_quiz_session(user: dict = Depends(verify_token)):
+    sid = get_db().create_quiz_session(user_id=user["id"])
     return {"session_id": sid}
 
 
 @app.post("/api/quiz/answer")
-async def submit_answer(req: QuizAnswerRequest):
+async def submit_answer(req: QuizAnswerRequest, user: dict = Depends(verify_token)):
     db = get_db()
-    db.update_srs_level(req.question_id, req.performance)
-    db.update_quiz_session(req.session_id, req.is_correct)
+    db.update_srs_level(req.question_id, req.performance, user_id=user["id"])
+    db.update_quiz_session(req.session_id, req.is_correct, user_id=user["id"])
     return {"ok": True}
 
 
@@ -293,10 +298,10 @@ async def submit_answer(req: QuizAnswerRequest):
 # ══════════════════════════════════════════════════════════════════════════
 
 @app.get("/api/review/due")
-async def get_due_questions(limit: int = 20):
+async def get_due_questions(limit: int = 20, user: dict = Depends(verify_token)):
     db = get_db()
-    count = db.get_due_review_count()
-    rows = db.get_due_questions(limit)
+    count = db.get_due_review_count(user_id=user["id"])
+    rows = db.get_due_questions(user_id=user["id"], limit=limit)
     questions = []
     for qid, question, options_raw, answer in rows:
         try:
@@ -308,10 +313,10 @@ async def get_due_questions(limit: int = 20):
 
 
 @app.post("/api/review/answer")
-async def submit_review_answer(req: QuizAnswerRequest):
+async def submit_review_answer(req: QuizAnswerRequest, user: dict = Depends(verify_token)):
     db = get_db()
-    db.update_srs_level(req.question_id, req.performance)
-    db.update_quiz_session(req.session_id, req.is_correct)
+    db.update_srs_level(req.question_id, req.performance, user_id=user["id"])
+    db.update_quiz_session(req.session_id, req.is_correct, user_id=user["id"])
     return {"ok": True}
 
 
@@ -320,11 +325,11 @@ async def submit_review_answer(req: QuizAnswerRequest):
 # ══════════════════════════════════════════════════════════════════════════
 
 @app.get("/api/stats")
-async def get_stats():
+async def get_stats(user: dict = Depends(verify_token)):
     db = get_db()
-    quiz_stats = db.get_quiz_stats()
-    db_info = db.get_database_info()
-    sessions = db.get_recent_sessions(10)
+    quiz_stats = db.get_quiz_stats(user_id=user["id"])
+    db_info = db.get_database_info(user_id=user["id"])
+    sessions = db.get_recent_sessions(user_id=user["id"], limit=10)
     session_data = [
         {"date": str(s[0]), "answered": s[1], "correct": s[2]}
         for s in sessions
@@ -337,16 +342,16 @@ async def get_stats():
 # ══════════════════════════════════════════════════════════════════════════
 
 @app.delete("/api/videos/{video_id}")
-async def delete_video(video_id: int):
-    ok, msg = get_db().delete_video(video_id)
+async def delete_video(video_id: int, user: dict = Depends(verify_token)):
+    ok, msg = get_db().delete_video(video_id, user_id=user["id"])
     if not ok:
         raise HTTPException(500, msg)
     return {"ok": True, "message": msg}
 
 
 @app.delete("/api/courses/{course_id}")
-async def delete_course(course_id: int):
-    ok, msg = get_db().delete_course(course_id)
+async def delete_course(course_id: int, user: dict = Depends(verify_token)):
+    ok, msg = get_db().delete_course(course_id, user_id=user["id"])
     if not ok:
         raise HTTPException(500, msg)
     return {"ok": True, "message": msg}

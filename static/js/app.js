@@ -11,6 +11,8 @@ import { renderQuiz }       from './pages/quiz.js';
 import { renderReview }     from './pages/review.js';
 import { renderStats }      from './pages/stats.js';
 import { renderManage }     from './pages/manage.js';
+import { getUser, getToken, getSession, onAuthChange, signOut } from './auth.js';
+import { renderLogin } from './pages/login.js';
 
 // ══════════════════════════════════════════════════════════════════
 // Two-layer API cache:
@@ -26,11 +28,11 @@ const LS_PREFIX = 'alc_cache_';
 
 // TTL config (ms) — L1 strict TTL, L2 soft TTL (stale ok, revalidate)
 const CACHE_TTL = {
-  '/api/courses':         { l1: 20_000, l2: 5 * 60_000  },  // 20s / 5 min
-  '/api/stats':           { l1: 15_000, l2: 3 * 60_000  },  // 15s / 3 min
-  '/api/review/due':      { l1: 10_000, l2: 2 * 60_000  },  // 10s / 2 min
+  '/api/courses':         { l1: 20_000, l2: 5 * 60_000  },
+  '/api/stats':           { l1: 15_000, l2: 3 * 60_000  },
+  '/api/review/due':      { l1: 10_000, l2: 2 * 60_000  },
   '/api/quiz/questions':  { l1: 10_000, l2: 2 * 60_000  },
-  '/api/videos/':         { l1: 60_000, l2: 10 * 60_000 },  // 1 min / 10 min
+  '/api/videos/':         { l1: 60_000, l2: 10 * 60_000 },
   'default':              { l1: 10_000, l2: 60_000 },
 };
 
@@ -41,7 +43,6 @@ function _getTtl(path) {
   return CACHE_TTL['default'];
 }
 
-// L1
 function _l1Get(path) {
   const e = _memCache.get(path);
   if (!e || Date.now() > e.ex) { _memCache.delete(path); return null; }
@@ -51,14 +52,11 @@ function _l1Set(path, data, ttlMs) {
   _memCache.set(path, { data, ex: Date.now() + ttlMs });
 }
 
-// L2 (localStorage)
 function _l2Get(path) {
   try {
     const raw = localStorage.getItem(LS_PREFIX + btoa(path));
     if (!raw) return null;
-    const e = JSON.parse(raw);
-    // Return data even if stale — caller decides whether to revalidate
-    return e;
+    return JSON.parse(raw);
   } catch { return null; }
 }
 function _l2Set(path, data, ttlMs) {
@@ -69,7 +67,6 @@ function _l2Set(path, data, ttlMs) {
   } catch { /* storage full — ignore */ }
 }
 
-// Bust both layers
 function _cacheBust(prefix) {
   for (const key of _memCache.keys()) {
     if (prefix === '*' || key.startsWith(prefix)) _memCache.delete(key);
@@ -80,13 +77,13 @@ function _cacheBust(prefix) {
   } else {
     try {
       const encoded = btoa(prefix);
-      Object.keys(localStorage).filter(k => k.startsWith(LS_PREFIX) && k.includes(encoded.slice(0,10)))
+      Object.keys(localStorage)
+        .filter(k => k.startsWith(LS_PREFIX) && k.includes(encoded.slice(0, 10)))
         .forEach(k => localStorage.removeItem(k));
     } catch { /**/ }
   }
 }
 
-// Subscriber callbacks for stale-while-revalidate updates
 const _swr_listeners = new Map();
 export function onFreshData(path, cb) { _swr_listeners.set(path, cb); }
 
@@ -96,24 +93,25 @@ export function onFreshData(path, cb) { _swr_listeners.set(path, cb); }
 export const API = {
   async get(path, { revalidate = true } = {}) {
     const ttl = _getTtl(path);
+    const token = await getToken();
+    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
-    // 1. L1 hit → return immediately (no network)
     const l1 = _l1Get(path);
     if (l1 !== null) return l1;
 
-    // 2. L2 hit → return stale data immediately, revalidate in background
     const l2 = _l2Get(path);
     if (l2 !== null) {
-      _l1Set(path, l2.data, ttl.l1);   // warm L1 too
+      _l1Set(path, l2.data, ttl.l1);
       const isStale = Date.now() > l2.ex;
       if (revalidate && isStale) {
-        // Background revalidation — don't block the caller
-        fetch(path).then(async r => {
-          if (!r.ok) return;
+        fetch(path, { headers }).then(async r => {
+          if (!r.ok) {
+            if (r.status === 401) signOut();
+            return;
+          }
           const fresh = await r.json();
           _l1Set(path, fresh, ttl.l1);
           _l2Set(path, fresh, ttl.l2);
-          // Notify any registered listener so the page can update
           const cb = _swr_listeners.get(path);
           if (cb) cb(fresh);
         }).catch(() => {});
@@ -121,9 +119,9 @@ export const API = {
       return l2.data;
     }
 
-    // 3. No cache → fetch, populate both layers
-    const r = await fetch(path);
+    const r = await fetch(path, { headers });
     if (!r.ok) {
+      if (r.status === 401) { signOut(); return; }
       const e = await r.json().catch(() => ({ detail: r.statusText }));
       throw new Error(e.detail || `HTTP ${r.status}`);
     }
@@ -134,12 +132,17 @@ export const API = {
   },
 
   async post(path, body) {
+    const token = await getToken();
     const r = await fetch(path, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
       body: JSON.stringify(body),
     });
     if (!r.ok) {
+      if (r.status === 401) { signOut(); return; }
       const e = await r.json().catch(() => ({ detail: r.statusText }));
       throw new Error(e.detail || `HTTP ${r.status}`);
     }
@@ -150,8 +153,13 @@ export const API = {
   },
 
   async del(path) {
-    const r = await fetch(path, { method: 'DELETE' });
+    const token = await getToken();
+    const r = await fetch(path, {
+      method: 'DELETE',
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+    });
     if (!r.ok) {
+      if (r.status === 401) { signOut(); return; }
       const e = await r.json().catch(() => ({ detail: r.statusText }));
       throw new Error(e.detail || `HTTP ${r.status}`);
     }
@@ -159,8 +167,6 @@ export const API = {
     return r.json();
   },
 };
-
-
 
 // ══════════════════════════════════════════════════════════════════
 // Toast
@@ -234,11 +240,10 @@ export function launchConfetti() {
   }));
 
   let frame;
-  let elapsed = 0;
   const last = performance.now();
 
   function draw(ts) {
-    elapsed = ts - last;
+    const elapsed = ts - last;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     let alive = false;
     for (const p of pieces) {
@@ -305,7 +310,6 @@ export function navigate(page) {
     content.style.transform = 'translateY(0)';
   }, 120);
 
-  // Close sidebar on mobile when navigating
   if (window._closeMobileSidebar) window._closeMobileSidebar();
   else document.getElementById('sidebar').classList.remove('open');
   window.location.hash = page;
@@ -322,7 +326,6 @@ async function refreshStatus() {
     dot.className    = 'status-dot ok';
     text.textContent = 'Connected ☑️';
 
-    // Update daily review badge
     try {
       const rev = await API.get('/api/review/due?limit=0');
       const badge = document.getElementById('review-badge');
@@ -371,96 +374,137 @@ function initMobile() {
     sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
   }
 
-  // Hamburger button
   btn.addEventListener('click', toggleSidebar);
-
-  // Tap overlay to close
   overlay.addEventListener('click', closeSidebar);
 
-  // ── Swipe gestures ──────────────────────────────────────────────
-  const SWIPE_THRESHOLD   = 48;   // px minimum horizontal travel
-  const EDGE_ZONE         = 28;   // px from left edge to start open-swipe
-  const VELOCITY_MIN      = 0.25; // px/ms minimum speed
-  let touchStartX = 0;
-  let touchStartY = 0;
-  let touchStartTime = 0;
-  let swipeIntent = null;         // 'open' | 'close' | null
+  const SWIPE_THRESHOLD = 48;
+  const EDGE_ZONE       = 28;
+  const VELOCITY_MIN    = 0.25;
+  let touchStartX = 0, touchStartY = 0, touchStartTime = 0, swipeIntent = null;
 
   document.addEventListener('touchstart', e => {
     if (e.touches.length !== 1) return;
     const t = e.touches[0];
-    touchStartX    = t.clientX;
-    touchStartY    = t.clientY;
-    touchStartTime = Date.now();
-
+    touchStartX = t.clientX; touchStartY = t.clientY; touchStartTime = Date.now();
     const sidebarOpen = sidebar.classList.contains('open');
-    // Only capture relevant starting zones
-    if (!sidebarOpen && touchStartX <= EDGE_ZONE) {
-      swipeIntent = 'open';
-    } else if (sidebarOpen) {
-      swipeIntent = 'close';
-    } else {
-      swipeIntent = null;
-    }
+    swipeIntent = (!sidebarOpen && touchStartX <= EDGE_ZONE) ? 'open'
+                : sidebarOpen ? 'close' : null;
   }, { passive: true });
 
   document.addEventListener('touchmove', e => {
-    // provide live visual drag preview while swiping
     if (!swipeIntent) return;
     const dx = e.touches[0].clientX - touchStartX;
     const dy = Math.abs(e.touches[0].clientY - touchStartY);
-    if (dy > 50) { swipeIntent = null; return; } // vertical scroll – cancel
-
+    if (dy > 50) { swipeIntent = null; return; }
     if (swipeIntent === 'open' && dx > 0) {
-      const progress = Math.min(dx / 272, 1);
       sidebar.style.transition = 'none';
       sidebar.style.transform  = `translateX(calc(-272px + ${dx}px))`;
       overlay.style.display    = 'block';
-      overlay.style.opacity    = String(progress * 0.55);
+      overlay.style.opacity    = String(Math.min(dx / 272, 1) * 0.55);
     } else if (swipeIntent === 'close' && dx < 0) {
-      const progress = Math.min(-dx / 272, 1);
       sidebar.style.transition = 'none';
       sidebar.style.transform  = `translateX(${dx}px)`;
-      overlay.style.opacity    = String((1 - progress) * 0.55);
+      overlay.style.opacity    = String((1 - Math.min(-dx / 272, 1)) * 0.55);
     }
   }, { passive: true });
 
   document.addEventListener('touchend', e => {
     if (!swipeIntent) return;
-    const t    = e.changedTouches[0];
-    const dx   = t.clientX - touchStartX;
-    const dy   = Math.abs(t.clientY - touchStartY);
-    const dt   = Date.now() - touchStartTime;
-    const vx   = Math.abs(dx) / (dt || 1);
-
-    // Reset inline styles so CSS transitions take over
-    sidebar.style.transition = '';
-    sidebar.style.transform  = '';
-    overlay.style.opacity    = '';
-    overlay.style.display    = '';
-
-    if (dy > 60) { swipeIntent = null; return; } // was a scroll
-
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStartX;
+    const dy = Math.abs(t.clientY - touchStartY);
+    const dt = Date.now() - touchStartTime;
+    const vx = Math.abs(dx) / (dt || 1);
+    sidebar.style.transition = ''; sidebar.style.transform = '';
+    overlay.style.opacity = ''; overlay.style.display = '';
+    if (dy > 60) { swipeIntent = null; return; }
     const isSwipe = Math.abs(dx) >= SWIPE_THRESHOLD || vx >= VELOCITY_MIN;
-
     if (swipeIntent === 'open'  && dx > 0 && isSwipe) openSidebar();
     else if (swipeIntent === 'close' && dx < 0 && isSwipe) closeSidebar();
-    // If swipe was too short, sidebar snaps back via CSS transition
-
     swipeIntent = null;
   }, { passive: true });
 
-  // Expose closeSidebar so navigate() can call it
   window._closeMobileSidebar = closeSidebar;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Show login — fullscreen, bypasses sidebar layout
+// ══════════════════════════════════════════════════════════════════
+function showLoginScreen() {
+  const sidebar   = document.getElementById('sidebar');
+  const mobileBtn = document.getElementById('mobile-menu-btn');
+  
+  if (sidebar)   sidebar.style.display   = 'none';
+  if (mobileBtn) mobileBtn.style.display = 'none';
+
+  const appEl = document.getElementById('app');
+  if (appEl) appEl.style.display = 'block';
+
+  const mainEl = document.getElementById('main-content');
+  if (mainEl) {
+    mainEl.style.marginLeft = '0';
+    mainEl.style.padding    = '0';
+    mainEl.style.minHeight  = '100vh';
+    mainEl.style.display    = 'flex';
+    mainEl.style.alignItems = 'center';
+    mainEl.style.justifyContent = 'center';
+  }
+
+  const pageContent = document.getElementById('page-content');
+  if (pageContent) {
+    pageContent.style.width = '100%';
+    renderLogin(pageContent);
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════
 // Boot
 // ══════════════════════════════════════════════════════════════════
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  // Get initial session state ONCE (getSession is faster for boot than getUser)
+  const session = await getSession();
+  const user = session?.user || null;
+  console.log('Boot: user =', user);
+
+  if (!user) {
+    // Not logged in — show login screen
+    showLoginScreen();
+
+    // Listen ONLY for a sign-in event to boot the app (no reload loop)
+    onAuthChange((event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        // User just logged in — do a clean reload to boot the full app
+        window.location.reload();
+      }
+    });
+    return;
+  }
+
+  // ── User is authenticated — boot the full app ─────────────────
+  // Listen for sign-out or token changes
+  onAuthChange((event, session) => {
+    if (event === 'SIGNED_OUT') {
+      window.location.reload();
+    }
+    // TOKEN_REFRESHED, USER_UPDATED etc. — do nothing, stay on current page
+  });
+
+  // Restore sidebar and main layout to defaults
+  const sidebar   = document.getElementById('sidebar');
+  const mobileBtn = document.getElementById('mobile-menu-btn');
+
+  if (sidebar) {
+    sidebar.style.visibility = 'visible';
+    sidebar.style.display    = '';
+  }
+  if (mobileBtn) {
+    mobileBtn.style.visibility = 'visible';
+    mobileBtn.style.display    = '';
+  }
+
   initMobile();
   refreshStatus();
-  Streak.bump(); // bump streak on daily open
+  Streak.bump();
 
   document.querySelectorAll('.nav-item').forEach(el => {
     el.addEventListener('click', e => { e.preventDefault(); navigate(el.dataset.page); });
@@ -469,23 +513,21 @@ document.addEventListener('DOMContentLoaded', () => {
   const hash = window.location.hash.replace('#', '');
   navigate(PAGES[hash] ? hash : 'dashboard');
 
-  // ── Keep-alive ping ─────────────────────────────────────────────
-  // When the user returns to the tab after being away, fire a silent
-  // ping so Vercel warms up BEFORE they interact (hides cold start).
-  let _lastPing = 0;
-  const PING_INTERVAL = 4 * 60 * 1000; // 4 minutes
+  const logoutBtn = document.getElementById('logout-btn');
+  if (logoutBtn) logoutBtn.addEventListener('click', () => signOut());
 
+  // ── Keep-alive ping ──────────────────────────────────────────────
+  let _lastPing = 0;
+  const PING_INTERVAL = 4 * 60 * 1000;
   function _maybePing() {
     const now = Date.now();
     if (now - _lastPing > PING_INTERVAL) {
       _lastPing = now;
-      fetch('/api/ping').catch(() => {}); // fire-and-forget
+      fetch('/api/ping').catch(() => {});
     }
   }
-
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') _maybePing();
   });
-
-  _maybePing(); // also ping on first load
+  _maybePing();
 });

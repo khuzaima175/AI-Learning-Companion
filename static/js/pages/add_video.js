@@ -57,10 +57,10 @@ export async function renderAddVideo(container) {
         <div class="card card-sm" style="border-color:var(--border-t)">
           <div style="font-size:.8rem;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">What AI generates</div>
           <div style="display:flex;flex-direction:column;gap:10px">
-            ${infoRow('📝','Detailed Summary','3–4 paragraph breakdown of the content')}
-            ${infoRow('💡','10 Key Concepts','Definitions for the most important terms')}
-            ${infoRow('⚡','12 Takeaways','Actionable bullet-point lessons')}
-            ${infoRow('🧠','Quiz Questions','10 MCQs for practice & spaced repetition')}
+            ${infoRow('📝','Detailed Summary','4-6 paragraph breakdown of the content')}
+            ${infoRow('💡','16 Key Concepts','Core definitions for the most important terms')}
+            ${infoRow('⚡','20 Takeaways','Actionable, specific bullet-point lessons')}
+            ${infoRow('🧠','Quiz Questions','20 MCQs for practice & staggered review')}
           </div>
         </div>
 
@@ -107,7 +107,7 @@ export async function renderAddVideo(container) {
           <div class="spinner"></div>
           <div>
             <div style="font-weight:600;color:var(--teal)">AI is processing your video…</div>
-            <div style="font-size:.8rem;color:var(--text-2);margin-top:3px">Generating summary, key concepts & quiz questions</div>
+            <div style="font-size:.8rem;color:var(--text-2);margin-top:3px">Generating summary, 16 key concepts & 20 quiz questions</div>
           </div>
         </div>
         <div class="progress-track" style="margin-top:14px">

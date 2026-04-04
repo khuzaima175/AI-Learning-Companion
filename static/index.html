@@ -26,6 +26,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
 
   <link rel="stylesheet" href="/static/css/style.css" />
+  
+  <style>
+    #sidebar,
+    #mobile-menu-btn { visibility: hidden; }
+  </style>
+  
+  <!-- Add Supabase JS -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
@@ -102,6 +110,10 @@
           <span id="status-text" style="flex:1;font-size:.79rem">Checking…</span>
         </div>
         <p class="sidebar-footer-note" style="margin-top:8px">☁️ Powered by Supabase</p>
+        <button class="btn btn-ghost btn-sm" id="logout-btn" 
+                style="width:100%;margin-top:8px;font-size:.78rem">
+          🚪 Sign Out
+        </button>
       </div>
     </aside>
 
