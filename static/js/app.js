@@ -3,14 +3,14 @@
  * Router · API client · Toast · Confetti · Streak · Global state
  */
 
-import { renderDashboard }  from './pages/dashboard.js';
-import { renderAddVideo }   from './pages/add_video.js';
-import { renderBrowse }     from './pages/browse.js';
+import { renderDashboard } from './pages/dashboard.js';
+import { renderAddVideo } from './pages/add_video.js';
+import { renderBrowse } from './pages/browse.js';
 import { renderFlashcards } from './pages/flashcards.js';
-import { renderQuiz }       from './pages/quiz.js';
-import { renderReview }     from './pages/review.js';
-import { renderStats }      from './pages/stats.js';
-import { renderManage }     from './pages/manage.js';
+import { renderQuiz } from './pages/quiz.js';
+import { renderReview } from './pages/review.js';
+import { renderStats } from './pages/stats.js';
+import { renderManage } from './pages/manage.js';
 import { getUser, getToken, getSession, onAuthChange, signOut } from './auth.js';
 import { renderLogin } from './pages/login.js';
 
@@ -28,12 +28,12 @@ const LS_PREFIX = 'alc_cache_';
 
 // TTL config (ms) — L1 strict TTL, L2 soft TTL (stale ok, revalidate)
 const CACHE_TTL = {
-  '/api/courses':         { l1: 20_000, l2: 5 * 60_000  },
-  '/api/stats':           { l1: 15_000, l2: 3 * 60_000  },
-  '/api/review/due':      { l1: 10_000, l2: 2 * 60_000  },
-  '/api/quiz/questions':  { l1: 10_000, l2: 2 * 60_000  },
-  '/api/videos/':         { l1: 60_000, l2: 10 * 60_000 },
-  'default':              { l1: 10_000, l2: 60_000 },
+  '/api/courses': { l1: 20_000, l2: 5 * 60_000 },
+  '/api/stats': { l1: 15_000, l2: 3 * 60_000 },
+  '/api/review/due': { l1: 10_000, l2: 2 * 60_000 },
+  '/api/quiz/questions': { l1: 10_000, l2: 2 * 60_000 },
+  '/api/videos/': { l1: 60_000, l2: 10 * 60_000 },
+  'default': { l1: 10_000, l2: 60_000 },
 };
 
 function _getTtl(path) {
@@ -114,7 +114,7 @@ export const API = {
           _l2Set(path, fresh, ttl.l2);
           const cb = _swr_listeners.get(path);
           if (cb) cb(fresh);
-        }).catch(() => {});
+        }).catch(() => { });
       }
       return l2.data;
     }
@@ -223,7 +223,7 @@ export function launchConfetti() {
   const canvas = document.getElementById('confetti-canvas');
   canvas.style.display = '';
   const ctx = canvas.getContext('2d');
-  canvas.width  = window.innerWidth;
+  canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
 
   const colors = ['#00e5cc', '#f59e0b', '#ff6b6b', '#0ea5e9', '#10b981', '#fff'];
@@ -278,14 +278,14 @@ export function staggerElements(selector, delay = 60) {
 // Router
 // ══════════════════════════════════════════════════════════════════
 const PAGES = {
-  'dashboard':   renderDashboard,
-  'add-video':   renderAddVideo,
-  'browse':      renderBrowse,
-  'flashcards':  renderFlashcards,
-  'quiz':        renderQuiz,
-  'review':      renderReview,
-  'stats':       renderStats,
-  'manage':      renderManage,
+  'dashboard': renderDashboard,
+  'add-video': renderAddVideo,
+  'browse': renderBrowse,
+  'flashcards': renderFlashcards,
+  'quiz': renderQuiz,
+  'review': renderReview,
+  'stats': renderStats,
+  'manage': renderManage,
 };
 
 let _current = 'dashboard';
@@ -319,25 +319,25 @@ export function navigate(page) {
 // Status bar (cloud connection check)
 // ══════════════════════════════════════════════════════════════════
 async function refreshStatus() {
-  const dot  = document.getElementById('status-dot');
+  const dot = document.getElementById('status-dot');
   const text = document.getElementById('status-text');
   try {
     await API.get('/api/courses');
-    dot.className    = 'status-dot ok';
+    dot.className = 'status-dot ok';
     text.textContent = 'Connected ☑️';
 
     try {
       const rev = await API.get('/api/review/due?limit=0');
       const badge = document.getElementById('review-badge');
       if (rev.due_count > 0) {
-        badge.textContent   = rev.due_count;
+        badge.textContent = rev.due_count;
         badge.style.display = '';
       } else {
         badge.style.display = 'none';
       }
     } catch { /**/ }
   } catch {
-    dot.className    = 'status-dot bad';
+    dot.className = 'status-dot bad';
     text.textContent = 'Server offline';
   }
 }
@@ -346,19 +346,19 @@ async function refreshStatus() {
 // Mobile sidebar – toggle · overlay · swipe gestures
 // ══════════════════════════════════════════════════════════════════
 function initMobile() {
-  const sidebar  = document.getElementById('sidebar');
-  const btn      = document.getElementById('mobile-menu-btn');
-  const overlay  = document.getElementById('sidebar-overlay');
-  const iconHam  = document.getElementById('menu-icon-ham');
-  const iconX    = document.getElementById('menu-icon-close');
+  const sidebar = document.getElementById('sidebar');
+  const btn = document.getElementById('mobile-menu-btn');
+  const overlay = document.getElementById('sidebar-overlay');
+  const iconHam = document.getElementById('menu-icon-ham');
+  const iconX = document.getElementById('menu-icon-close');
 
   function openSidebar() {
     sidebar.classList.add('open');
     overlay.classList.add('active');
     btn.classList.add('sidebar-open');
     btn.setAttribute('aria-expanded', 'true');
-    iconHam.style.display  = 'none';
-    iconX.style.display    = '';
+    iconHam.style.display = 'none';
+    iconX.style.display = '';
   }
 
   function closeSidebar() {
@@ -366,8 +366,8 @@ function initMobile() {
     overlay.classList.remove('active');
     btn.classList.remove('sidebar-open');
     btn.setAttribute('aria-expanded', 'false');
-    iconHam.style.display  = '';
-    iconX.style.display    = 'none';
+    iconHam.style.display = '';
+    iconX.style.display = 'none';
   }
 
   function toggleSidebar() {
@@ -378,8 +378,8 @@ function initMobile() {
   overlay.addEventListener('click', closeSidebar);
 
   const SWIPE_THRESHOLD = 48;
-  const EDGE_ZONE       = 28;
-  const VELOCITY_MIN    = 0.25;
+  const EDGE_ZONE = 28;
+  const VELOCITY_MIN = 0.25;
   let touchStartX = 0, touchStartY = 0, touchStartTime = 0, swipeIntent = null;
 
   document.addEventListener('touchstart', e => {
@@ -388,7 +388,7 @@ function initMobile() {
     touchStartX = t.clientX; touchStartY = t.clientY; touchStartTime = Date.now();
     const sidebarOpen = sidebar.classList.contains('open');
     swipeIntent = (!sidebarOpen && touchStartX <= EDGE_ZONE) ? 'open'
-                : sidebarOpen ? 'close' : null;
+      : sidebarOpen ? 'close' : null;
   }, { passive: true });
 
   document.addEventListener('touchmove', e => {
@@ -398,13 +398,13 @@ function initMobile() {
     if (dy > 50) { swipeIntent = null; return; }
     if (swipeIntent === 'open' && dx > 0) {
       sidebar.style.transition = 'none';
-      sidebar.style.transform  = `translateX(calc(-272px + ${dx}px))`;
-      overlay.style.display    = 'block';
-      overlay.style.opacity    = String(Math.min(dx / 272, 1) * 0.55);
+      sidebar.style.transform = `translateX(calc(-272px + ${dx}px))`;
+      overlay.style.display = 'block';
+      overlay.style.opacity = String(Math.min(dx / 272, 1) * 0.55);
     } else if (swipeIntent === 'close' && dx < 0) {
       sidebar.style.transition = 'none';
-      sidebar.style.transform  = `translateX(${dx}px)`;
-      overlay.style.opacity    = String((1 - Math.min(-dx / 272, 1)) * 0.55);
+      sidebar.style.transform = `translateX(${dx}px)`;
+      overlay.style.opacity = String((1 - Math.min(-dx / 272, 1)) * 0.55);
     }
   }, { passive: true });
 
@@ -419,7 +419,7 @@ function initMobile() {
     overlay.style.opacity = ''; overlay.style.display = '';
     if (dy > 60) { swipeIntent = null; return; }
     const isSwipe = Math.abs(dx) >= SWIPE_THRESHOLD || vx >= VELOCITY_MIN;
-    if (swipeIntent === 'open'  && dx > 0 && isSwipe) openSidebar();
+    if (swipeIntent === 'open' && dx > 0 && isSwipe) openSidebar();
     else if (swipeIntent === 'close' && dx < 0 && isSwipe) closeSidebar();
     swipeIntent = null;
   }, { passive: true });
@@ -431,10 +431,10 @@ function initMobile() {
 // Show login — fullscreen, bypasses sidebar layout
 // ══════════════════════════════════════════════════════════════════
 function showLoginScreen() {
-  const sidebar   = document.getElementById('sidebar');
+  const sidebar = document.getElementById('sidebar');
   const mobileBtn = document.getElementById('mobile-menu-btn');
-  
-  if (sidebar)   sidebar.style.display   = 'none';
+
+  if (sidebar) sidebar.style.display = 'none';
   if (mobileBtn) mobileBtn.style.display = 'none';
 
   const appEl = document.getElementById('app');
@@ -443,9 +443,9 @@ function showLoginScreen() {
   const mainEl = document.getElementById('main-content');
   if (mainEl) {
     mainEl.style.marginLeft = '0';
-    mainEl.style.padding    = '0';
-    mainEl.style.minHeight  = '100vh';
-    mainEl.style.display    = 'flex';
+    mainEl.style.padding = '0';
+    mainEl.style.minHeight = '100vh';
+    mainEl.style.display = 'flex';
     mainEl.style.alignItems = 'center';
     mainEl.style.justifyContent = 'center';
   }
@@ -482,6 +482,7 @@ document.addEventListener('DOMContentLoaded', () => {
       booted = true;
 
       if (!session?.user) {
+        booted = false;
         showLoginScreen();
         return;
       }
@@ -495,9 +496,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function bootApp() {
-  const sidebar   = document.getElementById('sidebar');
+  const sidebar = document.getElementById('sidebar');
   const mobileBtn = document.getElementById('mobile-menu-btn');
-  if (sidebar)   { sidebar.style.visibility = 'visible'; sidebar.style.display = ''; }
+  if (sidebar) { sidebar.style.visibility = 'visible'; sidebar.style.display = ''; }
   if (mobileBtn) { mobileBtn.style.visibility = 'visible'; mobileBtn.style.display = ''; }
 
   initMobile();
@@ -520,7 +521,7 @@ async function bootApp() {
     const now = Date.now();
     if (now - _lastPing > PING_INTERVAL) {
       _lastPing = now;
-      fetch('/api/ping').catch(() => {});
+      fetch('/api/ping').catch(() => { });
     }
   }
   document.addEventListener('visibilitychange', () => {
