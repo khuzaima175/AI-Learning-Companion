@@ -43,6 +43,10 @@ export async function signIn(email, password) {
 // ── Sign out ───────────────────────────────────────────────
 export async function signOut() {
     await sb.auth.signOut();
+    // Clear all cached data so next user starts fresh
+    Object.keys(localStorage)
+        .filter(k => k.startsWith('alc_'))
+        .forEach(k => localStorage.removeItem(k));
     window.location.reload();
 }
 
