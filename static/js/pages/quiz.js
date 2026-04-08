@@ -6,7 +6,7 @@ let _sessionId   = null;
 let _answered    = false;
 let _score       = 0;
 let _timerHandle = null;
-let _timeLeft    = 30;
+let _results     = [];   // tracks {correct: bool} per question
 const TIMER_S    = 30;
 
 export async function renderQuiz(container) {
@@ -249,8 +249,7 @@ async function startQuiz() {
     _questions = await API.get(`/api/quiz/questions?${params}`);
     if (!_questions.length) { showToast('No questions found — add some videos first!', 'error'); return; }
     const res = await API.post('/api/quiz/start-session', {});
-    _sessionId = res.session_id; _idx = 0; _score = 0;
-    _timeLeft  = timerV || TIMER_S;
+    _sessionId = res.session_id; _idx = 0; _score = 0; _results = [];
 
     document.getElementById('quiz-setup').style.display   = 'none';
     document.getElementById('quiz-play').style.display    = '';
@@ -281,7 +280,7 @@ function renderQuestion(timerDur) {
     </div>
 
     <!-- Timer bar -->
-    ${timerDur ? `<div class="timer-bar" id="timer-bar" style="width:100%;margin-bottom:18px;transition:width ${timerDur}s linear,background .3s"></div>` : ''}
+    ${timerDur ? `<div class="timer-bar" id="timer-bar" style="width:100%;margin-bottom:18px"></div>` : ''}
 
     <!-- Question card -->
     <div class="question-card">
@@ -306,21 +305,24 @@ function renderQuestion(timerDur) {
 }
 
 function startTimer(dur, q) {
-  const bar      = document.getElementById('timer-bar');
+  const bar = document.getElementById('timer-bar');
   if (!bar) return;
-  const start    = performance.now();
-  _timerHandle   = setInterval(() => {
-    const elapsed = (performance.now() - start) / 1000;
-    const remaining = Math.max(0, dur - elapsed);
-    const pct = (remaining / dur) * 100;
-    bar.style.width = pct + '%';
-    if (pct < 33) bar.classList.add('warn');
-    if (pct < 15) bar.classList.add('crit');
-    if (remaining <= 0) {
-      clearTimer();
-      if (!_answered) timeOut(q);
-    }
-  }, 80);
+  // Wait one frame so the bar renders at 100% before we start shrinking it
+  requestAnimationFrame(() => {
+    const start = performance.now();
+    _timerHandle = setInterval(() => {
+      const elapsed   = (performance.now() - start) / 1000;
+      const remaining = Math.max(0, dur - elapsed);
+      const pct       = (remaining / dur) * 100;
+      bar.style.width = pct + '%';
+      if (pct < 33) bar.classList.add('warn');
+      if (pct < 15) bar.classList.add('crit');
+      if (remaining <= 0) {
+        clearTimer();
+        if (!_answered) timeOut(q);
+      }
+    }, 80);
+  });
 }
 
 function clearTimer() {
@@ -329,6 +331,7 @@ function clearTimer() {
 
 function timeOut(q) {
   _answered = true;
+  _results.push({ correct: false });
   document.querySelectorAll('.option-btn').forEach(b => {
     b.disabled = true;
     if (b.dataset.val === q.answer) b.classList.add('correct');
@@ -344,6 +347,7 @@ async function selectAnswer(btn, q, timerDur) {
   const chosen  = btn.dataset.val;
   const correct = chosen === q.answer;
   if (correct) _score++;
+  _results.push({ correct });
 
   document.querySelectorAll('.option-btn').forEach(b => {
     b.disabled = true;
@@ -421,7 +425,7 @@ function renderResults() {
         <div style="font-size:.78rem;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px">Results summary</div>
         ${_questions.map((q, i) => `
           <div style="display:flex;align-items:center;gap:8px;font-size:.8rem;padding:5px 0;border-bottom:1px solid var(--border)">
-            <span style="color:${i < _score ? 'var(--emerald)' : 'var(--coral)'}">${i < _score ? '✅' : '❌'}</span>
+            <span style="color:${_results[i]?.correct ? 'var(--emerald)' : 'var(--coral)'}">${_results[i]?.correct ? '✅' : '❌'}</span>
             <span style="flex:1;color:var(--text-2);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${q.question}</span>
           </div>`).join('')}
       </div>
