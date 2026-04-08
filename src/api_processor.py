@@ -328,26 +328,23 @@ class ApiProcessor:
 
     def generate_summary_and_concepts(self, transcript: str, title: str):
         processed = self._process_long_transcript(transcript, target_length=500_000)
-        prompt = f"""You are an expert educator and curriculum designer analyzing a lecture on "{title}".
-
-Your goal is to extract content that will help a student deeply understand and retain this material.
+        prompt = f"""You are an educator creating study material for a lecture on "{title}".
 
 Return a single valid JSON object with these exact keys:
 
-"summary": A detailed summary in 4-6 paragraphs. Each paragraph should cover a distinct theme or section of the content. Write it as if explaining to an intelligent student who has never seen this material. Use clear cause-and-effect language.
+"summary": 4-6 paragraphs summarizing the lecture. Cover the main ideas in order, explain the reasoning behind them, and highlight anything non-obvious. Write clearly — not dumbed down, but not padded either.
 
-"key_concepts": An array of exactly 16 objects, each with:
-  - "concept": the term or idea (concise)
-  - "definition": a clear, precise explanation in 2-3 sentences. Include WHY it matters or HOW it connects to other concepts. Avoid vague definitions.
+"key_concepts": Exactly 16 objects, each with:
+  - "concept": the term or idea
+  - "definition": 1-3 sentences. Explain what it is and what makes it distinct or important in the context of this lecture. Skip concepts that are too basic or generic to be worth knowing.
 
-"bullet_points": An array of exactly 20 takeaways. Each must:
-  - Start with an action verb (Understand, Apply, Recognize, Distinguish, Calculate, etc.)
-  - State a specific insight, not a vague generality
-  - Be something a student could actually USE in an exam or real situation
-  - BAD example: "Machine learning is important"
-  - GOOD example: "Distinguish supervised from unsupervised learning by asking: does the training data have labeled outputs?"
+"bullet_points": Exactly 20 bullet points — these are the most important things to take away from this specific lecture. Rules:
+  - Every bullet must come from something actually said or shown in the lecture. No generic filler.
+  - Each bullet should be something a viewer could have missed or misunderstood. If it's obvious to anyone without watching, cut it.
+  - Be specific. Bad: "Neural networks are useful." Good: "The lecture uses a 3-layer network because adding more layers didn't improve accuracy on this dataset."
+  - Mix: key definitions worth remembering, non-obvious insights, important comparisons, cause-and-effect points, and practical implications.
 
-Important: Return ONLY valid JSON. No markdown, no explanation outside the JSON.
+Return ONLY valid JSON. No markdown, no text outside the JSON.
 
 Transcript: {processed}"""
         return self._call_gemini_and_parse_json(prompt)
@@ -361,42 +358,36 @@ Transcript: {processed}"""
         processed = self._process_long_transcript(transcript, target_length=500_000)
         diff_str = ", ".join(allowed_difficulties)
 
-        prompt = f"""You are an expert educator and exam writer specializing in "{title}".
+        prompt = f"""You are writing a quiz on "{title}" for someone who just watched the lecture.
 
-Your mission: create quiz questions that don't just test memory — they build genuine understanding and expose common misconceptions.
+The quiz has one purpose: to check whether the person genuinely understood the lecture — not whether they can guess, not whether they remember trivia.
 
-QUESTION DESIGN RULES:
-1. Test CONCEPTS, REASONING, and APPLICATION — not trivia or surface recall.
-2. NEVER reference the video/lecture (no "According to the video...", "The speaker said...").
-3. Each question must target a DIFFERENT concept — no overlap between questions.
-4. Use a MIX of question styles:
-   - Conceptual: "What is the key difference between X and Y?"
-   - Application: "A system does Z. Which approach best explains this?"
-   - Cause & Effect: "Why does X happen when Y occurs?"
-   - Misconception trap: Design one wrong answer that a student who half-understands would pick.
-   - Scenario-based: Give a real-world mini-scenario, ask what applies.
-5. WRONG OPTIONS must be:
-   - Plausible to someone who half-understands the topic
-   - Based on real common misconceptions, NOT random nonsense
-   - Similar in length and grammatical form to the correct answer
-6. The CORRECT answer must be unambiguously right — not just "most correct".
-7. Difficulty guidelines:
-   - easy: Tests direct definitions or single facts a student should know cold.
-   - medium: Requires connecting two concepts or applying a rule to a situation.
-   - hard: Requires multi-step reasoning, distinguishing between closely related ideas, or handling an edge case.
-8. Distribute difficulties evenly across: {diff_str}.
+Every question must pass this test: someone who watched and understood the lecture can answer it confidently. Someone who did NOT watch it should struggle, even if they know the general subject.
 
-Return a single valid JSON object with key "quiz_questions" containing EXACTLY {num_questions} objects.
-Each object MUST have:
-- "question": string — clear, specific, no video references
-- "options": array of exactly 4 strings — no A/B/C/D prefixes, similar length
-- "answer": string — must EXACTLY match one option
+Difficulty levels — distribute evenly across {diff_str}:
+- easy: Tests a clear, specific point from the lecture. Still requires having watched it — not guessable from general knowledge alone.
+- medium: Requires understanding a concept well enough to apply it or see why one option is right and another plausible-but-wrong.
+- hard: Requires connecting ideas from different parts of the lecture, understanding a nuance the lecturer emphasized, or reasoning through something the lecture explained step by step.
+
+Rules:
+1. No references to "the video", "the lecture", "the speaker". Ask about the content itself.
+2. Each question targets a DIFFERENT concept from the lecture.
+3. Wrong options must be plausible — things someone might believe if they half-understood the material, not random nonsense.
+4. The correct answer must be unambiguously correct based on the lecture content.
+5. No question should be answerable purely from general knowledge or common sense. If someone could guess it without watching, replace it.
+6. No trick questions, no gotchas, no testing peripheral details that don't matter.
+
+Return a single valid JSON object with key "quiz_questions" containing exactly {num_questions} objects.
+Each object must have:
+- "question": string — specific and clear
+- "options": array of exactly 4 strings (no A/B/C/D prefixes)
+- "answer": string — must exactly match one of the options
 - "difficulty": one of [{diff_str}]
-- "explanation": string — 1-2 sentences explaining WHY the answer is correct and why the main distractor is wrong. This helps the student learn from mistakes.
+- "explanation": 1-2 sentences — why the answer is correct, and what the key insight is
 
-Return ONLY valid JSON. No markdown, no text outside the JSON object.
+Return ONLY valid JSON. No markdown, no text outside the JSON.
 
-Educational Content:
+Lecture transcript:
 {processed}"""
         return self._call_gemini_and_parse_json(prompt)
 
