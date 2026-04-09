@@ -24,8 +24,9 @@ export async function renderReview(container) {
 
 async function loadDue() {
   try {
-    const data = await API.get('/api/review/due?limit=30');
+    const data = await API.get('/api/review/due');
     _questions = data.questions; _idx = 0; _correct = 0;
+    const totalDue = data.due_count ?? _questions.length;
     const body = document.getElementById('review-body');
 
     if (!_questions.length) {
@@ -41,7 +42,7 @@ async function loadDue() {
 
     body.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;max-width:640px;margin-bottom:10px">
-        <span style="font-size:.85rem;color:var(--text-2)"><strong style="color:var(--teal)">${_questions.length}</strong> card${_questions.length!==1?'s':''} due today</span>
+        <span style="font-size:.85rem;color:var(--text-2)"><strong style="color:var(--teal)">${totalDue}</strong> card${totalDue!==1?'s':''} due today</span>
         <span id="score-badge" class="badge badge-amber">0 / ${_questions.length}</span>
       </div>
       <div class="progress-track" style="max-width:640px;margin-bottom:26px">
