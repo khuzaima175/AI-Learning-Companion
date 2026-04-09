@@ -1,8 +1,8 @@
 """
-api/notify.py — Single unified cron handler for all 6 daily email notifications.
+api/notify.py — Unified cron handler for all 6 daily email notifications.
 
-Vercel hits this endpoint 6x/day with ?type=<name>. Each cron in vercel.json
-points to a different ?type, so one file handles everything cleanly.
+Vercel hits this endpoint 6x/day via ?type=<name>. Each cron entry in
+vercel.json points to a different ?type, so one file handles everything.
 
 Schedule (PKT → UTC):
   morning   → 10:00 AM PKT = 05:00 UTC
@@ -16,8 +16,9 @@ import os
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from fastapi import Request
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from mangum import Mangum
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -31,6 +32,8 @@ from src.email_service import (
     send_final_email,
 )
 
+app = FastAPI()
+
 # Map ?type= param to the correct sender function
 EMAIL_HANDLERS = {
     "morning":   send_morning_email,
@@ -42,7 +45,8 @@ EMAIL_HANDLERS = {
 }
 
 
-def handler(request: Request):
+@app.get("/api/notify")
+async def notify(request: Request, type: str = ""):
     # ── Auth: verify cron secret ──────────────────────────────────────────────
     secret = os.environ.get("CRON_SECRET", "")
     auth_header = request.headers.get("authorization", "")
@@ -50,7 +54,7 @@ def handler(request: Request):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
 
     # ── Resolve notification type ─────────────────────────────────────────────
-    email_type = request.query_params.get("type", "").lower()
+    email_type = type.lower()
     if email_type not in EMAIL_HANDLERS:
         return JSONResponse(
             {"error": f"Unknown type '{email_type}'. Valid: {list(EMAIL_HANDLERS.keys())}"},
@@ -73,7 +77,6 @@ def handler(request: Request):
     except Exception as e:
         return JSONResponse({"error": f"DB error: {e}"}, status_code=500)
 
-    # Morning always fires; all others are skipped if already reviewed
     if due_count == 0:
         reason = "Great job — all cards reviewed!" if email_type != "morning" else "No cards due today"
         return JSONResponse({"ok": True, "sent": False, "reason": reason})
@@ -91,3 +94,7 @@ def handler(request: Request):
         })
     except Exception as e:
         return JSONResponse({"error": f"Email send failed: {e}"}, status_code=500)
+
+
+# Vercel requires a top-level `handler` object
+handler = Mangum(app, lifespan="off")
