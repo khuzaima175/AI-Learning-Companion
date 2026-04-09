@@ -10,6 +10,14 @@
       }
     },
     {
+      "src": "api/notify.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxDuration": 30,
+        "includeFiles": ["src/**"]
+      }
+    },
+    {
       "src": "static/**",
       "use": "@vercel/static"
     }
@@ -24,8 +32,20 @@
       "dest": "/api/index.py"
     },
     {
+      "src": "/api/notify(.*)",
+      "dest": "/api/notify.py"
+    },
+    {
       "src": "/(.*)",
       "dest": "/api/index.py"
     }
+  ],
+  "crons": [
+    { "path": "/api/notify?type=morning",   "schedule": "0 5 * * *"  },
+    { "path": "/api/notify?type=midday",    "schedule": "0 7 * * *"  },
+    { "path": "/api/notify?type=afternoon", "schedule": "0 10 * * *" },
+    { "path": "/api/notify?type=evening",   "schedule": "0 13 * * *" },
+    { "path": "/api/notify?type=night",     "schedule": "0 16 * * *" },
+    { "path": "/api/notify?type=final",     "schedule": "30 18 * * *"}
   ]
 }

@@ -24,7 +24,7 @@ export async function renderReview(container) {
 
 async function loadDue() {
   try {
-    const data = await API.get('/api/review/due');
+    const data = await API.get('/api/review/due?limit=25');
     _questions = data.questions; _idx = 0; _correct = 0;
     const totalDue = data.due_count ?? _questions.length;
     const body = document.getElementById('review-body');
