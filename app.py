@@ -298,7 +298,7 @@ async def submit_answer(req: QuizAnswerRequest, user: dict = Depends(verify_toke
 # ══════════════════════════════════════════════════════════════════════════
 
 @app.get("/api/review/due")
-async def get_due_questions(limit: int = 20, user: dict = Depends(verify_token)):
+async def get_due_questions(limit: int = 0, user: dict = Depends(verify_token)):
     db = get_db()
     count = db.get_due_review_count(user_id=user["id"])
     rows = db.get_due_questions(user_id=user["id"], limit=limit)
