@@ -36,8 +36,14 @@ Features an automated cascading fallback system for Gemini API calls. If the pri
 
 ### 🔁 Spaced Repetition System (SRS)
 - **Mathematical Retention:** Implements the SM-2 algorithm concept. Questions are mathematically scheduled `[1, 3, 7, 14, 30, 90, 180]` days in advance based on your performance (`Hard`, `Good`, `Easy`). 
-- **Dynamic Quizzes:** AI generates custom multiple-choice questions matching stringent grammatical and conceptual constraints.
+- **Dynamic Quizzes:** AI generates custom multiple-choice questions matching stringent grammatical and conceptual constraints. Corrected visual timer and accurate results summary.
+- **Daily Review Cap:** Limits daily reviews to a configurable threshold (default 25 cards) to prevent study fatigue and keep sessions manageable.
 - **Race-Condition Safe:** Uses **Atomic RPC calls** directly inside Supabase to securely track session scores without Python read-then-write concurrency bugs.
+
+### 📩 Escalating Smart Email Reminders
+- Integrated with **Resend** and **Vercel Cron Jobs** to send up to 6 automated daily email nudges (`Morning`, `Midday`, `Afternoon`, `Evening`, `Night`, `Final Call`).
+- **Urgency Engine:** Emails escalate in tone and visual design (urgency colors) as midnight approaches if you have pending cards.
+- **Serverless:** Requires no server—fully managed by Vercel serverless cron pointing to a single `api/notify.py` route.
 
 ---
 
@@ -65,6 +71,11 @@ Create a `.env` file in the root directory:
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_KEY=your_service_key
 SUPADATA_API_KEY=your_supadata_key_for_vercel_bypass 
+RESEND_API_KEY=your_resend_api_key
+CRON_SECRET=your_vercel_cron_secret
+NOTIFY_EMAIL=email_to_send_reminders_to
+NOTIFY_USER_ID=your_supabase_user_id
+NOTIFY_FROM_EMAIL=your_verified_resend_domain_email
 ```
 *(Note: Adding your Gemini API key is handled directly inside the app's UI settings).*
 
@@ -81,13 +92,16 @@ Open **[http://localhost:8000](http://localhost:8000)** in your browser.
 ```text
 /
 ├── app.py                  # FastAPI traffic cop & endpoint router
+├── test_email.py           # Testing script for email delivery
 ├── requirements.txt        
-├── vercel.json             # Vercel deployment configs
+├── vercel.json             # Vercel deployment & cron job configs
 ├── /api
-│   └── index.py            # Mangum wrapper for Serverless AWS/Vercel functions 
+│   ├── index.py            # Mangum wrapper for Serverless AWS/Vercel functions 
+│   └── notify.py           # Unified cron handler for daily email notifications
 ├── /src
 │   ├── api_processor.py    # Complex transcript & AI fallback logic
-│   └── database.py         # Supabase PostgreSQL client & SRS logic
+│   ├── database.py         # Supabase PostgreSQL client & SRS logic
+│   └── email_service.py    # Resend-powered rich HTML email templates
 └── /static                 # The "Neon Sunset" design system
     ├── index.html
     ├── /css
@@ -97,7 +111,7 @@ Open **[http://localhost:8000](http://localhost:8000)** in your browser.
 ---
 
 ## 🤝 Contributing & Future Roadmap
-Contributions are welcome. Our next major objective is turning the frontend into a **Progressive Web App (PWA)** to directly push mobile notifications for due daily quizzes.
+Contributions are welcome. Our next major objectives include turning the frontend into a **Progressive Web App (PWA)** for native offline support and expanding analytics to provide deeper insights into learning retention curves.
 
 ---
 *Created with ❤️ for lifelong learners.*
