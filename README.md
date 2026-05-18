@@ -68,6 +68,7 @@ pip install -r requirements.txt
 ### 3. Environment Variables
 Create a `.env` file in the root directory:
 ```env
+GEMINI_API_KEY=your_gemini_api_key
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_KEY=your_service_key
 SUPADATA_API_KEY=your_supadata_key_for_vercel_bypass 
@@ -77,7 +78,7 @@ NOTIFY_EMAIL=email_to_send_reminders_to
 NOTIFY_USER_ID=your_supabase_user_id
 NOTIFY_FROM_EMAIL=your_verified_resend_domain_email
 ```
-*(Note: Adding your Gemini API key is handled directly inside the app's UI settings).*
+*(Note: The Gemini API key can be set in the `.env` or handled directly inside the app's UI settings).*
 
 ### 4. Run the Application locally
 ```powershell
@@ -92,7 +93,6 @@ Open **[http://localhost:8000](http://localhost:8000)** in your browser.
 ```text
 /
 ├── app.py                  # FastAPI traffic cop & endpoint router
-├── test_email.py           # Testing script for email delivery
 ├── requirements.txt        
 ├── vercel.json             # Vercel deployment & cron job configs
 ├── /api
