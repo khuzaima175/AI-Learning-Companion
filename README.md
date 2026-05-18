@@ -29,7 +29,12 @@ Transform any YouTube video into a structured learning experience. **AI Learning
   1. Native `youtube-transcript-api`
   2. Cloud-proxy via `Supadata API`
   3. Mobile-spoofing via `yt-dlp` to bypass Vercel server blocks.
+- **Manual Transcript Input:** Supports pasting custom transcripts directly to analyze off-platform lectures, private videos, or custom notes.
 - Automatically generates detailed summaries, 10+ core concepts, and 12+ actionable bullet points.
+
+### 💬 Interactive AI Study Companion
+- **Context-Aware AI Chat:** Ask specific questions about any video in your catalog. The AI acts as an expert tutor, utilizing the full video transcript to answer, explain, or elaborate on complex topics.
+- **Persistent Personal Notes:** Capture thoughts, study reflections, and custom definitions directly within the browser dashboard in a dedicated notes tab, persisted securely to Supabase.
 
 ### 🧠 Smart Model Fallback (Reliability First)
 Features an automated cascading fallback system for Gemini API calls. If the primary model hits a rate limit (HTTP 429), the code instantly catches the exception and routes to the next best option via a `for/continue/break` loop chain to ensure zero downtime.
