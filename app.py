@@ -127,6 +127,14 @@ async def get_config():
     }
 
 
+@app.get("/api/supabase-config")
+async def get_supabase_config():
+    return {
+        "supabase_url": os.environ.get("SUPABASE_URL", ""),
+        "supabase_anon": os.environ.get("SUPABASE_ANON_KEY", "")
+    }
+
+
 @app.post("/api/config/api-key")
 async def save_api_key(req: ApiKeyRequest):
     if not req.api_key.strip():

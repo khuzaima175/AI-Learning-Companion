@@ -1,9 +1,18 @@
 // static/js/auth.js
 // Handles all Supabase Auth on the frontend
 
-// Replace these with your actual Supabase project URL and anon key
-const SUPABASE_URL  = 'YOUR_SUPABASE_URL';
-const SUPABASE_ANON = 'YOUR_SUPABASE_ANON_KEY';
+// Fetch Supabase configuration dynamically from the backend at boot
+let SUPABASE_URL = '';
+let SUPABASE_ANON = '';
+
+try {
+    const configResp = await fetch('/api/supabase-config');
+    const config = await configResp.json();
+    SUPABASE_URL = config.supabase_url;
+    SUPABASE_ANON = config.supabase_anon;
+} catch (e) {
+    console.error("Failed to load Supabase config from server:", e);
+}
 
 // Supabase JS client (loaded from CDN in index.html)
 const { createClient } = supabase;
