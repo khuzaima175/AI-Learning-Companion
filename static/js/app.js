@@ -461,7 +461,7 @@ function showLoginScreen() {
 // ══════════════════════════════════════════════════════════════════
 // Boot
 // ══════════════════════════════════════════════════════════════════
-document.addEventListener('DOMContentLoaded', () => {
+function init() {
   // Show a minimal loading state while Supabase restores session
   const pageContent = document.getElementById('page-content');
   if (pageContent) {
@@ -494,7 +494,13 @@ document.addEventListener('DOMContentLoaded', () => {
       window.location.reload();
     }
   });
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
 
 async function bootApp() {
   const sidebar = document.getElementById('sidebar');
