@@ -1,8 +1,9 @@
 // static/js/auth.js
 // Handles all Supabase Auth on the frontend
 
-const SUPABASE_URL  = 'https://xscguybkkdgaopoawuge.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzY2d1eWJra2RnYW9wb2F3dWdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxMjM5MzYsImV4cCI6MjA5MDY5OTkzNn0.MNkOSEk7-Atiri1YgUuWdL_I37aLTn_aItVlT6aNWB4';
+// Replace these with your actual Supabase project URL and anon key
+const SUPABASE_URL  = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON = 'YOUR_SUPABASE_ANON_KEY';
 
 // Supabase JS client (loaded from CDN in index.html)
 const { createClient } = supabase;

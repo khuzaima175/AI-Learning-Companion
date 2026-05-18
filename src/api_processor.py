@@ -75,7 +75,7 @@ class ApiProcessor:
                 use_requests = False
             import urllib.request
 
-            api_key = os.environ.get("SUPADATA_API_KEY", "sd_83eff41ba2f6336f8eaff268e2c80a5a")
+            api_key = os.environ.get("SUPADATA_API_KEY", "")
             if not api_key:
                 return None, "SUPADATA_API_KEY not set in environment"
 
