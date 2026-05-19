@@ -323,22 +323,24 @@ async function refreshStatus() {
   const text = document.getElementById('status-text');
   try {
     await API.get('/api/courses');
-    dot.className = 'status-dot ok';
-    text.textContent = 'Connected ☑️';
+    if (dot) dot.className = 'status-dot ok';
+    if (text) text.textContent = 'Connected ☑️';
 
     try {
       const rev = await API.get('/api/review/due?limit=0');
       const badge = document.getElementById('review-badge');
-      if (rev.due_count > 0) {
-        badge.textContent = rev.due_count;
-        badge.style.display = '';
-      } else {
-        badge.style.display = 'none';
+      if (badge) {
+        if (rev.due_count > 0) {
+          badge.textContent = rev.due_count;
+          badge.style.display = '';
+        } else {
+          badge.style.display = 'none';
+        }
       }
     } catch { /**/ }
   } catch {
-    dot.className = 'status-dot bad';
-    text.textContent = 'Server offline';
+    if (dot) dot.className = 'status-dot bad';
+    if (text) text.textContent = 'Server offline';
   }
 }
 
