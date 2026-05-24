@@ -11,15 +11,15 @@ let _hintUsed     = false;
 // ─────────────────────────────────────────────────────────────────────────────
 // Auto-rate based on time & correctness
 //   wrong OR hint used → "hard"
-//   right, < 10 s      → "easy"
-//   right, 10–15 s     → "good"
-//   right, > 15 s      → "hard"
+//   right, < 15 s      → "easy"
+//   right, 15–20 s     → "good"
+//   right, > 20 s      → "hard"
 // ─────────────────────────────────────────────────────────────────────────────
 function autoRate(elapsedMs, isCorrect, hintUsed) {
   if (hintUsed || !isCorrect) return 'hard';
   const s = elapsedMs / 1000;
-  if (s < 10)  return 'easy';
-  if (s <= 15) return 'good';
+  if (s < 15)  return 'easy';
+  if (s <= 20) return 'good';
   return 'hard';
 }
 
@@ -102,7 +102,7 @@ function renderRevQ() {
 
       <!-- Timer bar (shrinks over 20 s visually, purely decorative) -->
       <div id="timer-track" style="height:4px;border-radius:4px;background:var(--border);margin-bottom:18px;overflow:hidden">
-        <div id="timer-fill" style="height:100%;width:100%;border-radius:4px;background:var(--grad-teal);transition:width 20s linear"></div>
+        <div id="timer-fill" style="height:100%;width:100%;border-radius:4px;background:var(--grad-teal);transition:width 25s linear"></div>
       </div>
       <div id="timer-label" style="font-size:.72rem;color:var(--text-3);text-align:right;margin-top:-14px;margin-bottom:14px">
         ⏱ Answer quickly for a better rating
