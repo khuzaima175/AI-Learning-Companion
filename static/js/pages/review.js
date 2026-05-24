@@ -1,18 +1,42 @@
 import { API, showToast } from '../app.js';
 
-let _questions  = [];
-let _idx        = 0;
-let _sessionId  = null;
-let _answered   = false;
-let _correct    = 0;
+let _questions    = [];
+let _idx          = 0;
+let _sessionId    = null;
+let _answered     = false;
+let _correct      = 0;
+let _questionStart = 0;   // performance.now() timestamp when question rendered
+let _hintUsed     = false;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Auto-rate based on time & correctness
+//   wrong OR hint used → "hard"
+//   right, < 10 s      → "easy"
+//   right, 10–15 s     → "good"
+//   right, > 15 s      → "hard"
+// ─────────────────────────────────────────────────────────────────────────────
+function autoRate(elapsedMs, isCorrect, hintUsed) {
+  if (hintUsed || !isCorrect) return 'hard';
+  const s = elapsedMs / 1000;
+  if (s < 10)  return 'easy';
+  if (s <= 15) return 'good';
+  return 'hard';
+}
+
+const RATING_META = {
+  easy: { emoji: '🚀', label: 'Easy',  note: 'Excellent recall! See you in 14+ days.',   color: 'var(--emerald)', bg: 'rgba(16,185,129,0.12)',  border: 'rgba(16,185,129,0.30)'  },
+  good: { emoji: '👍', label: 'Good',  note: 'Solid! Scheduled for 3–7 days.',            color: 'var(--teal)',    bg: 'rgba(0,229,204,0.10)',   border: 'rgba(0,229,204,0.28)'   },
+  hard: { emoji: '😓', label: 'Hard',  note: 'No worries — reviewing again in 1 day.',   color: 'var(--coral)',   bg: 'rgba(255,107,107,0.12)', border: 'rgba(255,107,107,0.30)' },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 export async function renderReview(container) {
   container.innerHTML = `
     <div class="page-header enter">
       <div class="page-icon-wrap">🔁</div>
       <div class="page-title-text">
         <h1>Daily Review</h1>
-        <p class="page-subtitle">Spaced Repetition — rate your recall to schedule next review</p>
+        <p class="page-subtitle">Answer fast → rated Easy. Take your time → rated Hard. No clicking required.</p>
       </div>
     </div>
     <div id="review-body">
@@ -22,6 +46,7 @@ export async function renderReview(container) {
   await loadDue();
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
 async function loadDue() {
   try {
     const data = await API.get('/api/review/due?limit=25');
@@ -60,6 +85,7 @@ async function loadDue() {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
 function renderRevQ() {
   const area  = document.getElementById('rev-q-area');
   const q     = _questions[_idx];
@@ -67,77 +93,192 @@ function renderRevQ() {
   const pct   = Math.round((_idx / total) * 100);
   document.getElementById('rev-bar').style.width = pct + '%';
 
+  _hintUsed = false;
+  _answered = false;
+
   area.innerHTML = `
-    <div class="question-card">
+    <div class="question-card enter">
       <div class="question-num">Card ${_idx + 1} of ${total}</div>
+
+      <!-- Timer bar (shrinks over 20 s visually, purely decorative) -->
+      <div id="timer-track" style="height:4px;border-radius:4px;background:var(--border);margin-bottom:18px;overflow:hidden">
+        <div id="timer-fill" style="height:100%;width:100%;border-radius:4px;background:var(--grad-teal);transition:width 20s linear"></div>
+      </div>
+      <div id="timer-label" style="font-size:.72rem;color:var(--text-3);text-align:right;margin-top:-14px;margin-bottom:14px">
+        ⏱ Answer quickly for a better rating
+      </div>
+
       <div class="question-text">${q.question}</div>
-      <div class="options-grid">
+
+      <div class="options-grid" id="rev-options">
         ${q.options.map((opt, i) => `
           <button class="option-btn" data-val="${opt.replace(/"/g,'&quot;')}">
             <span class="option-letter">${String.fromCharCode(65+i)}</span>
             <span style="flex:1">${opt}</span>
           </button>`).join('')}
       </div>
+
       <div id="rev-feedback" style="display:none;margin-top:20px"></div>
+
+      <!-- Show Answer button -->
+      <div id="hint-area" style="margin-top:16px;text-align:center">
+        <button id="hint-btn" class="btn btn-ghost btn-sm" style="opacity:.55;font-size:.8rem">
+          💡 Show Answer <span style="opacity:.6;font-size:.72rem">(counts as Hard)</span>
+        </button>
+      </div>
     </div>
   `;
 
-  _answered = false;
+  // Start timer
+  _questionStart = performance.now();
+
+  // Animate timer bar: start shrinking immediately
+  requestAnimationFrame(() => {
+    const fill = document.getElementById('timer-fill');
+    if (fill) fill.style.width = '0%';
+  });
+
+  // Wire up answer buttons
   area.querySelectorAll('.option-btn').forEach(btn => {
     btn.addEventListener('click', () => onAnswer(btn, q));
   });
+
+  // Wire up Show Answer / Hint button
+  document.getElementById('hint-btn').addEventListener('click', () => onShowAnswer(q));
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
 async function onAnswer(btn, q) {
   if (_answered) return;
   _answered = true;
-  const correct = btn.dataset.val === q.answer;
-  if (correct) _correct++;
 
-  document.querySelectorAll('#rev-q-area .option-btn').forEach(b => {
+  const elapsed   = performance.now() - _questionStart;
+  const isCorrect = btn.dataset.val === q.answer;
+  const perf      = autoRate(elapsed, isCorrect, _hintUsed);
+
+  if (isCorrect) _correct++;
+
+  // Visually lock all buttons
+  document.querySelectorAll('#rev-options .option-btn').forEach(b => {
     b.disabled = true;
     if (b.dataset.val === q.answer) b.classList.add('correct');
-    else if (b === btn && !correct) b.classList.add('wrong');
+    else if (b === btn && !isCorrect) b.classList.add('wrong');
   });
 
   document.getElementById('score-badge').textContent = `${_correct} / ${_questions.length}`;
 
+  // Hide hint button
+  const hintArea = document.getElementById('hint-area');
+  if (hintArea) hintArea.style.display = 'none';
+
+  // Stop timer bar
+  const fill = document.getElementById('timer-fill');
+  if (fill) {
+    const pct = Math.max(0, 100 - (elapsed / 200));   // visual snapshot
+    fill.style.transition = 'none';
+    fill.style.width = pct + '%';
+  }
+
+  // Show feedback with auto-rating info
+  showFeedback(isCorrect, elapsed, perf, q.answer, isCorrect ? null : btn.dataset.val);
+
+  // Save to backend (fire-and-forget)
+  setTimeout(() => {
+    API.post('/api/review/answer', {
+      session_id:  _sessionId,
+      question_id: q.id,
+      is_correct:  isCorrect,
+      performance: perf,
+    }).catch(e => console.error('Failed to save answer', e));
+  }, 50);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+async function onShowAnswer(q) {
+  if (_answered) return;
+  _answered = true;
+  _hintUsed = true;
+
+  // Lock option buttons
+  document.querySelectorAll('#rev-options .option-btn').forEach(b => {
+    b.disabled = true;
+    if (b.dataset.val === q.answer) b.classList.add('correct');
+  });
+
+  // Hide hint button
+  const hintArea = document.getElementById('hint-area');
+  if (hintArea) hintArea.style.display = 'none';
+
+  // Stop timer bar
+  const fill = document.getElementById('timer-fill');
+  if (fill) { fill.style.transition = 'none'; fill.style.width = '0%'; }
+
+  const elapsed = performance.now() - _questionStart;
+  showFeedback(false, elapsed, 'hard', q.answer, null, /*isHint=*/true);
+
+  setTimeout(() => {
+    API.post('/api/review/answer', {
+      session_id:  _sessionId,
+      question_id: q.id,
+      is_correct:  false,
+      performance: 'hard',
+    }).catch(e => console.error('Failed to save answer', e));
+  }, 50);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+function showFeedback(isCorrect, elapsedMs, perf, correctAnswer, chosenWrong, isHint = false) {
   const fb = document.getElementById('rev-feedback');
+  const m  = RATING_META[perf];
+  const secs = (elapsedMs / 1000).toFixed(1);
+
+  let resultLine;
+  if (isHint) {
+    resultLine = `<span style="color:var(--text-2)">💡 You revealed the answer.</span>`;
+  } else if (isCorrect) {
+    resultLine = `<span style="color:var(--emerald)">✅ Correct!</span>`;
+  } else {
+    resultLine = `<span style="color:var(--coral)">❌ Correct answer: <em>${correctAnswer}</em></span>`;
+  }
+
   fb.style.display = '';
   fb.innerHTML = `
-    <div style="font-weight:600;font-size:.9rem;margin-bottom:14px;color:${correct?'var(--emerald)':'var(--coral)'}">
-      ${correct ? '✅ Correct! How easy was that?' : `❌ Correct answer: <em>${q.answer}</em>`}
-    </div>
-    <div style="font-size:.78rem;color:var(--text-3);margin-bottom:10px">Rate your confidence to schedule next review:</div>
-    <div class="srs-row">
-      <button class="srs-btn srs-hard" data-perf="hard">😓 Hard<br><span style="font-size:.68rem;opacity:.7">1 day</span></button>
-      <button class="srs-btn srs-good" data-perf="good">👍 Good<br><span style="font-size:.68rem;opacity:.7">3–7 days</span></button>
-      <button class="srs-btn srs-easy" data-perf="easy">🚀 Easy<br><span style="font-size:.68rem;opacity:.7">14+ days</span></button>
+    <div style="border-radius:14px;background:var(--glass);border:1px solid var(--glass-border);padding:18px 20px">
+      <div style="font-weight:600;font-size:.95rem;margin-bottom:12px">${resultLine}</div>
+
+      <!-- Auto-rating chip -->
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:10px;
+                  background:${m.bg};
+                  border:1px solid ${m.border}">
+        <span style="font-size:1.5rem">${m.emoji}</span>
+        <div>
+          <div style="font-weight:700;color:${m.color};font-size:.9rem">
+            ${m.label}
+            <span style="font-weight:400;font-size:.78rem;color:var(--text-3);margin-left:6px">
+              ⏱ ${secs}s${isHint ? ' · hint used' : ''}
+            </span>
+          </div>
+          <div style="font-size:.78rem;color:var(--text-3);margin-top:2px">${m.note}</div>
+        </div>
+      </div>
+
+      <button id="next-btn" class="btn btn-teal btn-sm" style="margin-top:14px;width:100%">
+        Next Card ➡️
+      </button>
     </div>
   `;
 
-  fb.querySelectorAll('.srs-btn').forEach(b => {
-    b.addEventListener('click', () => {
-      fb.querySelectorAll('.srs-btn').forEach(x => x.disabled = true);
-      
-      const currentQ = q; // capture current question before incrementing
-      const perf = b.dataset.perf;
-
-      _idx++;
-      if (_idx < _questions.length) renderRevQ();
-      else renderDone();
-
-      // Defer network request & cache busting to prevent UI thread jank
-      setTimeout(() => {
-        API.post('/api/review/answer', {
-          session_id: _sessionId, question_id: currentQ.id,
-          is_correct: correct, performance: perf,
-        }).catch(e => console.error("Failed to save answer", e));
-      }, 50);
-    });
+  document.getElementById('next-btn').addEventListener('click', () => {
+    _idx++;
+    if (_idx < _questions.length) renderRevQ();
+    else renderDone();
   });
+
+  // Auto-focus next button for keyboard flow
+  document.getElementById('next-btn').focus();
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
 function renderDone() {
   document.getElementById('rev-bar').style.width = '100%';
   const pct = Math.round((_correct / _questions.length) * 100);
