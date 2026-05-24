@@ -17,7 +17,7 @@ Transform any YouTube video into a structured learning experience. **AI Learning
 - **Backend:** [FastAPI](https://fastapi.tiangolo.com/) (Python)
 - **Frontend:** Vanilla JavaScript (ES6) & Pure CSS ("Neon Sunset" Design System)
 - **Database:** [Supabase](https://supabase.com/) (PostgreSQL cloud persistence)
-- **AI Engine:** Google [Gemini API](https://aistudio.google.com/) (`flash-lite` / `2.5-flash`)
+- **AI Engine:** Google [Gemini API](https://aistudio.google.com/) (`3.5-flash` / `2.5-flash` / `2.0-flash`)
 - **Deployment:** Vercel (Serverless Functions via `api/index.py`)
 
 ---

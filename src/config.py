@@ -8,9 +8,9 @@ load_dotenv()
 
 # Model fallback chain — tried in order; falls back on quota / rate-limit errors
 MODEL_CHAIN = [
-    "gemini-3.1-flash-lite-preview",  # primary
-    "gemini-2.5-flash",               # fallback 1
-    "gemini-2.0-flash",               # fallback 2 (last resort)
+    "gemini-3.5-flash",  # primary
+    "gemini-2.5-flash",  # fallback 1
+    "gemini-2.0-flash",  # fallback 2 (last resort)
 ]
 
 
