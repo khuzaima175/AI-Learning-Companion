@@ -504,7 +504,13 @@ button { font-family: inherit; }
 }
 .form-input::placeholder, .form-textarea::placeholder { color: var(--text-3); }
 .form-select { cursor: pointer; }
-.form-select option { background: #111128; }
+.form-select option { background: #111128; color: var(--text); }
+.form-select optgroup {
+  background: #111128;
+  color: var(--teal);
+  font-weight: 700;
+  font-style: normal;
+}
 .form-textarea { resize: vertical; min-height: 110px; line-height: 1.6; }
 
 /* ── Tabs ───────────────────────────────────────────────────────── */
