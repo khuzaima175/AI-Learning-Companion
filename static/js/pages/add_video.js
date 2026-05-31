@@ -10,7 +10,7 @@ export async function renderAddVideo(container) {
       </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 340px;gap:24px;align-items:start" class="enter" style="animation-delay:80ms">
+    <div class="add-video-grid enter" style="animation-delay:80ms">
 
       <!-- Form card -->
       <div class="card">
@@ -22,7 +22,7 @@ export async function renderAddVideo(container) {
           </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="add-video-form-row">
           <div class="form-group">
             <label class="form-label" for="av-title">Video Title</label>
             <input id="av-title" class="form-input" type="text" placeholder="Introduction to…" />

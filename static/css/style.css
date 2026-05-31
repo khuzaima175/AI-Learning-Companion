@@ -991,6 +991,19 @@ button { font-family: inherit; }
   line-height: 1.6;
 }
 
+/* ── Add Video Grid ── */
+.add-video-grid {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 24px;
+  align-items: start;
+}
+.add-video-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
 /* ── Responsive ─────────────────────────────────────────────────── */
 @media (max-width: 800px) {
   .mobile-menu-btn { display: flex; }
@@ -1025,6 +1038,8 @@ button { font-family: inherit; }
   }
 
   .split-layout { grid-template-columns: 1fr; }
+  .add-video-grid { grid-template-columns: 1fr; gap: 20px; }
+  .add-video-form-row { grid-template-columns: 1fr; gap: 12px; }
   .metric-grid { grid-template-columns: repeat(2, 1fr); }
   .question-card { padding: 22px; }
 
