@@ -379,6 +379,27 @@ function initMobile() {
   btn.addEventListener('click', toggleSidebar);
   overlay.addEventListener('click', closeSidebar);
 
+  // Hide hamburger menu button on scroll down, show on scroll up / top
+  let lastScrollY = window.scrollY;
+  window.addEventListener('scroll', () => {
+    const currentScrollY = window.scrollY;
+    // Don't animate if sidebar is open
+    if (sidebar.classList.contains('open')) return;
+    
+    if (currentScrollY > 60 && currentScrollY > lastScrollY) {
+      // Scrolling down -> hide button
+      btn.style.transform = 'translateY(-60px) scale(0.9)';
+      btn.style.opacity = '0';
+      btn.style.pointerEvents = 'none';
+    } else {
+      // Scrolling up or at the top -> show button
+      btn.style.transform = '';
+      btn.style.opacity = '';
+      btn.style.pointerEvents = '';
+    }
+    lastScrollY = currentScrollY;
+  }, { passive: true });
+
   const SWIPE_THRESHOLD = 48;
   const EDGE_ZONE = 28;
   const VELOCITY_MIN = 0.25;

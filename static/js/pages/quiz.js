@@ -20,104 +20,146 @@ export async function renderQuiz(container) {
     </div>
 
     <div id="quiz-setup" class="enter" style="animation-delay:80ms">
-      <div class="card" style="max-width:540px">
-        <h3 style="font-family:'Space Grotesk',sans-serif;margin-bottom:20px;font-size:1.1rem">Configure Your Quiz</h3>
+      <div class="quiz-grid">
+        <!-- Configuration Card -->
+        <div class="card">
+          <h3 style="font-family:'Space Grotesk',sans-serif;margin-bottom:20px;font-size:1.1rem">Configure Your Quiz</h3>
 
-        <div class="form-group">
-          <label class="form-label">Question Pool</label>
-          <select id="q-scope" class="form-select">
-            <option value="all">🌐 All videos</option>
-          </select>
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
           <div class="form-group">
-            <label class="form-label">Questions</label>
-            <select id="q-count" class="form-select">
-              <option value="5">5</option>
-              <option value="10" selected>10</option>
-              <option value="15">15</option>
-              <option value="20">20</option>
+            <label class="form-label">Question Pool</label>
+            <select id="q-scope" class="form-select">
+              <option value="all">🌐 All videos</option>
             </select>
           </div>
-          <div class="form-group">
-            <label class="form-label">Timer</label>
-            <select id="q-timer" class="form-select">
-              <option value="15">15 sec</option>
-              <option value="30" selected>30 sec</option>
-              <option value="60">60 sec</option>
-              <option value="0">No timer</option>
-            </select>
-          </div>
-        </div>
 
-        <div class="form-group">
-          <label class="form-label">Difficulty</label>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            ${['easy','medium','hard'].map(d => `
-              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.875rem;color:var(--text-2)">
-                <input type="checkbox" value="${d}" checked style="accent-color:var(--teal);width:15px;height:15px" />
-                ${d.charAt(0).toUpperCase() + d.slice(1)}
-              </label>`).join('')}
-          </div>
-        </div>
-
-        <button class="btn btn-teal btn-full btn-lg" id="start-btn" style="margin-top:8px">
-          <span class="btn-text">🚀 Start Quiz</span>
-        </button>
-
-        <!-- ── Generate More Questions ── -->
-        <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:16px">
-          <button id="gen-toggle-btn" style="display:flex;align-items:center;justify-content:space-between;width:100%;background:none;border:none;cursor:pointer;padding:0;text-align:left">
-            <div>
-              <div style="display:flex;align-items:center;gap:8px">
-                <span style="font-size:1.05rem">⚡</span>
-                <span style="font-weight:700;font-size:.9rem;color:var(--text-1)">Generate More Questions</span>
-                <span class="badge badge-teal" style="font-size:.68rem;padding:2px 7px">AI</span>
-              </div>
-              <div style="margin-top:3px;font-size:.76rem;color:var(--text-3);padding-left:30px">Use Gemini to create new questions and save them to the DB</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div class="form-group">
+              <label class="form-label">Questions</label>
+              <select id="q-count" class="form-select">
+                <option value="5">5</option>
+                <option value="10" selected>10</option>
+                <option value="15">15</option>
+                <option value="20">20</option>
+              </select>
             </div>
-            <span id="gen-chevron" style="color:var(--teal);font-size:.8rem;transition:transform .25s;display:inline-block;flex-shrink:0;margin-left:10px">▼</span>
+            <div class="form-group">
+              <label class="form-label">Timer</label>
+              <select id="q-timer" class="form-select">
+                <option value="15">15 sec</option>
+                <option value="30" selected>30 sec</option>
+                <option value="60">60 sec</option>
+                <option value="0">No timer</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Difficulty</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              ${['easy','medium','hard'].map(d => `
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.875rem;color:var(--text-2)">
+                  <input type="checkbox" value="${d}" checked style="accent-color:var(--teal);width:15px;height:15px" />
+                  ${d.charAt(0).toUpperCase() + d.slice(1)}
+                </label>`).join('')}
+            </div>
+          </div>
+
+          <button class="btn btn-teal btn-full btn-lg" id="start-btn" style="margin-top:8px">
+            <span class="btn-text">🚀 Start Quiz</span>
           </button>
 
-          <div id="gen-panel" style="display:none;margin-top:16px">
-            <div style="background:var(--glass);border:1px solid var(--border);border-radius:var(--r-md);padding:18px;display:flex;flex-direction:column;gap:14px">
-
-              <div class="form-group" style="margin-bottom:0">
-                <label class="form-label">📹 Generate questions for</label>
-                <select id="gen-video" class="form-select">
-                  <option value="">Loading videos…</option>
-                </select>
+          <!-- ── Generate More Questions ── -->
+          <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:16px">
+            <button id="gen-toggle-btn" style="display:flex;align-items:center;justify-content:space-between;width:100%;background:none;border:none;cursor:pointer;padding:0;text-align:left">
+              <div>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-size:1.05rem">⚡</span>
+                  <span style="font-weight:700;font-size:.9rem;color:var(--text-1)">Generate More Questions</span>
+                  <span class="badge badge-teal" style="font-size:.68rem;padding:2px 7px">AI</span>
+                </div>
+                <div style="margin-top:3px;font-size:.76rem;color:var(--text-3);padding-left:30px">Use Gemini to create new questions and save them to the DB</div>
               </div>
+              <span id="gen-chevron" style="color:var(--teal);font-size:.8rem;transition:transform .25s;display:inline-block;flex-shrink:0;margin-left:10px">▼</span>
+            </button>
 
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div id="gen-panel" style="display:none;margin-top:16px">
+              <div style="background:var(--glass);border:1px solid var(--border);border-radius:var(--r-md);padding:18px;display:flex;flex-direction:column;gap:14px">
+
                 <div class="form-group" style="margin-bottom:0">
-                  <label class="form-label">How many</label>
-                  <select id="gen-count" class="form-select">
-                    <option value="5">5 questions</option>
-                    <option value="10" selected>10 questions</option>
-                    <option value="15">15 questions</option>
-                    <option value="20">20 questions</option>
+                  <label class="form-label">📹 Generate questions for</label>
+                  <select id="gen-video" class="form-select">
+                    <option value="">Loading videos…</option>
                   </select>
                 </div>
-                <div class="form-group" style="margin-bottom:0">
-                  <label class="form-label">Difficulty</label>
-                  <div style="display:flex;flex-direction:column;gap:6px;padding-top:6px">
-                    ${['easy','medium','hard'].map((d,i) => `
-                      <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:.82rem;color:var(--text-2)">
-                        <input type="checkbox" class="gen-diff" value="${d}" ${i<2?'checked':''} style="accent-color:var(--teal);width:14px;height:14px" />
-                        <span>${d.charAt(0).toUpperCase()+d.slice(1)}</span>
-                      </label>`).join('')}
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">How many</label>
+                    <select id="gen-count" class="form-select">
+                      <option value="5">5 questions</option>
+                      <option value="10" selected>10 questions</option>
+                      <option value="15">15 questions</option>
+                      <option value="20">20 questions</option>
+                    </select>
+                  </div>
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">Difficulty</label>
+                    <div style="display:flex;flex-direction:column;gap:6px;padding-top:6px">
+                      ${['easy','medium','hard'].map((d,i) => `
+                        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:.82rem;color:var(--text-2)">
+                          <input type="checkbox" class="gen-diff" value="${d}" ${i<2?'checked':''} style="accent-color:var(--teal);width:14px;height:14px" />
+                          <span>${d.charAt(0).toUpperCase()+d.slice(1)}</span>
+                        </label>`).join('')}
+                    </div>
                   </div>
                 </div>
+
+                <div id="gen-result" style="display:none;padding:10px 14px;border-radius:var(--r-sm);font-size:.82rem;font-weight:600"></div>
+
+                <button id="gen-btn" class="btn btn-teal btn-full" style="margin-top:2px">
+                  <span class="btn-text">⚡ Generate &amp; Save to Database</span>
+                </button>
               </div>
-
-              <div id="gen-result" style="display:none;padding:10px 14px;border-radius:var(--r-sm);font-size:.82rem;font-weight:600"></div>
-
-              <button id="gen-btn" class="btn btn-teal btn-full" style="margin-top:2px">
-                <span class="btn-text">⚡ Generate &amp; Save to Database</span>
-              </button>
             </div>
+          </div>
+        </div>
+
+        <!-- Sidebar (Fills empty space beautifully on desktop) -->
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div class="card card-sm" style="border-color:var(--border-t)">
+            <div style="font-size:.8rem;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">🧠 Practice Guidelines</div>
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;gap:10px;align-items:flex-start">
+                <span style="font-size:1.15rem;flex-shrink:0">⏱️</span>
+                <div>
+                  <div style="font-size:.82rem;font-weight:700;color:var(--text)">Timed Recall</div>
+                  <div style="font-size:.76rem;color:var(--text-2);margin-top:2px">Each question has a customizable countdown. Practice answering quickly under pressure.</div>
+                </div>
+              </div>
+              <div style="display:flex;gap:10px;align-items:flex-start">
+                <span style="font-size:1.15rem;flex-shrink:0">📊</span>
+                <div>
+                  <div style="font-size:.82rem;font-weight:700;color:var(--text)">Catalog Scope</div>
+                  <div style="font-size:.76rem;color:var(--text-2);margin-top:2px">Select "All Videos" for a comprehensive exam, or isolate a specific course/video to review.</div>
+                </div>
+              </div>
+              <div style="display:flex;gap:10px;align-items:flex-start">
+                <span style="font-size:1.15rem;flex-shrink:0">🔄</span>
+                <div>
+                  <div style="font-size:.82rem;font-weight:700;color:var(--text)">Spaced Repetition Integration</div>
+                  <div style="font-size:.76rem;color:var(--text-2);margin-top:2px">Wrong quiz answers are automatically integrated into your Daily Review queue via SRS.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card card-sm" style="border-color:var(--border-a)">
+            <div style="font-size:.8rem;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Quick Tips</div>
+            <ul class="bullet-list">
+              <li>Use Easy/Medium questions for fast-paced active recall sessions.</li>
+              <li>Toggle the AI Panel to auto-generate fresh lecture questions.</li>
+              <li>Aim for at least 80% accuracy to unlock review achievements!</li>
+            </ul>
           </div>
         </div>
       </div>

@@ -295,7 +295,7 @@ button { font-family: inherit; }
   border-radius: 999px;
   color: var(--teal); font-size: 1rem;
   cursor: pointer; align-items: center; justify-content: center;
-  transition: background 0.18s ease, box-shadow 0.18s ease;
+  transition: background 0.18s ease, box-shadow 0.18s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
   box-shadow: 0 2px 16px rgba(0,229,204,0.18);
   /* Three‑line hamburger icon via SVG background – avoids ☰ glyph ambiguity */
   gap: 0;
@@ -1004,6 +1004,14 @@ button { font-family: inherit; }
   gap: 16px;
 }
 
+/* ── Quiz Grid ── */
+.quiz-grid {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 24px;
+  align-items: start;
+}
+
 /* ── Responsive ─────────────────────────────────────────────────── */
 @media (max-width: 800px) {
   .mobile-menu-btn { display: flex; }
@@ -1040,6 +1048,7 @@ button { font-family: inherit; }
   .split-layout { grid-template-columns: 1fr; }
   .add-video-grid { grid-template-columns: 1fr; gap: 20px; }
   .add-video-form-row { grid-template-columns: 1fr; gap: 12px; }
+  .quiz-grid { grid-template-columns: 1fr; gap: 20px; }
   .metric-grid { grid-template-columns: repeat(2, 1fr); }
   .question-card { padding: 22px; }
 
