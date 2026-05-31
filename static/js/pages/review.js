@@ -1,4 +1,4 @@
-import { API, showToast } from '../app.js';
+import { API, showToast, DailyGoal } from '../app.js';
 
 let _questions    = [];
 let _idx          = 0;
@@ -178,6 +178,9 @@ async function onAnswer(btn, q) {
     fill.style.transition = 'none';
     fill.style.width = pct + '%';
   }
+
+  // Track daily goal progress (1 card reviewed)
+  DailyGoal.addProgress(1);
 
   // Show feedback with auto-rating info
   showFeedback(isCorrect, elapsed, perf, q.answer, isCorrect ? null : btn.dataset.val);

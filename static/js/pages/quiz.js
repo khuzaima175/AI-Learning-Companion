@@ -1,4 +1,4 @@
-import { API, showToast, launchConfetti, staggerElements } from '../app.js';
+import { API, showToast, launchConfetti, staggerElements, DailyGoal } from '../app.js';
 
 let _questions   = [];
 let _idx         = 0;
@@ -398,6 +398,9 @@ async function selectAnswer(btn, q, timerDur) {
   });
 
   showFeedback(correct, q.answer, false);
+
+  // Track daily goal progress (1 card reviewed)
+  DailyGoal.addProgress(1);
 
   try {
     await API.post('/api/quiz/answer', {

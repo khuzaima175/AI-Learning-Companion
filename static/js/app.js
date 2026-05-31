@@ -202,6 +202,63 @@ export const Streak = {
 };
 
 // ══════════════════════════════════════════════════════════════════
+// Daily Goal (localStorage)
+// ══════════════════════════════════════════════════════════════════
+export const DailyGoal = {
+  key: 'alc_daily_goal',
+
+  /** Returns the full goal object for today */
+  get() {
+    try {
+      const raw = localStorage.getItem(this.key);
+      const stored = raw ? JSON.parse(raw) : null;
+      const today = new Date().toISOString().slice(0, 10);
+      if (!stored) return this._default(today);
+      // Reset daily progress if it's a new day
+      if (stored.date !== today) {
+        const reset = { ...stored, date: today, progress: 0 };
+        localStorage.setItem(this.key, JSON.stringify(reset));
+        return reset;
+      }
+      return stored;
+    } catch {
+      return this._default(new Date().toISOString().slice(0, 10));
+    }
+  },
+
+  _default(today) {
+    return { type: 'cards', target: 15, progress: 0, date: today };
+  },
+
+  /** Save goal settings (type + target) */
+  save(type, target) {
+    const current = this.get();
+    const next = { ...current, type, target: Math.max(1, parseInt(target) || 15) };
+    localStorage.setItem(this.key, JSON.stringify(next));
+    return next;
+  },
+
+  /** Add progress units towards the goal; returns new goal state */
+  addProgress(units = 1) {
+    const g = this.get();
+    g.progress = Math.min(g.progress + units, g.target * 2); // cap at 2× so it doesn't overflow
+    localStorage.setItem(this.key, JSON.stringify(g));
+    return g;
+  },
+
+  /** Percentage complete 0–100 */
+  pct(g) {
+    if (!g) g = this.get();
+    return Math.min(100, Math.round((g.progress / g.target) * 100));
+  },
+
+  isDone(g) {
+    if (!g) g = this.get();
+    return g.progress >= g.target;
+  },
+};
+
+// ══════════════════════════════════════════════════════════════════
 // Animated number counter
 // ══════════════════════════════════════════════════════════════════
 export function animateCount(el, to, duration = 900, suffix = '') {
