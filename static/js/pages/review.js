@@ -65,10 +65,21 @@ async function loadDue() {
       return;
     }
 
+    const goal = DailyGoal.get();
+    const goalLabel = goal.progress >= goal.target
+      ? `✅ Daily goal done! ${goal.progress} / ${goal.target} cards`
+      : `📊 Today's goal: ${goal.progress} / ${goal.target} cards`;
+
     body.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;max-width:640px;margin-bottom:10px">
-        <span style="font-size:.85rem;color:var(--text-2)"><strong style="color:var(--teal)">${totalDue}</strong> card${totalDue!==1?'s':''} due today</span>
-        <span id="score-badge" class="badge badge-amber">0 / ${_questions.length}</span>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;max-width:640px;margin-bottom:6px;gap:8px;flex-wrap:wrap">
+        <div>
+          <span style="font-size:.85rem;color:var(--text-2)"><strong style="color:var(--teal)">${totalDue}</strong> card${totalDue!==1?'s':''} due today</span>
+          <div id="goal-progress-line" style="font-size:.78rem;color:${goal.progress >= goal.target ? 'var(--emerald)' : 'var(--text-3)'};margin-top:3px">${goalLabel}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+          <span style="font-size:.65rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em">Session</span>
+          <span id="score-badge" class="badge badge-teal">✓ 0 / ${_questions.length}</span>
+        </div>
       </div>
       <div class="progress-track" style="max-width:640px;margin-bottom:26px">
         <div class="progress-fill" id="rev-bar" style="width:0%"></div>
@@ -165,7 +176,10 @@ async function onAnswer(btn, q) {
     else if (b === btn && !isCorrect) b.classList.add('wrong');
   });
 
-  document.getElementById('score-badge').textContent = `${_correct} / ${_questions.length}`;
+  document.getElementById('score-badge').textContent = `✓ ${_correct} / ${_questions.length}`;
+
+  // Update daily goal progress line
+  _updateGoalLine();
 
   // Hide hint button
   const hintArea = document.getElementById('hint-area');
@@ -218,6 +232,10 @@ async function onShowAnswer(q) {
 
   const elapsed = performance.now() - _questionStart;
   showFeedback(false, elapsed, 'hard', q.answer, null, /*isHint=*/true);
+
+  // Track daily goal progress — hints still count as reviewed
+  DailyGoal.addProgress(1);
+  _updateGoalLine();
 
   setTimeout(() => {
     API.post('/api/review/answer', {
@@ -300,4 +318,17 @@ function renderDone() {
       <button class="btn btn-teal btn-sm" id="rev-again-btn">🔄 Review Again</button>
     </div>`;
   document.getElementById('rev-again-btn').addEventListener('click', loadDue);
+}
+// ─────────────────────────────────────────────────────────────────────────────
+// Update the live daily goal progress line in the review header
+// ─────────────────────────────────────────────────────────────────────────────
+function _updateGoalLine() {
+  const el = document.getElementById('goal-progress-line');
+  if (!el) return;
+  const goal = DailyGoal.get();
+  const done = goal.progress >= goal.target;
+  el.textContent = done
+    ? `✅ Daily goal done! ${goal.progress} / ${goal.target} cards`
+    : `📊 Today's goal: ${goal.progress} / ${goal.target} cards`;
+  el.style.color = done ? 'var(--emerald)' : 'var(--text-3)';
 }

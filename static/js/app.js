@@ -190,10 +190,10 @@ export const Streak = {
     catch { return { count: 0, last: '' }; }
   },
   bump() {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Date().toLocaleDateString('en-CA'); // local YYYY-MM-DD
     const s = this.get();
     if (s.last === today) return s;
-    const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 864e5).toLocaleDateString('en-CA');
     const count = s.last === yesterday ? s.count + 1 : 1;
     const next = { count, last: today };
     localStorage.setItem(this.key, JSON.stringify(next));
@@ -212,7 +212,7 @@ export const DailyGoal = {
     try {
       const raw = localStorage.getItem(this.key);
       const stored = raw ? JSON.parse(raw) : null;
-      const today = new Date().toISOString().slice(0, 10);
+      const today = new Date().toLocaleDateString('en-CA'); // local YYYY-MM-DD (not UTC)
       if (!stored) return this._default(today);
       // Reset daily progress if it's a new day
       if (stored.date !== today) {
@@ -222,12 +222,13 @@ export const DailyGoal = {
       }
       return stored;
     } catch {
-      return this._default(new Date().toISOString().slice(0, 10));
+      return this._default(new Date().toLocaleDateString('en-CA'));
     }
   },
 
   _default(today) {
-    return { type: 'cards', target: 15, progress: 0, date: today };
+    const d = today ?? new Date().toLocaleDateString('en-CA');
+    return { type: 'cards', target: 15, progress: 0, date: d };
   },
 
   /** Save goal settings (type + target) */

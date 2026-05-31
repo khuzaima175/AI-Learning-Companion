@@ -88,9 +88,13 @@ export async function renderDashboard(container) {
         <!-- Info below ring -->
         <div class="goal-ring-info">
           <div class="goal-ring-title">Daily Goal ${goalEmoji}</div>
-          <div class="goal-ring-sub">${goal.target} ${goalTypeLabel}</div>
+          <div class="goal-ring-sub">${goal.target} ${goalTypeLabel} / day</div>
           <div class="goal-ring-progress-txt">
-            <span>${goal.progress}</span> / ${goal.target} ${goalTypeLabel}
+            <span style="color:var(--teal);font-weight:700">${goal.progress}</span>
+            <span style="color:var(--text-3)"> / ${goal.target} ${goalTypeLabel} today</span>
+          </div>
+          <div style="font-size:.68rem;color:var(--text-3);margin-top:4px;opacity:.7">
+            Quiz &amp; Review cards count
           </div>
         </div>
       </div>
