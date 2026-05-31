@@ -67,9 +67,14 @@ function renderCourseList(filter = '') {
         <div id="course-list" style="display:flex;flex-direction:column;gap:7px"></div>
       </div>
       <div id="video-panel">
-        <div class="empty-state" style="padding:60px 20px">
-          <div class="empty-icon">👈</div>
-          <div>Select a course</div>
+        <div class="welcome-splash" style="padding:80px 20px;animation:enterPage 0.5s ease both">
+          <div class="splash-graphic-wrap">
+            <div class="splash-orb orb-primary"></div>
+            <div class="splash-orb orb-secondary"></div>
+            <div class="splash-icon">📖</div>
+          </div>
+          <h3 class="splash-title">Select a Course</h3>
+          <p class="splash-subtitle">Choose a subject from the panel on the left to explore video lectures, read summaries, study cards, or ask questions.</p>
         </div>
       </div>
     </div>`;

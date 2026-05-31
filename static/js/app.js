@@ -300,12 +300,12 @@ export function navigate(page) {
 
   const content = document.getElementById('page-content');
   content.style.opacity = '0';
-  content.style.transform = 'translateY(14px)';
+  content.style.transform = 'translateY(10px)';
 
   setTimeout(() => {
     content.innerHTML = '';
     PAGES[page](content);
-    content.style.transition = 'opacity 0.35s ease, transform 0.35s ease';
+    content.style.transition = 'opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)';
     content.style.opacity = '1';
     content.style.transform = 'translateY(0)';
   }, 120);
@@ -531,6 +531,25 @@ async function bootApp() {
   initMobile();
   refreshStatus();
   Streak.bump();
+
+  // Ambient mouse light glow spotlight
+  const glow = document.getElementById('cursor-glow');
+  if (glow) {
+    let curX = 0, curY = 0, tgtX = 0, tgtY = 0;
+    window.addEventListener('mousemove', e => {
+      tgtX = e.clientX + window.scrollX;
+      tgtY = e.clientY + window.scrollY;
+      glow.style.opacity = '1';
+    }, { passive: true });
+    
+    function updateGlow() {
+      curX += (tgtX - curX) * 0.08;
+      curY += (tgtY - curY) * 0.08;
+      glow.style.transform = `translate3d(calc(${curX}px - 225px), calc(${curY}px - 225px), 0)`;
+      requestAnimationFrame(updateGlow);
+    }
+    requestAnimationFrame(updateGlow);
+  }
 
   document.querySelectorAll('.nav-item').forEach(el => {
     el.addEventListener('click', e => { e.preventDefault(); navigate(el.dataset.page); });
