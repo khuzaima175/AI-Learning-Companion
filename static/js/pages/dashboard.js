@@ -35,7 +35,7 @@ export async function renderDashboard(container) {
     </div>
 
     <!-- Hero row: Streak | Goal Ring | Quote -->
-    <div style="display:grid;grid-template-columns:auto 200px 1fr;gap:16px;margin-bottom:28px;align-items:stretch" class="enter" style="animation-delay:60ms">
+    <div class="dashboard-hero enter">
 
       <!-- Streak -->
       <div class="streak-display" style="flex-direction:column;text-align:center;min-width:120px;justify-content:center">
@@ -96,7 +96,7 @@ export async function renderDashboard(container) {
       </div>
 
       <!-- Quote -->
-      <div class="card" style="padding:20px 24px;display:flex;align-items:center">
+      <div class="card dashboard-quote" style="padding:20px 24px;display:flex;align-items:center">
         <div>
           <div style="font-size:1.1rem;font-weight:500;line-height:1.5;color:var(--text);font-style:italic">"${quote.q}"</div>
           <div style="font-size:.78rem;color:var(--text-3);margin-top:8px">— ${quote.a}</div>

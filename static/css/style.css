@@ -1012,6 +1012,15 @@ button { font-family: inherit; }
   align-items: start;
 }
 
+/* ── Dashboard hero row ────────────────────────────────────────── */
+.dashboard-hero {
+  display: grid;
+  grid-template-columns: auto 200px 1fr;
+  gap: 16px;
+  margin-bottom: 28px;
+  align-items: stretch;
+}
+
 /* ── Daily Goal Ring ────────────────────────────────────────────── */
 .goal-ring-card {
   background: rgba(14, 14, 30, 0.55);
@@ -1236,7 +1245,18 @@ button { font-family: inherit; }
   .quiz-grid { grid-template-columns: 1fr; gap: 20px; }
   .metric-grid { grid-template-columns: repeat(2, 1fr); }
   .question-card { padding: 22px; }
-  /* Hero row: stack vertically on mobile */
+  /* Hero row: 2-col on mobile (streak + ring), quote full-width below */
+  .dashboard-hero {
+    grid-template-columns: 1fr 1fr;
+  }
+  .dashboard-quote {
+    grid-column: 1 / -1;
+  }
+  /* Streak card: remove fixed min-width so it stretches naturally */
+  .dashboard-hero .streak-display {
+    min-width: unset;
+  }
+  /* Goal ring card: remove fixed min-width */
   .goal-ring-card { min-width: unset; width: 100%; }
 
 
@@ -1250,6 +1270,10 @@ button { font-family: inherit; }
   .metric-grid { grid-template-columns: 1fr 1fr; }
   .quick-actions { grid-template-columns: 1fr 1fr; }
   .modal-card { margin: 16px; }
+  /* Hide quote on very small screens — streak + ring fill the space cleanly */
+  .dashboard-quote { display: none; }
+  /* Hero becomes a clean 2-col equal grid */
+  .dashboard-hero { grid-template-columns: 1fr 1fr; }
 }
 
 /* Respect user's reduced-motion preference */
