@@ -101,46 +101,64 @@ export async function renderAddVideo(container) {
     btn.classList.add('btn-loading');
     btn.disabled = true;
 
+    // Terminal visual
+    const STEPS = [
+      { text: 'Fetching video metadata…',        cls: '' },
+      { text: 'Extracting YouTube transcript…',   cls: '' },
+      { text: 'Sending to AI pipeline…',          cls: 'warn' },
+      { text: 'Generating summary (4-6 paragraphs)…', cls: '' },
+      { text: 'Extracting 16 key concepts…',      cls: '' },
+      { text: 'Building 20 quiz questions…',      cls: '' },
+      { text: 'Compiling 20 takeaways…',          cls: '' },
+      { text: 'Saving to database…',              cls: '' },
+    ];
+
     status.innerHTML = `
-      <div class="card card-sm" style="border-color:var(--border-t)">
-        <div style="display:flex;align-items:center;gap:14px">
-          <div class="spinner"></div>
-          <div>
-            <div style="font-weight:600;color:var(--teal)">AI is processing your video…</div>
-            <div style="font-size:.8rem;color:var(--text-2);margin-top:3px">Generating summary, 16 key concepts & 20 quiz questions</div>
-          </div>
-        </div>
-        <div class="progress-track" style="margin-top:14px">
-          <div class="progress-fill" id="av-fake-progress" style="width:0%"></div>
-        </div>
+      <div style="margin-bottom:8px;font-size:.78rem;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.07em">Processing…</div>
+      <div class="terminal-panel" id="av-terminal">
+        <span class="terminal-cursor" id="av-cursor"></span>
       </div>`;
 
-    // Fake progress animation
-    let prog = 0;
+    let stepIdx = 0;
+    const terminal = document.getElementById('av-terminal');
+    const cursor   = document.getElementById('av-cursor');
+
+    function appendLine(text, cls = '') {
+      const line = document.createElement('div');
+      line.className = 'terminal-line';
+      line.style.animationDelay = '0ms';
+      line.innerHTML = `<span class="term-prompt">$</span><span class="term-text ${cls}">${text}</span>`;
+      terminal.insertBefore(line, cursor);
+      terminal.scrollTop = terminal.scrollHeight;
+    }
+
     const progInt = setInterval(() => {
-      prog = Math.min(prog + Math.random() * 8, 88);
-      const bar = document.getElementById('av-fake-progress');
-      if (bar) bar.style.width = prog + '%';
-    }, 400);
+      if (stepIdx < STEPS.length) {
+        const s = STEPS[stepIdx++];
+        appendLine(s.text, s.cls);
+      }
+    }, 1800);
 
     try {
       const res = await API.post('/api/add-video', { url, title, course, manual_transcript: manual });
       clearInterval(progInt);
-      const bar = document.getElementById('av-fake-progress');
-      if (bar) bar.style.width = '100%';
+      // Show "done" in terminal before clearing
+      if (document.getElementById('av-terminal')) {
+        appendLine('Done. Saving to database… ✓', 'ok');
+      }
 
       setTimeout(() => {
         status.innerHTML = '';
         const result = document.getElementById('av-result');
         result.style.display = '';
         result.innerHTML = `
-          <div class="card" style="border-color:rgba(16,185,129,0.35)">
+          <div class="card" style="border-color:rgba(132,204,22,0.3)">
             <div style="display:flex;gap:14px;align-items:flex-start">
-              <div style="font-size:2.8rem">🎉</div>
+              <div style="font-size:2.4rem;line-height:1">✓</div>
               <div>
-                <div style="font-weight:800;font-size:1.15rem;color:var(--emerald);margin-bottom:6px">Video processed successfully!</div>
+                <div style="font-family:'Instrument Serif',serif;font-size:1.4rem;font-weight:400;color:var(--teal);margin-bottom:6px">Video processed.</div>
                 <div style="font-weight:600;color:var(--text)">${res.title}</div>
-                <div style="font-size:.82rem;color:var(--text-2);margin-top:4px">Ready to browse, quiz and review. Go to <strong>Browse Content</strong> to explore.</div>
+                <div style="font-size:.82rem;color:var(--text-2);margin-top:4px">Summary, concepts &amp; quiz ready. Open <strong>Browse Content</strong> to explore.</div>
               </div>
             </div>
           </div>`;
@@ -152,10 +170,14 @@ export async function renderAddVideo(container) {
       }, 500);
     } catch (e) {
       clearInterval(progInt);
-      status.innerHTML = `
-        <div class="card card-sm" style="border-color:rgba(255,107,107,0.35);color:var(--coral)">
-          ❌ ${e.message}
-        </div>`;
+      if (document.getElementById('av-terminal')) {
+        appendLine(`Error: ${e.message}`, 'err');
+      } else {
+        status.innerHTML = `
+          <div class="card card-sm" style="border-color:rgba(255,107,107,0.35);color:var(--coral)">
+            ❌ ${e.message}
+          </div>`;
+      }
       showToast(e.message, 'error');
     } finally {
       btn.classList.remove('btn-loading');

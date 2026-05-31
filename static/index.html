@@ -37,15 +37,6 @@
 </head>
 <body>
 
-  <!-- Aurora background orbs -->
-  <div class="aurora" aria-hidden="true">
-    <div class="aurora-orb orb-1"></div>
-    <div class="aurora-orb orb-2"></div>
-    <div class="aurora-orb orb-3"></div>
-    <div class="aurora-orb orb-4"></div>
-    <div class="cursor-glow" id="cursor-glow"></div>
-  </div>
-
   <!-- Confetti canvas (hidden by default) -->
   <canvas id="confetti-canvas" style="display:none"></canvas>
 
@@ -146,12 +137,17 @@
   <svg width="0" height="0" style="position:absolute">
     <defs>
       <linearGradient id="teal-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-        <stop offset="0%" stop-color="#00e5cc"/>
-        <stop offset="100%" stop-color="#0ea5e9"/>
+        <stop offset="0%" stop-color="#a3e635"/>
+        <stop offset="100%" stop-color="#65a30d"/>
       </linearGradient>
       <linearGradient id="amber-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-        <stop offset="0%" stop-color="#f59e0b"/>
-        <stop offset="100%" stop-color="#ef4444"/>
+        <stop offset="0%" stop-color="#f97316"/>
+        <stop offset="100%" stop-color="#c2410c"/>
+      </linearGradient>
+      <!-- Add goalGradient alias so it resolves correctly in the CSS -->
+      <linearGradient id="goalGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#a3e635"/>
+        <stop offset="100%" stop-color="#65a30d"/>
       </linearGradient>
     </defs>
   </svg>

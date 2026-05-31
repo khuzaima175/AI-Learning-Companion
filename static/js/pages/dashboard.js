@@ -47,27 +47,22 @@ export async function renderDashboard(container) {
       <!-- Daily Goal Ring -->
       <div class="goal-ring-card${done ? ' goal-done' : ''}" id="goal-ring-card">
         <button class="goal-ring-edit" id="goal-edit-btn" title="Set goal">⚙ Edit</button>
-
+        
         <div class="goal-ring-wrap${done ? ' goal-done' : ''}" id="goal-ring-wrap">
-          <!-- SVG with inline gradient + glow filter defs -->
+          <!-- SVG with inline gradient defs -->
           <svg class="goal-ring-svg" width="${R*2 + STROKE*2}" height="${R*2 + STROKE*2}"
                viewBox="0 0 ${R*2 + STROKE*2} ${R*2 + STROKE*2}">
             <defs>
               <linearGradient id="goalGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%"   stop-color="#00e5cc"/>
-                <stop offset="50%"  stop-color="#0ea5e9"/>
-                <stop offset="100%" stop-color="#f59e0b"/>
+                <stop offset="0%"   stop-color="#a3e635"/>
+                <stop offset="100%" stop-color="#65a30d"/>
               </linearGradient>
-              <filter id="goalGlow" x="-30%" y="-30%" width="160%" height="160%">
-                <feGaussianBlur stdDeviation="3" result="blur"/>
-                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-              </filter>
             </defs>
             <!-- Track -->
             <circle class="goal-ring-track"
               cx="${R + STROKE}" cy="${R + STROKE}" r="${R}"
               stroke-width="${STROKE}"/>
-            <!-- Fill (starts from offset, animates to 0 = full) -->
+            <!-- Fill -->
             <circle class="goal-ring-fill" id="goal-ring-fill"
               cx="${R + STROKE}" cy="${R + STROKE}" r="${R}"
               stroke-width="${STROKE}"
@@ -91,7 +86,7 @@ export async function renderDashboard(container) {
           <div class="goal-ring-sub">${goal.target} ${goalTypeLabel} / day</div>
           <div class="goal-ring-progress-txt">
             <span style="color:var(--teal);font-weight:700">${goal.progress}</span>
-            <span style="color:var(--text-3)"> / ${goal.target} ${goalTypeLabel} today</span>
+            <span style="color:var(--text-2)"> / ${goal.target} ${goalTypeLabel} today</span>
           </div>
           <div style="font-size:.68rem;color:var(--text-3);margin-top:4px;opacity:.7">
             Quiz &amp; Review cards count
@@ -109,7 +104,7 @@ export async function renderDashboard(container) {
     </div>
 
     <!-- Metrics skeleton -->
-    <div class="metric-grid stagger-children" id="metric-grid">
+    <div class="metric-grid bento-grid stagger-children" id="metric-grid">
       ${metric('📚','courses','Courses','teal')}
       ${metric('🎬','videos','Videos','teal')}
       ${metric('❓','questions','Questions','amber')}

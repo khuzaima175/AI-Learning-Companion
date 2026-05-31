@@ -151,6 +151,14 @@ function renderCardDeck(concepts) {
       <button class="btn btn-teal" id="fc-next">Next →</button>
     </div>
 
+    <!-- Keyboard hint -->
+    <div style="display:flex;gap:10px;justify-content:center;margin-top:12px;flex-wrap:wrap;align-items:center">
+      <span style="font-size:.72rem;color:var(--text-3)">Keyboard:</span>
+      <span class="kbd">←</span><span style="font-size:.72rem;color:var(--text-3)">prev</span>
+      <span class="kbd">→</span><span style="font-size:.72rem;color:var(--text-3)">next</span>
+      <span class="kbd">Space</span><span style="font-size:.72rem;color:var(--text-3)">flip</span>
+    </div>
+
     <!-- Grid preview -->
     <div class="section-hdr" style="margin-top:36px">
       <div class="section-title">All Cards</div>
@@ -215,4 +223,35 @@ function renderCardDeck(concepts) {
     staggerElements('#fc-grid .card', 30);
   }
   buildGrid();
+  // Keyboard shortcuts
+  function handleKey(e) {
+    // Don't fire when user is typing in an input
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+    const card = document.getElementById('fc-card');
+    if (!card) return;
+    switch (e.key) {
+      case 'ArrowRight': case 'l':
+        if (idx < concepts.length - 1) showCard(idx + 1);
+        else showToast('You reached the end! 🎉', 'success');
+        break;
+      case 'ArrowLeft': case 'h':
+        if (idx > 0) showCard(idx - 1);
+        break;
+      case ' ':
+        e.preventDefault();
+        card.classList.toggle('flipped');
+        break;
+    }
+  }
+  document.addEventListener('keydown', handleKey);
+
+  // Clean up listener when page changes (app.js replaces #page-content innerHTML)
+  const observer = new MutationObserver(() => {
+    if (!document.getElementById('fc-card')) {
+      document.removeEventListener('keydown', handleKey);
+      observer.disconnect();
+    }
+  });
+  const pageContent = document.getElementById('page-content');
+  if (pageContent) observer.observe(pageContent, { childList: true, subtree: false });
 }
