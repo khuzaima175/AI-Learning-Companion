@@ -363,6 +363,7 @@ export function navigate(page) {
   setTimeout(() => {
     content.innerHTML = '';
     PAGES[page](content);
+    polishPageChrome(page);
     content.style.transition = 'opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)';
     content.style.opacity = '1';
     content.style.transform = 'translateY(0)';
@@ -535,6 +536,7 @@ function showLoginScreen() {
   if (pageContent) {
     pageContent.style.width = '100%';
     renderLogin(pageContent);
+    polishLoginChrome(pageContent);
   }
 }
 
@@ -584,6 +586,8 @@ if (document.readyState === 'loading') {
 }
 
 async function bootApp() {
+  polishShellChrome();
+
   const sidebar = document.getElementById('sidebar');
   const mobileBtn = document.getElementById('mobile-menu-btn');
   if (sidebar) { sidebar.style.visibility = 'visible'; sidebar.style.display = ''; }
@@ -653,4 +657,77 @@ async function bootApp() {
     if (document.visibilityState === 'visible') _maybePing();
   });
   _maybePing();
+}
+
+function polishPageChrome(page) {
+  const pageIcon = document.querySelector('.page-icon-wrap');
+  const labels = {
+    'dashboard': 'DB',
+    'add-video': 'AV',
+    'browse': 'BR',
+    'flashcards': 'FC',
+    'quiz': 'QZ',
+    'review': 'RV',
+    'stats': 'ST',
+    'manage': 'MG',
+  };
+  if (pageIcon) pageIcon.textContent = labels[page] || 'AI';
+
+  document.querySelectorAll('.metric-icon').forEach((el, index) => {
+    el.textContent = ['CR', 'VD', 'QS', 'DU', 'AC'][index] || 'AI';
+  });
+
+  document.querySelectorAll('.quick-card').forEach(card => {
+    const title = card.querySelector('.quick-card-title')?.textContent || '';
+    const icon = card.querySelector('.quick-card-icon');
+    if (!icon) return;
+    if (title.includes('Add')) icon.textContent = 'AV';
+    else if (title.includes('Flash')) icon.textContent = 'FC';
+    else if (title.includes('Quiz')) icon.textContent = 'QZ';
+    else if (title.includes('Review')) icon.textContent = 'RV';
+  });
+
+  const editBtn = document.getElementById('goal-edit-btn');
+  if (editBtn) editBtn.textContent = 'Edit';
+}
+
+function polishShellChrome() {
+  const brand = document.querySelector('.brand-name');
+  if (brand) brand.textContent = 'AI Learning';
+
+  const tagline = document.querySelector('.brand-tagline');
+  if (tagline) tagline.textContent = 'Study workspace';
+
+  const logout = document.getElementById('logout-btn');
+  if (logout) logout.textContent = 'Sign Out';
+
+  document.querySelectorAll('.nav-item').forEach(item => {
+    const icon = item.querySelector('.nav-icon');
+    const page = item.dataset.page || '';
+    const labels = {
+      'dashboard': 'DB',
+      'add-video': 'AV',
+      'browse': 'BR',
+      'flashcards': 'FC',
+      'quiz': 'QZ',
+      'review': 'RV',
+      'stats': 'ST',
+      'manage': 'MG',
+    };
+    if (icon) icon.textContent = labels[page] || '';
+  });
+}
+
+function polishLoginChrome(root) {
+  const logo = root.querySelector('.card > div:first-child > div:first-child');
+  if (logo) logo.textContent = 'AI';
+
+  const title = root.querySelector('.card > div:first-child > div:nth-child(2)');
+  if (title) title.textContent = 'AI Learning Companion';
+
+  const subtitle = root.querySelector('.card > div:first-child > div:nth-child(3)');
+  if (subtitle) subtitle.textContent = 'Focused study, generated from your lessons';
+
+  const password = root.querySelector('#auth-password');
+  if (password) password.placeholder = 'Enter your password';
 }
