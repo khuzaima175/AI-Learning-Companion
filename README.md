@@ -115,7 +115,8 @@ Open **[http://localhost:8000](http://localhost:8000)** in your browser.
 
 ---
 
-## 🤝 Contributing & Future Roadmap
+
+## 🤝 Contributing and  Future Roadmap
 Contributions are welcome. Our next major objectives include turning the frontend into a **Progressive Web App (PWA)** for native offline support and expanding analytics to provide deeper insights into learning retention curves.
 
 ---
