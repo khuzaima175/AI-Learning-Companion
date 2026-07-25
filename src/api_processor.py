@@ -410,7 +410,7 @@ Rules:
 1. No references to "the video", "the lecture", or "the speaker" in the question text — ask about the content directly.
 2. Each question targets a different concept; don't test the same point twice.
 3. Wrong options should be plausible mistakes (things a half-attentive viewer might mix up), not absurd or obviously-wrong filler — but they must be unambiguously incorrect, not defensible alternate answers.
-4. Exactly one option is correct, and it must be clearly supported by the transcript.
+4. Exactly one option is correct, and it must be clearly supported by the transcript. Randomize the position of the correct answer among the 4 options.
 5. Avoid peripheral trivia (exact numbers mentioned once, minor asides) unless the lecture itself emphasized it as important.
 
 Return a single valid JSON object with key "quiz_questions" containing exactly {num_questions} objects.

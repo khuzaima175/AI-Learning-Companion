@@ -262,11 +262,15 @@ class DatabaseManager:
             difficulty = q.get("difficulty", "medium").lower()
             if difficulty not in ("easy", "medium", "hard"):
                 difficulty = "medium"
+            opts = q.get("options", [])
+            if isinstance(opts, list) and len(opts) > 1:
+                import random
+                random.shuffle(opts)
             rows_to_insert.append({
                 "video_id":         video_db_id,
                 "user_id":          user_id,
                 "question":         q_text,
-                "options":          json.dumps(q.get("options", [])),
+                "options":          json.dumps(opts),
                 "answer":           q.get("answer", ""),
                 "next_review_date": today,
                 "difficulty":       difficulty,

@@ -263,6 +263,9 @@ async def get_quiz_questions(
             options = json.loads(options_raw) if options_raw else []
         except Exception:
             options = []
+        if isinstance(options, list) and len(options) > 1:
+            import random
+            random.shuffle(options)
         questions.append({"id": qid, "question": question, "options": options, "answer": answer})
     return questions
 
@@ -316,6 +319,9 @@ async def get_due_questions(limit: int = 0, user: dict = Depends(verify_token)):
             options = json.loads(options_raw) if options_raw else []
         except Exception:
             options = []
+        if isinstance(options, list) and len(options) > 1:
+            import random
+            random.shuffle(options)
         questions.append({"id": qid, "question": question, "options": options, "answer": answer})
     return {"due_count": count, "questions": questions}
 
