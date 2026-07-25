@@ -4,9 +4,12 @@ Ported from main.py; Colab dependencies removed. Uses config.get_client().
 """
 
 import json
+import logging
 import re
 
 from src import config
+
+logger = logging.getLogger(__name__)
 
 
 class ApiProcessor:
@@ -16,6 +19,14 @@ class ApiProcessor:
     # ------------------------------------------------------------------
     # Transcript helpers
     # ------------------------------------------------------------------
+
+    # Matches the 11-char video ID out of watch?v=, youtu.be/, /shorts/, /live/, /embed/.
+    # Anchored with a boundary so "youtube.com/c/SomeChannelName" can't be mistaken
+    # for an ID.
+    _VIDEO_ID_RE = re.compile(
+        r"(?:youtube\.com/(?:watch\?v=|shorts/|live/|embed/)|youtu\.be/)"
+        r"([0-9A-Za-z_-]{11})(?:[?&/].*)?$"
+    )
 
     def get_youtube_transcript(self, url: str):
         """Fetch transcript using youtube-transcript-api v1.0+."""
@@ -27,7 +38,7 @@ class ApiProcessor:
                 VideoUnavailable,
             )
 
-            m = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11}).*", url)
+            m = self._VIDEO_ID_RE.search(url)
             if not m:
                 return None, "Invalid YouTube URL format"
             video_id = m.group(1)
@@ -46,13 +57,16 @@ class ApiProcessor:
             except (NoTranscriptFound, TranscriptsDisabled, VideoUnavailable) as e:
                 return None, str(e)
 
-            except Exception:
-                # Fallback 1: Supadata API (cloud-friendly, works on Vercel)
+            except Exception as e:
+                # Something unexpected (API shape change, network hiccup, etc.) —
+                # log it loudly so a silent bug in the primary path doesn't hide
+                # behind the fallbacks, then still try the fallbacks.
+                logger.warning("Primary transcript fetch failed for %s: %s", video_id, e)
+
                 text, err = self._get_transcript_supadata(video_id)
                 if text:
                     return text, video_id
 
-                # Fallback 2: yt-dlp (last resort)
                 text, err2 = self._get_transcript_ytdlp(video_id)
                 if text:
                     return text, video_id
@@ -81,12 +95,11 @@ class ApiProcessor:
 
             url = f"https://api.supadata.ai/v1/youtube/transcript?videoId={video_id}&lang=en"
 
+            # Auth is via x-api-key; the browser-style headers below are only to
+            # avoid generic bot-blocking and aren't required by Supadata's docs.
             headers = {
                 "x-api-key": api_key,
                 "Accept": "application/json",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Origin": "https://supadata.ai",
-                "Referer": "https://supadata.ai/",
             }
 
             if use_requests:
@@ -141,7 +154,6 @@ class ApiProcessor:
                 subs = info.get('subtitles', {})
                 auto = info.get('automatic_captions', {})
 
-                # Prioritize manual english, then auto english
                 target_subs = subs.get('en') or subs.get('en-US') or subs.get('en-GB')
                 if not target_subs:
                     target_subs = auto.get('en') or auto.get('en-US') or auto.get('en-GB')
@@ -195,24 +207,24 @@ class ApiProcessor:
                         model=model_id,
                         contents=[{"parts": [{"text": prompt}]}],
                     )
-                    if not response or not hasattr(response, "text"):
-                        response = client.models.generate_content(model=model_id, contents=prompt)
-                    if response and hasattr(response, "text") and response.text:
+                    if response and getattr(response, "text", None):
                         return response.text, None
-                    # Empty response — retry same model
+                    # Empty response — retry same model, don't burn a second
+                    # call with a different payload shape; the shape above is
+                    # already the documented one.
                     last_error = f"[{model_id}] returned empty response"
+                    logger.info(last_error)
                     continue
                 except Exception as e:
                     err_str = str(e).lower()
-                    # Quota / rate-limit → fall back to next model immediately
                     if any(kw in err_str for kw in ("429", "quota", "rate", "resource exhausted", "503", "unavailable")):
                         last_error = f"[{model_id}] quota/rate-limit: {e}"
-                        break  # break retry loop → try next model
-                    # Other error → retry same model
+                        logger.warning(last_error)
+                        break  # try next model
                     last_error = f"[{model_id}] error: {e}"
+                    logger.error(last_error)
                     if attempt < max_retries - 1:
                         continue
-                    # Exhausted retries for this model → try next
                     break
 
         return None, f"All models failed. Last error: {last_error}"
@@ -247,6 +259,7 @@ class ApiProcessor:
             return {"summary": sm.group(1), "key_concepts": [], "bullet_points": []}, \
                    "Partial data extracted"
 
+        logger.error("Failed to parse JSON response. Preview: %s", clean[:200])
         return None, f"Failed to parse JSON. Preview: {clean[:200]}"
 
     def _call_gemini_and_parse_json(self, prompt: str):
@@ -265,12 +278,30 @@ class ApiProcessor:
     # ------------------------------------------------------------------
 
     def _process_long_transcript(self, transcript: str, target_length: int = 80_000) -> str:
+        """
+        Note: both generate_summary_and_concepts and
+        generate_quiz_questions_with_difficulty call this with
+        target_length=500_000, which is far above almost any lecture
+        transcript, so in practice this rarely does anything. It only
+        kicks in for genuinely huge transcripts (multi-hour lectures,
+        stitched playlists, etc.).
+        """
         if len(transcript) <= target_length:
             return transcript
         key = self._extract_key_sections(transcript, target_length)
         return key if key else self._smart_truncate(transcript, target_length)
 
     def _extract_key_sections(self, transcript: str, target_length: int):
+        """
+        Keyword-scored sentence selection. This is a heuristic, not real
+        summarization — it will miss important content that doesn't happen
+        to contain the keyword list, and can overweight sentences that
+        coincidentally contain several. It's a fallback for the rare
+        oversized-transcript case, not the primary path. If oversized
+        transcripts become common, replace this with a proper map-reduce
+        LLM summarization (chunk -> summarize each chunk -> summarize the
+        summaries) instead of tuning the keyword list further.
+        """
         try:
             sentences = transcript.replace("\n", " ").split(". ")
             if len(sentences) < 10:
@@ -328,25 +359,28 @@ class ApiProcessor:
 
     def generate_summary_and_concepts(self, transcript: str, title: str):
         processed = self._process_long_transcript(transcript, target_length=500_000)
-        prompt = f"""You are an educator creating study material for a lecture on "{title}".
+        prompt = f"""You are an educator creating study material for a lecture titled "{title}".
 
-Return a single valid JSON object with these exact keys:
+Base everything strictly on the transcript below. Do not add outside facts, and do not pad with generic statements that would be true of any lecture on this general subject.
 
-"summary": 4-6 paragraphs summarizing the lecture. Cover the main ideas in order, explain the reasoning behind them, and highlight anything non-obvious. Write clearly — not dumbed down, but not padded either.
+Return a single valid JSON object with exactly these keys:
+
+"summary": 4-6 paragraphs, in the order the lecture covers them. For each major idea: state what it is, then the reasoning or evidence the lecture gives for it. Call out anything the lecture treats as surprising, counterintuitive, or easy to get wrong. Write at the level of someone with a general background in the subject, not a beginner and not a specialist — clear, not dumbed down, no filler sentences.
 
 "key_concepts": Exactly 16 objects, each with:
-  - "concept": the term or idea
-  - "definition": 1-3 sentences. Explain what it is and what makes it distinct or important in the context of this lecture. Skip concepts that are too basic or generic to be worth knowing.
+  - "concept": the term or idea, as named in the lecture
+  - "definition": 1-3 sentences covering (a) what it is and (b) what makes it matter specifically in this lecture, not in the field generally. Skip anything the lecture only mentions in passing without explaining — pick the 16 concepts that carry the most weight in the argument, not the first 16 that appear.
 
-"bullet_points": Exactly 20 bullet points — these are the most important things to take away from this specific lecture. Rules:
-  - Every bullet must come from something actually said or shown in the lecture. No generic filler.
-  - Each bullet should be something a viewer could have missed or misunderstood. If it's obvious to anyone without watching, cut it.
-  - Be specific. Bad: "Neural networks are useful." Good: "The lecture uses a 3-layer network because adding more layers didn't improve accuracy on this dataset."
-  - Mix: key definitions worth remembering, non-obvious insights, important comparisons, cause-and-effect points, and practical implications.
+"bullet_points": Exactly 20 bullet points, ranked roughly by importance. Rules:
+  - Every bullet must trace to something specific the lecture actually said, showed, or argued — not a paraphrase of the topic in general.
+  - Each bullet should contain a detail a viewer could plausibly have missed, misremembered, or misunderstood on a first watch. If any adult with general knowledge of the topic would already know it without watching, cut it.
+  - Be concrete over abstract. Prefer numbers, named examples, specific claims, and stated reasons over vague summary language.
+  - Cover a mix: precise definitions worth remembering, non-obvious insights or caveats, comparisons the lecture draws, cause-and-effect claims, and practical implications or applications mentioned.
 
-Return ONLY valid JSON. No markdown, no text outside the JSON.
+Return ONLY the JSON object. No markdown fences, no commentary before or after.
 
-Transcript: {processed}"""
+Transcript:
+{processed}"""
         return self._call_gemini_and_parse_json(prompt)
 
     def generate_quiz_questions_with_difficulty(
@@ -358,34 +392,36 @@ Transcript: {processed}"""
         processed = self._process_long_transcript(transcript, target_length=500_000)
         diff_str = ", ".join(allowed_difficulties)
 
-        prompt = f"""You are writing a quiz on "{title}" for someone who just watched the lecture.
+        prompt = f"""You are writing a comprehension quiz on "{title}" for someone who just finished watching the lecture once, attentively.
 
-The quiz has one purpose: to check whether the person genuinely understood the lecture — not whether they can guess, not whether they remember trivia.
+The goal is to confirm they followed along and picked up the lecture's actual content — not to trip them up, and not to require them to have memorized every detail perfectly. A well-prepared viewer should be able to get most of these right on a first pass.
 
-Every question must pass this test: someone who watched and understood the lecture can answer it confidently. Someone who did NOT watch it should struggle, even if they know the general subject.
+Calibrate each difficulty tier like this:
 
-Difficulty levels — distribute evenly across {diff_str}:
-- easy: Tests a clear, specific point from the lecture. Still requires having watched it — not guessable from general knowledge alone.
-- medium: Requires understanding a concept well enough to apply it or see why one option is right and another plausible-but-wrong.
-- hard: Requires connecting ideas from different parts of the lecture, understanding a nuance the lecturer emphasized, or reasoning through something the lecture explained step by step.
+- easy: A direct, clearly-stated fact, definition, or example from the lecture. Someone who paid attention gets this right without hesitation. Not guessable purely from generic knowledge of the topic (it should require having actually watched), but also not a trap — one correct fact stated plainly, three clearly wrong options.
+
+- medium: Requires understanding a concept well enough to recognize it in a slightly different phrasing, or to tell it apart from one similar-sounding but wrong idea from the same lecture. This is normal "did you understand it, not just hear it" territory — not a stretch.
+
+- hard: The most demanding tier, but still fair: connects two related points the lecture made, or asks about a nuance/exception the lecture explicitly called out (e.g. "X is true, except when..."). This should NOT require outside knowledge, multi-step inference the lecture never modeled, or spotting something the lecture only mentioned once in passing.
+
+Distribute questions evenly across: {diff_str}.
 
 Rules:
-1. No references to "the video", "the lecture", "the speaker". Ask about the content itself.
-2. Each question targets a DIFFERENT concept from the lecture.
-3. Wrong options must be plausible — things someone might believe if they half-understood the material, not random nonsense.
-4. The correct answer must be unambiguously correct based on the lecture content.
-5. No question should be answerable purely from general knowledge or common sense. If someone could guess it without watching, replace it.
-6. No trick questions, no gotchas, no testing peripheral details that don't matter.
+1. No references to "the video", "the lecture", or "the speaker" in the question text — ask about the content directly.
+2. Each question targets a different concept; don't test the same point twice.
+3. Wrong options should be plausible mistakes (things a half-attentive viewer might mix up), not absurd or obviously-wrong filler — but they must be unambiguously incorrect, not defensible alternate answers.
+4. Exactly one option is correct, and it must be clearly supported by the transcript.
+5. Avoid peripheral trivia (exact numbers mentioned once, minor asides) unless the lecture itself emphasized it as important.
 
 Return a single valid JSON object with key "quiz_questions" containing exactly {num_questions} objects.
 Each object must have:
-- "question": string — specific and clear
-- "options": array of exactly 4 strings (no A/B/C/D prefixes)
+- "question": string
+- "options": array of exactly 4 strings (no "A)"/"B)" prefixes)
 - "answer": string — must exactly match one of the options
 - "difficulty": one of [{diff_str}]
-- "explanation": 1-2 sentences — why the answer is correct, and what the key insight is
+- "explanation": 1-2 sentences on why the answer is correct
 
-Return ONLY valid JSON. No markdown, no text outside the JSON.
+Return ONLY the JSON object. No markdown fences, no commentary before or after.
 
 Lecture transcript:
 {processed}"""
@@ -399,8 +435,8 @@ Lecture transcript:
         prompt = f"""You are an expert AI tutor for the video "{title}".
 
 1. First try to answer using the transcript.
-2. If the answer isn't in the transcript, acknowledge that and give a helpful general answer.
-3. If completely off-topic, say so politely.
+2. If the answer isn't in the transcript, say so explicitly, then give a helpful general answer.
+3. If the question is unrelated to the video's subject, say so politely and briefly.
 
 Video Title: "{title}"
 Transcript: {truncated}
