@@ -40,3 +40,7 @@ Thumbs.db
 
 # Vercel
 .vercel/
+
+# Backup files
+*.bak
+

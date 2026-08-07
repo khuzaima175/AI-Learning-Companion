@@ -1,64 +1,92 @@
 # 🎓 AI Learning Companion 2.0
 
-![Version](https://img.shields.io/badge/version-2.1.0-blueviolet)
+![Version](https://img.shields.io/badge/version-2.2.0-blueviolet)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688)
 ![Database](https://img.shields.io/badge/database-PostgreSQL_(Supabase)-emerald)
+![Deployment](https://img.shields.io/badge/deployment-Vercel_Serverless-black)
 
-Transform any YouTube video into a structured learning experience. **AI Learning Companion** is a professional-grade personal tutor that uses advanced AI to analyze educational content, generate smart summaries, and handle your long-term retention via an Anki-style Spaced Repetition System (SRS).
+Transform any YouTube video or custom lecture transcript into an interactive, high-retention learning experience. **AI Learning Companion** is a full-stack, cloud-native study system powered by Google Gemini AI, Supabase PostgreSQL, and an Anki-style Spaced Repetition System (SRS).
 
 > [!IMPORTANT]
-> This application has been upgraded to a high-performance **FastAPI** backend with a modern, glassmorphic "Neon Sunset" Vanilla JS UI. It is fully decoupled and cloud-ready for **Vercel** serverless hosting.
+> **Version 2.2 Upgrade:** Includes Supabase JWT Bearer Auth for multi-user data isolation, advanced Stale-While-Revalidate (SWR) client caching, high-performance database batch querying (N+1 query resolution), automated Resend email reminders, and Vercel serverless cold-start mitigation.
 
 ---
 
-## 🏗️ Tech Stack
+## 🏗️ Technical Architecture & Tech Stack
 
-- **Backend:** [FastAPI](https://fastapi.tiangolo.com/) (Python)
-- **Frontend:** Vanilla JavaScript (ES6) & Pure CSS ("Neon Sunset" Design System)
-- **Database:** [Supabase](https://supabase.com/) (PostgreSQL cloud persistence)
-- **AI Engine:** Google [Gemini API](https://aistudio.google.com/) (`3.5-flash` / `2.5-flash` / `2.0-flash`)
-- **Deployment:** Vercel (Serverless Functions via `api/index.py`)
-
----
-
-## 🔥 Key Features
-
-### 📺 Intelligent Video Analysis (Anti-Scrape Tech)
-- Extracts YouTube transcripts using a **3-Layer Fallback System**:
-  1. Native `youtube-transcript-api`
-  2. Cloud-proxy via `Supadata API`
-  3. Mobile-spoofing via `yt-dlp` to bypass Vercel server blocks.
-- **Manual Transcript Input:** Supports pasting custom transcripts directly to analyze off-platform lectures, private videos, or custom notes.
-- Automatically generates detailed summaries, 10+ core concepts, and 12+ actionable bullet points.
-
-### 💬 Interactive AI Study Companion
-- **Context-Aware AI Chat:** Ask specific questions about any video in your catalog. The AI acts as an expert tutor, utilizing the full video transcript to answer, explain, or elaborate on complex topics.
-- **Persistent Personal Notes:** Capture thoughts, study reflections, and custom definitions directly within the browser dashboard in a dedicated notes tab, persisted securely to Supabase.
-
-### 🧠 Smart Model Fallback (Reliability First)
-Features an automated cascading fallback system for Gemini API calls. If the primary model hits a rate limit (HTTP 429), the code instantly catches the exception and routes to the next best option via a `for/continue/break` loop chain to ensure zero downtime.
-
-### 🔁 Spaced Repetition System (SRS)
-- **Mathematical Retention:** Implements the SM-2 algorithm concept. Questions are mathematically scheduled `[1, 3, 7, 14, 30, 90, 180]` days in advance based on your performance (`Hard`, `Good`, `Easy`). 
-- **Dynamic Quizzes:** AI generates custom multiple-choice questions matching stringent grammatical and conceptual constraints. Corrected visual timer and accurate results summary.
-- **Daily Review Cap:** Limits daily reviews to a configurable threshold (default 25 cards) to prevent study fatigue and keep sessions manageable.
-- **Race-Condition Safe:** Uses **Atomic RPC calls** directly inside Supabase to securely track session scores without Python read-then-write concurrency bugs.
-
-### 📩 Escalating Smart Email Reminders
-- Integrated with **Resend** and **Vercel Cron Jobs** to send up to 6 automated daily email nudges (`Morning`, `Midday`, `Afternoon`, `Evening`, `Night`, `Final Call`).
-- **Urgency Engine:** Emails escalate in tone and visual design (urgency colors) as midnight approaches if you have pending cards.
-- **Serverless:** Requires no server—fully managed by Vercel serverless cron pointing to a single `api/notify.py` route.
+- **Backend Framework:** [FastAPI](https://fastapi.tiangolo.com/) (Python 3.10+) with `uvicorn` and `Mangum` serverless handler.
+- **Frontend Architecture:** Vanilla JavaScript (ES6+), Modern Pure CSS ("Neon Sunset" Design System with glassmorphic UI, responsive layouts, and CSS skeleton loaders).
+- **Authentication & Security:** Supabase Auth (JWT Bearer Token verification) with per-user data isolation.
+- **Cloud Database:** [Supabase](https://supabase.com/) (PostgreSQL cloud database with Atomic RPC functions).
+- **AI Processing Engine:** Google [Gemini API](https://aistudio.google.com/) (`gemini-2.5-flash` / `gemini-2.0-flash` / `gemini-1.5-flash`) with automatic rate-limit fallback chaining.
+- **Anti-Scrape Transcript Pipeline:** 3-Tier fallback system (`youtube-transcript-api` → `Supadata API` → `yt-dlp` mobile-spoofing) + Direct Manual Transcript input.
+- **Email & Notifications:** [Resend API](https://resend.com) with 6-stage daily escalating Vercel Cron email reminders.
+- **Hosting & Deployment:** Serverless edge deployment on **Vercel** (`api/index.py` & `api/notify.py`).
 
 ---
 
-## 🚀 Getting Started
+## 🔥 Core Features
+
+### 📺 Intelligent Video Analysis & Anti-Scrape Pipeline
+- **3-Layer Transcript Extraction:**
+  1. Primary: Native `youtube-transcript-api`
+  2. Secondary: Cloud proxy via `Supadata API`
+  3. Tertiary: `yt-dlp` with mobile client spoofing to bypass Vercel server blocks.
+- **Manual Transcript Mode:** Option to directly paste raw transcripts for off-platform video lectures, private webinars, audio transcripts, or personal study notes.
+- **Automated Structuring:** Generates concise summaries, 10+ core concepts, and 12+ actionable takeaways per video.
+
+### 🧠 Practice Quiz & Smart AI Questions
+- **On-Demand Quiz Generation:** Inline question generator to expand quiz sets for any video or course.
+- **Subject-Matter AI Enforcement:** Prompt-engineered AI generation focusing strictly on core academic concepts rather than meta-questions about the video.
+- **Deduplication Engine:** Prevents duplicate question insertion at both the browser and database levels.
+
+### 💬 Interactive Context-Aware Study Assistant
+- **Video-Specific AI Tutor:** Ask questions directly about any video in your catalog. The assistant leverages the video's full transcript context to explain complex topics.
+- **Persistent Personal Notes:** Dedicated browser notes editor per video saved directly to Supabase.
+
+### 🔁 Anki-Style Spaced Repetition System (SRS)
+- **SM-2 Retention Algorithm:** Questions are mathematically scheduled `[1, 3, 7, 14, 30, 90, 180]` days into the future based on user feedback (`Hard`, `Good`, `Easy`).
+- **Atomic Session Updates:** Uses Supabase RPC calls (`increment_session`) for race-condition-safe score tracking without read-then-write concurrency bugs.
+
+### 📩 6-Stage Escalating Email Nudges
+- **Vercel Cron Integration:** Automated cron execution sending up to 6 email reminders per day (`Morning`, `Midday`, `Afternoon`, `Evening`, `Night`, `Final Call`).
+- **Urgency Visual Engine:** Dynamic HTML emails that escalate in visual urgency as midnight approaches if pending SRS cards remain unreviewed.
+
+---
+
+## ⚡ High-Performance Optimizations
+
+1. **Fixing the N+1 Database Bottleneck (`in_` Bulk Queries):**
+   - Refactored `/api/courses` single-pass fetching using SQL `IN` bulk queries, reducing round-trips from `1 + 2N + V` queries down to **exactly 3 queries**.
+2. **Dual-Layer Stale-While-Revalidate (SWR) Caching:**
+   - Client-side data rendering directly from `localStorage` for 0ms instant load times, accompanied by background HTTP revalidation for fresh updates.
+3. **Parallel Request Orchestration & Skeleton UI:**
+   - Synchronized API loading via `Promise.all()` paired with custom glowing CSS skeleton shapes (`.skel`) to eliminate layout shift and reduce perceived latency.
+4. **Waterfall Mitigation via `<link rel="modulepreload">`:**
+   - High-priority resource hints mapping ES JavaScript modules in `index.html` to enable browser parallel script downloads before execution.
+5. **Vercel Serverless Cold-Start Prevention:**
+   - Visibility State listener (`visibilitychange`) triggering an invisible keep-alive ping (`/api/ping`) whenever the tab becomes active, pre-warming serverless Lambda containers before the user clicks.
+6. **Multi-Threaded DB Counters:**
+   - Backend concurrent querying using Python's `ThreadPoolExecutor` to assemble course, video, and question metrics simultaneously.
+
+---
+
+## 🔒 Authentication & Multi-User Security
+
+- Routes are protected via FastAPI `verify_token` dependency checking Supabase Auth JWT tokens.
+- Database records (courses, videos, quiz questions, quiz sessions) are strictly scoped by `user_id` to guarantee full multi-tenant data privacy.
+
+---
+
+## 🚀 Setup & Local Development
 
 ### 1. Prerequisites
 - Python 3.10+
 - Google Gemini API Key
-- Supabase Project URL & Service Key
-- (Optional) Supadata API Key for cloud deployments
+- Supabase Project URL & Keys (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_ANON_KEY`)
+- (Optional) Supadata API Key & Resend API Key
 
 ### 2. Installation
 ```powershell
@@ -70,54 +98,65 @@ cd AI-Learning-Companion
 pip install -r requirements.txt
 ```
 
-### 3. Environment Variables
+### 3. Environment Setup (`.env`)
 Create a `.env` file in the root directory:
 ```env
 GEMINI_API_KEY=your_gemini_api_key
 SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_KEY=your_service_key
-SUPADATA_API_KEY=your_supadata_key_for_vercel_bypass 
+SUPABASE_SERVICE_KEY=your_service_role_key
+SUPABASE_ANON_KEY=your_anon_public_key
+SUPADATA_API_KEY=your_supadata_key
 RESEND_API_KEY=your_resend_api_key
 CRON_SECRET=your_vercel_cron_secret
-NOTIFY_EMAIL=email_to_send_reminders_to
+NOTIFY_EMAIL=user_email_for_reminders
 NOTIFY_USER_ID=your_supabase_user_id
-NOTIFY_FROM_EMAIL=your_verified_resend_domain_email
+NOTIFY_FROM_EMAIL=your_resend_verified_sender_email
 ```
-*(Note: The Gemini API key can be set in the `.env` or handled directly inside the app's UI settings).*
 
-### 4. Run the Application locally
+### 4. Database Setup
+Run the SQL queries in `supabase_schema.sql` within your **Supabase Dashboard → SQL Editor**.
+
+### 5. Running Locally
 ```powershell
 uvicorn app:app --reload
 ```
-Open **[http://localhost:8000](http://localhost:8000)** in your browser.
+Navigate to **`http://localhost:8000`** in your browser.
 
 ---
 
-## 📂 File Structure Overview
+## 📂 Project Structure
 
 ```text
-/
-├── app.py                  # FastAPI traffic cop & endpoint router
-├── requirements.txt        
-├── vercel.json             # Vercel deployment & cron job configs
+AI-Learning-Companion/
+├── app.py                  # FastAPI route handlers & app entrypoint
+├── requirements.txt        # Python dependencies
+├── vercel.json             # Vercel serverless build & cron job configurations
+├── supabase_schema.sql     # Supabase database table definitions & indexes
+├── optimizations_report.md # Performance engineering guide
 ├── /api
-│   ├── index.py            # Mangum wrapper for Serverless AWS/Vercel functions 
-│   └── notify.py           # Unified cron handler for daily email notifications
+│   ├── index.py            # Mangum serverless adapter for Vercel/AWS Lambda
+│   └── notify.py           # Unified cron route for escalating email reminders
 ├── /src
-│   ├── api_processor.py    # Complex transcript & AI fallback logic
+│   ├── api_processor.py    # Gemini AI prompts, fallback chains & transcript handlers
+│   ├── auth.py             # Supabase Auth JWT token verification dependency
+│   ├── config.py           # API key persistence & environment settings
 │   ├── database.py         # Supabase PostgreSQL client & SRS logic
-│   └── email_service.py    # Resend-powered rich HTML email templates
-└── /static                 # The "Neon Sunset" design system
+│   └── email_service.py    # Resend HTML email builder & reminder dispatchers
+└── /static                 # "Neon Sunset" pure JS/CSS frontend
     ├── index.html
     ├── /css
-    └── /js/pages           # Component-based pure JS (add_video, quiz, stats, etc.)
+    └── /js
+        ├── app.js          # Core routing, SWR cache & keep-alive ping engine
+        └── /pages         # Component scripts (browse, dashboard, quiz, stats, etc.)
 ```
 
 ---
 
+## 🤝 Roadmap & Future Enhancements
 
-## 🤝 Contributing and  Future Roadmap
-Contributions are welcome. Our next major objectives include turning the frontend into a **Progressive Web App (PWA)** for native offline support and expanding analytics to provide deeper insights into learning retention curves.
+- [ ] **Progressive Web App (PWA):** Offline flashcard caching & local service worker support.
+- [ ] **Advanced Retention Analytics:** Forgetting curve charts and difficulty heatmaps.
+- [ ] **Vector Embeddings (RAG):** Semantic vector search across all video transcripts using pgvector in Supabase.
 
 ---
-*Created with ❤️ for lifelong learners.*
+*Built with ❤️ for lifelong learners.*
