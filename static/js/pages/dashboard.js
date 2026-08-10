@@ -1,325 +1,366 @@
-import { API, animateCount, navigate, Streak, staggerElements, DailyGoal, launchConfetti } from '../app.js';
+import { API, animateCount, navigate, Streak, DailyGoal, icon, skel, mapStats, getDueCount } from '../app.js';
 
 const QUOTES = [
   { q: "The more that you read, the more things you will know.", a: "Dr. Seuss" },
   { q: "Education is not the filling of a pail, but the lighting of a fire.", a: "W.B. Yeats" },
   { q: "An investment in knowledge pays the best interest.", a: "Benjamin Franklin" },
-  { q: "Live as if you were to die tomorrow. Learn as if you were to live forever.", a: "Gandhi" },
+  { q: "Live as if you were to die tomorrow. Learn as if you were to live forever.", a: "Mahatma Gandhi" },
   { q: "The beautiful thing about learning is that nobody can take it away from you.", a: "B.B. King" },
   { q: "Knowledge is power. Information is liberating.", a: "Kofi Annan" },
   { q: "Intellectual growth should commence at birth and cease only at death.", a: "Albert Einstein" },
+  { q: "Tell me and I forget. Teach me and I remember. Involve me and I learn.", a: "Benjamin Franklin" },
 ];
 
 export async function renderDashboard(container) {
-  const quote  = QUOTES[Math.floor(Math.random() * QUOTES.length)];
+  let quoteIdx = Math.floor(Math.random() * QUOTES.length);
+  const quote = QUOTES[quoteIdx];
   const streak = Streak.get();
-  const goal   = DailyGoal.get();
-  const pct    = DailyGoal.pct(goal);
-  const done   = DailyGoal.isDone(goal);
+  const goal = DailyGoal.get();
+  const pct = DailyGoal.pct(goal);
+  const done = DailyGoal.isDone(goal);
 
-  // SVG ring maths
-  const R = 52, STROKE = 9;
+  // SVG Ring maths
+  const R = 44;
   const CIRC = 2 * Math.PI * R;
   const offset = CIRC - (pct / 100) * CIRC;
 
-  const goalTypeLabel = goal.type === 'minutes' ? 'min study' : 'cards';
-  const goalEmoji     = done ? '🏆' : goal.type === 'minutes' ? '⏱️' : '🃏';
+  const todayDateStr = new Date().toLocaleDateString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric'
+  });
+
+  // Calculate 7-day dot statuses
+  const dayNames = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  const today = new Date();
+  const dayOfWeek = (today.getDay() + 6) % 7; // 0 = Mon, 6 = Sun
+
+  const dayDotsHtml = dayNames.map((name, i) => {
+    const diff = i - dayOfWeek;
+    const targetDate = new Date(today);
+    targetDate.setDate(today.getDate() + diff);
+    const dateStr = targetDate.toLocaleDateString('en-CA');
+    const isStudied = streak.history?.includes(dateStr) || (diff === 0 && streak.count > 0);
+    const isFuture = diff > 0;
+    return `
+      <div class="day-dot ${isStudied ? 'active' : ''}" style="${isFuture ? 'opacity:0.35' : ''}">
+        <div class="day-dot-circle"></div>
+        <span class="day-dot-lbl">${name}</span>
+      </div>`;
+  }).join('');
 
   container.innerHTML = `
-    <div class="page-header enter" style="animation-delay:0ms">
-      <div class="page-icon-wrap">🏠</div>
-      <div class="page-title-text">
-        <h1>Dashboard</h1>
-        <p class="page-subtitle">${greeting()} Let's keep the momentum going.</p>
+    <!-- Header -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:28px;flex-wrap:wrap;gap:16px">
+      <div>
+        <div class="page-title">Welcome back to your <em>Workspace</em></div>
+        <p class="page-subtitle">Your daily study telemetry, spaced repetition intervals, and active recall streak.</p>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="pill pill-amber" style="padding:6px 12px;font-size:0.75rem">
+          ${icon('calendar', '', 'width:13px;height:13px')}
+          <span>${todayDateStr}</span>
+        </div>
       </div>
     </div>
 
-    <!-- Hero row: Streak | Goal Ring | Quote -->
-    <div class="dashboard-hero enter">
+    <!-- Bento Grid Row 1: Streak (span-1) | Daily Goal (span-1) | Quote (span-2) -->
+    <div class="bento-grid rev" style="margin-bottom:16px">
 
-      <!-- Streak -->
-      <div class="streak-display" style="flex-direction:column;text-align:center;min-width:120px;justify-content:center">
-        <div class="streak-flame">🔥</div>
-        <div class="streak-num" id="streak-num">0</div>
-        <div class="streak-label">Day Streak</div>
-      </div>
-
-      <!-- Daily Goal Ring -->
-      <div class="goal-ring-card${done ? ' goal-done' : ''}" id="goal-ring-card">
-        <button class="goal-ring-edit" id="goal-edit-btn" title="Set goal">⚙ Edit</button>
-        
-        <div class="goal-ring-wrap${done ? ' goal-done' : ''}" id="goal-ring-wrap">
-          <!-- SVG with inline gradient defs -->
-          <svg class="goal-ring-svg" width="${R*2 + STROKE*2}" height="${R*2 + STROKE*2}"
-               viewBox="0 0 ${R*2 + STROKE*2} ${R*2 + STROKE*2}">
-            <defs>
-              <linearGradient id="goalGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%"   stop-color="#a3e635"/>
-                <stop offset="100%" stop-color="#65a30d"/>
-              </linearGradient>
-            </defs>
-            <!-- Track -->
-            <circle class="goal-ring-track"
-              cx="${R + STROKE}" cy="${R + STROKE}" r="${R}"
-              stroke-width="${STROKE}"/>
-            <!-- Fill -->
-            <circle class="goal-ring-fill" id="goal-ring-fill"
-              cx="${R + STROKE}" cy="${R + STROKE}" r="${R}"
-              stroke-width="${STROKE}"
-              stroke-dasharray="${CIRC}"
-              stroke-dashoffset="${CIRC}"/>
-          </svg>
-
-          <!-- Center label -->
-          <div class="goal-ring-label">
-            ${done
-              ? `<div class="goal-ring-emoji">✅</div>
-                 <div class="goal-ring-done-txt">Done!</div>`
-              : `<div class="goal-ring-pct" id="goal-ring-pct">0%</div>`
-            }
-          </div>
-        </div>
-
-        <!-- Info below ring -->
-        <div class="goal-ring-info">
-          <div class="goal-ring-title">Daily Goal ${goalEmoji}</div>
-          <div class="goal-ring-sub">${goal.target} ${goalTypeLabel} / day</div>
-          <div class="goal-ring-progress-txt">
-            <span style="color:var(--teal);font-weight:700">${goal.progress}</span>
-            <span style="color:var(--text-2)"> / ${goal.target} ${goalTypeLabel} today</span>
-          </div>
-          <div style="font-size:.68rem;color:var(--text-3);margin-top:4px;opacity:.7">
-            Quiz &amp; Review cards count
-          </div>
-        </div>
-      </div>
-
-      <!-- Quote -->
-      <div class="card dashboard-quote" style="padding:20px 24px;display:flex;align-items:center">
+      <!-- 1. Active Streak Card (Flame Sticker + Big Num + 7 Dots) -->
+      <div class="card span-1" style="display:flex;flex-direction:column;justify-content:space-between">
         <div>
-          <div style="font-size:1.1rem;font-weight:500;line-height:1.5;color:var(--text);font-style:italic">"${quote.q}"</div>
-          <div style="font-size:.78rem;color:var(--text-3);margin-top:8px">— ${quote.a}</div>
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <span class="card-title">Active streak</span>
+            <div class="flame-sticker">
+              ${icon('flame', '', 'width:20px;height:20px')}
+            </div>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:6px;margin-top:8px">
+            <span class="serif-num" style="font-size:3.6rem;color:var(--amber)" id="dash-streak-num">${streak.count || 1}</span>
+            <span style="color:var(--muted);font-size:0.95rem;font-weight:500">days</span>
+          </div>
+        </div>
+        <div>
+          <div class="day-dots">${dayDotsHtml}</div>
+          <div style="font-size:0.72rem;color:var(--faint);margin-top:12px">Review 1 card tomorrow to maintain streak.</div>
+        </div>
+      </div>
+
+      <!-- 2. Daily Goal (Side-by-side Ring + Stats) -->
+      <div class="card span-1" style="display:flex;flex-direction:column;justify-content:space-between">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span class="card-title">Daily target</span>
+          <button id="goal-edit-btn" class="btn btn-ghost btn-sm" style="padding:3px 7px" title="Change Target">
+            ${icon('settings-2', '', 'width:13px;height:13px')}
+          </button>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:16px;margin:8px 0">
+          <div class="goal-ring-wrap">
+            <svg class="goal-ring-svg" width="86" height="86" viewBox="0 0 100 100">
+              <circle class="goal-ring-track" cx="50" cy="50" r="${R}" stroke-width="8"/>
+              <circle id="dash-goal-fill" class="goal-ring-fill" cx="50" cy="50" r="${R}" stroke-width="8"
+                      stroke-dasharray="${CIRC}" stroke-dashoffset="${CIRC}"/>
+            </svg>
+            <div class="goal-ring-center">
+              <div class="serif-num" style="font-size:1.45rem;color:var(--teal)" id="dash-goal-pct">0%</div>
+            </div>
+          </div>
+
+          <div>
+            <div style="font-size:0.92rem;font-weight:600;color:var(--text)">
+              <span style="color:var(--teal)">${goal.progress}</span> / ${goal.target}
+            </div>
+            <div style="font-size:0.75rem;color:var(--muted);margin-top:2px">cards reviewed today</div>
+            <span class="pill ${done ? 'pill-green' : 'pill-teal'}" style="font-size:0.62rem;margin-top:6px">
+              ${done ? 'Target Met' : 'In Progress'}
+            </span>
+          </div>
+        </div>
+
+        <div style="font-size:0.72rem;color:var(--faint)">Resets at midnight automatically.</div>
+      </div>
+
+      <!-- 3. Quote of the Day (Rotated Glyph + Serif Text) -->
+      <div class="card span-2" style="display:flex;flex-direction:column;justify-content:space-between;position:relative">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span class="card-title" style="color:var(--muted)">Daily focus</span>
+          <button id="dash-refresh-quote" class="btn btn-ghost btn-sm" style="padding:3px 7px" title="New Quote">
+            ${icon('rotate-cw', '', 'width:13px;height:13px')}
+          </button>
+        </div>
+
+        <div style="display:flex;gap:14px;align-items:flex-start;margin:12px 0">
+          <div style="color:var(--teal);opacity:0.3;transform:rotate(-6deg);flex-shrink:0;margin-top:-4px">
+            ${icon('quote', '', 'width:28px;height:28px')}
+          </div>
+          <div>
+            <div id="dash-quote-text" style="font-family:'Instrument Serif', serif;font-size:1.35rem;line-height:1.4;color:var(--text);font-style:italic">
+              "${quote.q}"
+            </div>
+            <div id="dash-quote-author" style="margin-top:8px;font-size:0.8rem;font-weight:600;color:var(--teal)">
+              — ${quote.a}
+            </div>
+          </div>
+        </div>
+
+        <div style="font-size:0.72rem;color:var(--faint)">Active recall forms stronger neural pathways than passive re-reading.</div>
+      </div>
+    </div>
+
+    <!-- Bento Grid Row 2: Rotating Conic Border Due CTA (span-2) | Merged Library Metrics (span-2) -->
+    <div class="bento-grid rev" style="margin-bottom:16px">
+
+      <!-- 4. Due Review Queue Card (Rotating Conic Border .cta-live) -->
+      <div class="card span-2 cta-live" style="display:flex;align-items:center;justify-content:space-between;gap:20px;padding:24px 28px">
+        <div style="display:flex;align-items:center;gap:18px">
+          <div class="icon-chip amber" style="width:48px;height:48px">
+            ${icon('alarm-clock', '', 'width:24px;height:24px')}
+          </div>
+          <div>
+            <span class="card-title">Due for review</span>
+            <div style="display:flex;align-items:baseline;gap:8px;margin-top:2px">
+              <span class="serif-num" style="font-size:3.2rem;color:var(--amber)" id="dash-due-count">0</span>
+              <span style="color:var(--muted);font-size:0.9rem">cards ready</span>
+            </div>
+            <div style="font-size:0.75rem;color:var(--faint);margin-top:2px">SM-2 interval scheduling algorithm active</div>
+          </div>
+        </div>
+
+        <button class="btn btn-amber btn-lg" id="dash-start-review" style="white-space:nowrap;box-shadow:0 4px 20px rgba(249,115,22,0.35)">
+          <span>Start Review</span>
+          ${icon('arrow-right', '', 'width:16px;height:16px')}
+        </button>
+      </div>
+
+      <!-- 5. Merged Library Metrics Card (3 Columns: Courses | Lectures | Questions) -->
+      <div class="card span-2 library-split-card" style="padding:14px 10px">
+        
+        <div class="library-split-col">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="icon-chip teal" style="width:28px;height:28px">${icon('book-open', '', 'width:14px;height:14px')}</div>
+              <span class="card-title" style="font-size:0.8rem">Courses</span>
+            </div>
+            <div class="serif-num" style="font-size:2.4rem;margin:6px 0;color:var(--text)" id="dash-courses-num">0</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="window.navigate('browse')" style="justify-content:space-between;padding:4px 8px;font-size:0.75rem">
+            <span>Browse</span>
+            ${icon('arrow-right', '', 'width:12px;height:12px')}
+          </button>
+        </div>
+
+        <div class="library-split-col">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="icon-chip sky" style="width:28px;height:28px">${icon('clapperboard', '', 'width:14px;height:14px')}</div>
+              <span class="card-title" style="font-size:0.8rem">Lectures</span>
+            </div>
+            <div class="serif-num" style="font-size:2.4rem;margin:6px 0;color:var(--text)" id="dash-videos-num">0</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="window.navigate('add-video')" style="justify-content:space-between;padding:4px 8px;font-size:0.75rem">
+            <span>Add New</span>
+            ${icon('plus', '', 'width:12px;height:12px')}
+          </button>
+        </div>
+
+        <div class="library-split-col">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="icon-chip amber" style="width:28px;height:28px">${icon('help-circle', '', 'width:14px;height:14px')}</div>
+              <span class="card-title" style="font-size:0.8rem">Quiz Cards</span>
+            </div>
+            <div class="serif-num" style="font-size:2.4rem;margin:6px 0;color:var(--amber)" id="dash-questions-num">0</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="window.navigate('quiz')" style="justify-content:space-between;padding:4px 8px;font-size:0.75rem">
+            <span>Take Quiz</span>
+            ${icon('arrow-right', '', 'width:12px;height:12px')}
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 7-Day Activity Flex Bars -->
+    <div class="card rev" style="margin-bottom:28px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div>
+          <h3 style="font-size:1.3rem">7-Day Study Volume</h3>
+          <span class="mono-meta">Cards reviewed per day</span>
+        </div>
+        <span id="dash-act-max-lbl" class="mono-meta">MAX: 10 CARDS</span>
+      </div>
+
+      <div id="dash-activity-bars-wrap">
+        <div class="activity-bars" id="dash-activity-bars">
+          ${[0, 0, 0, 0, 0, 0, 0].map((_, i) => `
+            <div class="act-bar-col">
+              <div class="act-bar-fill" style="height:10%"></div>
+              <span class="act-bar-lbl">${['M','T','W','T','F','S','S'][i]}</span>
+            </div>`).join('')}
         </div>
       </div>
     </div>
 
-    <!-- Metrics skeleton -->
-    <div class="metric-grid bento-grid stagger-children" id="metric-grid">
-      ${metric('📚','courses','Courses','teal')}
-      ${metric('🎬','videos','Videos','teal')}
-      ${metric('❓','questions','Questions','amber')}
-      ${metric('🔔','due','Due Today','amber')}
-      ${metric('🎯','accuracy','Accuracy','teal','%')}
-    </div>
+    <!-- Quick Navigation Tiles -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:16px" class="rev">
+      <div class="quick-action-tile" onclick="window.navigate('add-video')">
+        <div class="icon-chip teal" style="width:44px;height:44px">
+          ${icon('video', '', 'width:22px;height:22px')}
+        </div>
+        <div>
+          <div style="font-weight:600;font-size:0.95rem;color:var(--text)">Add Video Lecture</div>
+          <div style="font-size:0.78rem;color:var(--muted);margin-top:2px">Import YouTube transcripts to auto-generate cards.</div>
+        </div>
+        <span class="action-arrow">${icon('chevron-right', '', 'width:18px;height:18px')}</span>
+      </div>
 
-    <!-- Quick actions -->
-    <div class="section-hdr enter" style="margin-top:8px">
-      <div>
-        <div class="section-title">Quick Actions</div>
-        <div class="section-sub">Jump straight in</div>
+      <div class="quick-action-tile" onclick="window.navigate('flashcards')">
+        <div class="icon-chip sky" style="width:44px;height:44px">
+          ${icon('layers', '', 'width:22px;height:22px')}
+        </div>
+        <div>
+          <div style="font-weight:600;font-size:0.95rem;color:var(--text)">3D Flashcard Decks</div>
+          <div style="font-size:0.78rem;color:var(--muted);margin-top:2px">Interactive concept flip cards with spacebar shortcuts.</div>
+        </div>
+        <span class="action-arrow">${icon('chevron-right', '', 'width:18px;height:18px')}</span>
       </div>
-    </div>
-    <div class="quick-actions stagger-children" id="quick-actions">
-      <div class="quick-card card-tilt" data-goto="add-video">
-        <div class="quick-card-icon">📚</div>
-        <div class="quick-card-title">Add Video</div>
-        <div class="quick-card-desc">Process a YouTube video with AI</div>
-      </div>
-      <div class="quick-card card-tilt" data-goto="flashcards">
-        <div class="quick-card-icon">🃏</div>
-        <div class="quick-card-title">Flashcards</div>
-        <div class="quick-card-desc">Drill your key concepts</div>
-      </div>
-      <div class="quick-card card-tilt" data-goto="quiz">
-        <div class="quick-card-icon">🧠</div>
-        <div class="quick-card-title">Practice Quiz</div>
-        <div class="quick-card-desc">Test what you know</div>
-      </div>
-      <div class="quick-card card-tilt" data-goto="review">
-        <div class="quick-card-icon">🔁</div>
-        <div class="quick-card-title">Daily Review</div>
-        <div class="quick-card-desc">SRS cards due today</div>
-      </div>
-    </div>
 
-    <!-- Recent courses -->
-    <div class="section-hdr enter" style="margin-top:28px">
-      <div>
-        <div class="section-title">Recent Courses</div>
-        <div class="section-sub">Your content library</div>
-      </div>
-      <button class="btn btn-ghost btn-sm" onclick="window.navigate && navigate('browse')">View all →</button>
-    </div>
-    <div id="recent-courses">
-      <div style="display:flex;flex-direction:column;gap:8px">
-        ${[1,2,3].map(() => `
-          <div class="card card-sm skel-row" style="display:flex;justify-content:space-between;align-items:center">
-            <div class="skel" style="width:140px;height:14px;border-radius:6px"></div>
-            <div class="skel" style="width:50px;height:20px;border-radius:99px"></div>
-          </div>`).join('')}
+      <div class="quick-action-tile" onclick="window.navigate('stats')">
+        <div class="icon-chip amber" style="width:44px;height:44px">
+          ${icon('bar-chart-3', '', 'width:22px;height:22px')}
+        </div>
+        <div>
+          <div style="font-weight:600;font-size:0.95rem;color:var(--text)">Retention Analytics</div>
+          <div style="font-size:0.78rem;color:var(--muted);margin-top:2px">Comprehension graphs & historical sessions.</div>
+        </div>
+        <span class="action-arrow">${icon('chevron-right', '', 'width:18px;height:18px')}</span>
       </div>
     </div>
   `;
 
-  // ── Animate ring fill ────────────────────────────────────────────
-  const fillEl = document.getElementById('goal-ring-fill');
-  const pctEl  = document.getElementById('goal-ring-pct');
-
+  // Animate Goal Ring
+  const fillEl = document.getElementById('dash-goal-fill');
+  const pctEl = document.getElementById('dash-goal-pct');
   if (fillEl) {
-    // Trigger animation next frame so CSS transition fires
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         fillEl.style.strokeDashoffset = offset;
       });
     });
   }
+  if (pctEl) animateCount(pctEl, pct, 700, '%');
 
-  // Animate percentage number inside ring
-  if (pctEl && !done) {
-    let curr = 0;
-    const target = pct;
-    const dur = 1100;
-    const start = performance.now();
-    function animPct(now) {
-      const t = Math.min((now - start) / dur, 1);
-      const ease = 1 - Math.pow(1 - t, 3);
-      curr = Math.round(target * ease);
-      pctEl.textContent = curr + '%';
-      if (t < 1) requestAnimationFrame(animPct);
-    }
-    requestAnimationFrame(animPct);
-  }
-
-  // ── Stagger & streak count ───────────────────────────────────────
-  staggerElements('#metric-grid .metric-card', 70);
-  staggerElements('#quick-actions .quick-card', 60);
-  setTimeout(() => animateCount(document.getElementById('streak-num'), streak.count, 600), 200);
-
-  document.querySelectorAll('.quick-card[data-goto]').forEach(el => {
-    el.addEventListener('click', () => navigate(el.dataset.goto));
+  // Event Listeners
+  document.getElementById('dash-start-review')?.addEventListener('click', () => navigate('review'));
+  document.getElementById('dash-refresh-quote')?.addEventListener('click', () => {
+    quoteIdx = (quoteIdx + 1) % QUOTES.length;
+    const nq = QUOTES[quoteIdx];
+    const qt = document.getElementById('dash-quote-text');
+    const qa = document.getElementById('dash-quote-author');
+    if (qt) qt.textContent = `"${nq.q}"`;
+    if (qa) qa.textContent = `— ${nq.a}`;
   });
 
-  // ── Goal edit popover ────────────────────────────────────────────
-  document.getElementById('goal-edit-btn').addEventListener('click', () => openGoalEditor());
+  document.getElementById('goal-edit-btn')?.addEventListener('click', () => {
+    const target = prompt('Set daily card target (e.g. 15):', goal.target);
+    if (target) {
+      DailyGoal.save(goal.type, target);
+      renderDashboard(container);
+    }
+  });
 
-  // ── Load stats & courses in parallel ────────────────────────────
+  // Hydrate Live Backend Data
   try {
-    const [s, courses] = await Promise.all([
-      API.get('/api/stats'),
-      API.get('/api/courses'),
+    const [rawStats, courses, dueCount] = await Promise.all([
+      API.get('/api/stats').catch(() => ({})),
+      API.get('/api/courses').catch(() => []),
+      getDueCount(),
     ]);
 
-    fillMetric('courses',   s.courses || 0);
-    fillMetric('videos',    s.videos  || 0);
-    fillMetric('questions', s.total_questions || 0);
-    fillMetric('due',       s.due_questions   || 0);
-    fillMetric('accuracy',  s.accuracy || 0, '%');
+    const s = mapStats(rawStats);
+    const totalCourses = s.courses || courses.length || 0;
+    const totalVideos = s.videos || courses.reduce((a, c) => a + (c.videos?.length || c.video_count || 0), 0);
+    const totalQuestions = s.questions || courses.reduce((a, c) => a + (c.question_count || 0), 0);
+    const finalDue = dueCount || s.due || 0;
 
-    const rc = document.getElementById('recent-courses');
-    if (!rc) return;
-    if (!courses.length) {
-      rc.innerHTML = `<div class="card card-sm" style="color:var(--text-2);text-align:center;padding:28px">
-        No content yet — <span class="link" style="cursor:pointer" id="add-first">add your first video!</span>
-      </div>`;
-      document.getElementById('add-first')?.addEventListener('click', () => navigate('add-video'));
-    } else {
-      rc.innerHTML = `<div style="display:flex;flex-direction:column;gap:8px">
-        ${courses.slice(0, 4).map((c, i) => `
-          <div class="card card-sm" style="display:flex;justify-content:space-between;align-items:center;animation-delay:${i*60}ms;cursor:pointer" data-course="${c.id}">
-            <div>
-              <span style="font-weight:700;font-size:.9rem">${c.name}</span>
-              <span style="margin-left:10px;font-size:.75rem;color:var(--text-3)">${c.video_count} video${c.video_count!==1?'s':''}</span>
-            </div>
-            <div style="display:flex;gap:8px;align-items:center">
-              <span class="badge badge-teal">${c.question_count} Qs</span>
-              <span style="color:var(--text-3);font-size:.8rem">→</span>
-            </div>
-          </div>`).join('')}
-      </div>`;
-      document.querySelectorAll('[data-course]').forEach(el => {
-        el.addEventListener('click', () => navigate('browse'));
-      });
+    animateCount(document.getElementById('dash-due-count'), finalDue);
+    animateCount(document.getElementById('dash-questions-num'), totalQuestions);
+    animateCount(document.getElementById('dash-courses-num'), totalCourses);
+    animateCount(document.getElementById('dash-videos-num'), totalVideos);
+
+    // Populate Activity Bars
+    const sessions = s.recent_sessions || [];
+    const barsWrap = document.getElementById('dash-activity-bars-wrap');
+    const maxLbl = document.getElementById('dash-act-max-lbl');
+
+    if (barsWrap) {
+      if (!sessions.length || sessions.every(x => (x.answered || 0) === 0)) {
+        barsWrap.innerHTML = `
+          <div style="padding:28px 16px;text-align:center;color:var(--faint);font-size:0.85rem">
+            No quiz sessions recorded yet — complete your first quiz or daily review to chart activity.
+          </div>`;
+      } else {
+        const maxVal = Math.max(...sessions.map(x => x.answered || 0), 10);
+        if (maxLbl) maxLbl.textContent = `PEAK: ${maxVal} CARDS`;
+        const recent7 = sessions.slice(0, 7).reverse();
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        barsWrap.innerHTML = `
+          <div class="activity-bars" id="dash-activity-bars">
+            ${recent7.map((sess, i) => {
+              const heightPct = Math.max(10, Math.round(((sess.answered || 0) / maxVal) * 100));
+              const isToday = sess.date === todayStr || i === recent7.length - 1;
+              const dayLabel = sess.date ? new Date(sess.date).toLocaleDateString('en-US', { weekday: 'narrow' }) : '•';
+              return `
+                <div class="act-bar-col" title="${sess.date}: ${sess.answered} cards">
+                  <div class="act-bar-fill ${isToday ? 'today' : ''}" style="height:${heightPct}%"></div>
+                  <span class="act-bar-lbl" style="${isToday ? 'color:var(--amber);font-weight:700' : ''}">${dayLabel}</span>
+                </div>`;
+            }).join('')}
+          </div>`;
+      }
     }
-  } catch { /**/ }
+  } catch (e) {
+    console.error('Dashboard data load error:', e);
+  }
 }
-
-// ── Goal editor popover ────────────────────────────────────────────
-function openGoalEditor() {
-  const card = document.getElementById('goal-ring-card');
-  if (!card || card.querySelector('.goal-settings-popover')) return;
-
-  const goal = DailyGoal.get();
-
-  const pop = document.createElement('div');
-  pop.className = 'goal-settings-popover';
-  pop.innerHTML = `
-    <h4>🎯 Set Daily Goal</h4>
-    <div class="goal-type-row">
-      <button class="goal-type-btn${goal.type === 'cards' ? ' active' : ''}" data-type="cards">🃏 Cards</button>
-      <button class="goal-type-btn${goal.type === 'minutes' ? ' active' : ''}" data-type="minutes">⏱ Minutes</button>
-    </div>
-    <div class="goal-amount-row">
-      <label>Target:</label>
-      <input class="goal-amount-input" id="goal-amount-inp" type="number"
-             min="1" max="999" value="${goal.target}" />
-      <span style="font-size:.72rem;color:var(--text-3)" id="goal-unit-lbl">${goal.type === 'minutes' ? 'min' : 'cards'}</span>
-    </div>
-    <button class="goal-save-btn" id="goal-save-btn">✓ Save Goal</button>
-    <button class="goal-cancel-btn" id="goal-cancel-btn">Cancel</button>
-  `;
-  card.appendChild(pop);
-
-  // Type toggle
-  let selectedType = goal.type;
-  pop.querySelectorAll('.goal-type-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      pop.querySelectorAll('.goal-type-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      selectedType = btn.dataset.type;
-      const lbl = document.getElementById('goal-unit-lbl');
-      if (lbl) lbl.textContent = selectedType === 'minutes' ? 'min' : 'cards';
-    });
-  });
-
-  document.getElementById('goal-save-btn').addEventListener('click', () => {
-    const amt = document.getElementById('goal-amount-inp').value;
-    DailyGoal.save(selectedType, amt);
-    pop.remove();
-    // Re-render dashboard to reflect new goal
-    const container = document.getElementById('page-content');
-    if (container) renderDashboard(container);
-  });
-
-  document.getElementById('goal-cancel-btn').addEventListener('click', () => pop.remove());
-}
-
-// ── Goal complete celebration (called externally if needed) ────────
-export function celebrateGoalComplete() {
-  const card = document.getElementById('goal-ring-card');
-  if (!card) return;
-  card.classList.add('just-completed');
-  card.addEventListener('animationend', () => card.classList.remove('just-completed'), { once: true });
-  launchConfetti();
-}
-
-function metric(icon, id, label, color, suffix = '') {
-  return `
-    <div class="metric-card card-tilt">
-      <div class="metric-icon">${icon}</div>
-      <div class="metric-val ${color}" id="m-${id}">—</div>
-      <div class="metric-label">${label}</div>
-    </div>`;
-}
-
-function fillMetric(id, val, suffix = '') {
-  const el = document.getElementById(`m-${id}`);
-  if (el) animateCount(el, val, 800, suffix);
-}
-
-function greeting() {
-  const h = new Date().getHours();
-  if (h < 12) return 'Good morning! ☀️';
-  if (h < 17) return 'Good afternoon! 🌤️';
-  return 'Good evening! 🌙';
-}
-

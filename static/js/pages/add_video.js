@@ -1,198 +1,314 @@
-import { API, showToast } from '../app.js';
+import { API, showToast, icon, ytId, ytThumb, launchConfetti, navigate, skel } from '../app.js';
 
 export async function renderAddVideo(container) {
   container.innerHTML = `
-    <div class="page-header enter">
-      <div class="page-icon-wrap">📚</div>
-      <div class="page-title-text">
-        <h1>Add New Video</h1>
-        <p class="page-subtitle">Paste a YouTube link — AI generates summary, concepts & quiz in one shot</p>
-      </div>
+    <!-- Page Header -->
+    <div style="margin-bottom:28px">
+      <div class="page-title">Add Video <em>Lecture</em></div>
+      <p class="page-subtitle">Paste a YouTube link or transcript — Gemini AI will generate summary, concepts, takeaways, and 20 practice cards.</p>
     </div>
 
-    <div class="add-video-grid enter" style="animation-delay:80ms">
+    <!-- 2-Column Grid -->
+    <div class="add-video-grid">
 
-      <!-- Form card -->
-      <div class="card">
-        <div class="form-group">
-          <label class="form-label" for="av-url">YouTube URL</label>
-          <div class="search-bar">
-            <span class="search-icon">🔗</span>
-            <input id="av-url" class="search-input" type="url" placeholder="https://www.youtube.com/watch?v=…" />
-          </div>
-        </div>
-
-        <div class="add-video-form-row">
+      <!-- Main Form Column -->
+      <div style="display:flex;flex-direction:column;gap:20px">
+        
+        <div class="card" style="padding:28px">
+          <!-- YouTube URL Field -->
           <div class="form-group">
-            <label class="form-label" for="av-title">Video Title</label>
-            <input id="av-title" class="form-input" type="text" placeholder="Introduction to…" />
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <label class="form-label" for="av-url" style="margin-bottom:0">YouTube Lecture URL</label>
+              <button id="av-paste-btn" class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:0.75rem">
+                ${icon('copy', '', 'width:12px;height:12px')}
+                <span>Paste Link</span>
+              </button>
+            </div>
+            <div style="position:relative;display:flex;align-items:center">
+              <input id="av-url" class="form-input input" type="url" 
+                     placeholder="https://www.youtube.com/watch?v=..." 
+                     style="padding-left:42px;font-size:0.95rem" />
+              <div style="position:absolute;left:14px;color:var(--faint);pointer-events:none">
+                ${icon('video', '', 'width:18px;height:18px')}
+              </div>
+            </div>
+
+            <!-- Real-time Thumbnail Preview -->
+            <div id="av-thumb-preview" class="thumb-preview-card" style="display:none">
+              <img id="av-thumb-img" class="thumb-preview-img thumb" alt="Video Preview" />
+              <div style="position:absolute;bottom:10px;left:10px;background:rgba(0,0,0,0.8);border-radius:var(--r-sm);padding:4px 8px;font-family:'JetBrains Mono', monospace;font-size:0.7rem;color:#fff" id="av-vid-id-lbl">
+                YouTube ID Detected
+              </div>
+            </div>
           </div>
-          <div class="form-group">
-            <label class="form-label" for="av-course">Course / Topic</label>
-            <input id="av-course" class="form-input" type="text" placeholder="Deep Learning, Biology…" />
+
+          <!-- Video Title & Course Row -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="form-group">
+              <label class="form-label" for="av-title">Lecture Title</label>
+              <input id="av-title" class="form-input input" type="text" placeholder="e.g. Transformers & Self-Attention" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="av-course">Course / Subject</label>
+              <input id="av-course" list="existing-courses-dl" class="form-input input" type="text" placeholder="e.g. Deep Learning" />
+              <datalist id="existing-courses-dl"></datalist>
+            </div>
+          </div>
+
+          <!-- Manual Transcript Accordion -->
+          <div class="card card-xs" style="background:var(--sf2);border:1px solid var(--line);margin-bottom:20px;padding:0;overflow:hidden">
+            <div id="manual-acc-hdr" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;cursor:pointer">
+              <div style="display:flex;align-items:center;gap:8px">
+                ${icon('edit-3', '', 'width:14px;height:14px;color:var(--teal)')}
+                <span style="font-weight:500;font-size:0.82rem;color:var(--muted)">Paste Manual Transcript (Optional)</span>
+              </div>
+              <span id="manual-acc-chevron" style="color:var(--faint);transition:transform 0.2s">${icon('chevron-down', '', 'width:14px;height:14px')}</span>
+            </div>
+            <div id="manual-acc-body" style="display:none;padding:16px;border-top:1px solid var(--line)">
+              <p style="font-size:0.78rem;color:var(--muted);margin-bottom:8px">Use for videos without automated captions or custom audio recordings.</p>
+              <textarea id="av-manual" class="form-textarea input" placeholder="Paste transcript text here..."></textarea>
+            </div>
+          </div>
+
+          <!-- Submit Button -->
+          <button class="btn btn-primary btn-full btn-lg" id="av-submit">
+            <span class="spin" id="av-btn-spin" style="display:none"></span>
+            <span id="av-btn-label">Process Lecture with AI</span>
+          </button>
+        </div>
+
+        <!-- Terminal Window Output -->
+        <div id="av-terminal-wrap" style="display:none">
+          <div class="terminal-window">
+            <div class="terminal-hdr">
+              <span class="term-dot red"></span>
+              <span class="term-dot yellow"></span>
+              <span class="term-dot green"></span>
+              <span class="mono-meta" style="margin-left:8px;font-size:0.7rem">gemini-flash · transcript processor</span>
+            </div>
+            <div class="terminal-body" id="av-terminal-body">
+              <div class="term-line" id="av-cursor-line">
+                <span style="color:var(--teal)">$</span>
+                <span class="term-cursor"></span>
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- Manual transcript accordion -->
-        <div class="accordion" id="manual-acc">
-          <div class="accordion-hdr" id="manual-acc-hdr">
-            <span>📝 Paste transcript manually <span style="color:var(--text-3);font-weight:400;font-size:.8rem">(optional)</span></span>
-            <span class="accordion-arrow">▾</span>
-          </div>
-          <div class="accordion-body">
-            <p style="font-size:.8rem;color:var(--text-3);margin-bottom:10px">Use this if YouTube auto-captions aren't available for the video.</p>
-            <textarea id="av-manual" class="form-textarea" style="min-height:130px" placeholder="Paste full transcript here…"></textarea>
-          </div>
-        </div>
-
-        <button class="btn btn-teal btn-full btn-lg" id="av-submit" style="margin-top:22px">
-          <span class="btn-text">✨ Process Video with AI</span>
-        </button>
-
-        <div id="av-status" style="margin-top:16px"></div>
+        <div id="av-result" style="display:none"></div>
       </div>
 
-      <!-- Info sidebar -->
-      <div style="display:flex;flex-direction:column;gap:14px">
-        <div class="card card-sm" style="border-color:var(--border-t)">
-          <div style="font-size:.8rem;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">What AI generates</div>
-          <div style="display:flex;flex-direction:column;gap:10px">
-            ${infoRow('📝','Detailed Summary','4-6 paragraph breakdown of the content')}
-            ${infoRow('💡','16 Key Concepts','Core definitions for the most important terms')}
-            ${infoRow('⚡','20 Takeaways','Actionable, specific bullet-point lessons')}
-            ${infoRow('🧠','Quiz Questions','20 MCQs for practice & staggered review')}
+      <!-- Right Rail: Stepper Overview & Recents -->
+      <div style="display:flex;flex-direction:column;gap:18px">
+
+        <!-- Stepper Breakdown -->
+        <div class="card card-sm">
+          <div class="card-title" style="margin-bottom:14px">Processing Pipeline</div>
+          <div class="stepper-rail">
+            <div class="stepper-item">
+              <div class="stepper-num">1</div>
+              <div>
+                <div style="font-weight:600;font-size:0.85rem">Transcript Ingestion</div>
+                <div style="font-size:0.75rem;color:var(--muted)">Extract clean English captions</div>
+              </div>
+            </div>
+            <div class="stepper-item">
+              <div class="stepper-num">2</div>
+              <div>
+                <div style="font-weight:600;font-size:0.85rem">Structured Synthesis</div>
+                <div style="font-size:0.75rem;color:var(--muted)">Summary, 16 concepts &amp; 20 takeaways</div>
+              </div>
+            </div>
+            <div class="stepper-item">
+              <div class="stepper-num">3</div>
+              <div>
+                <div style="font-weight:600;font-size:0.85rem">Quiz Calibration</div>
+                <div style="font-size:0.75rem;color:var(--muted)">20 active recall practice questions</div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div class="card card-sm" style="border-color:var(--border-a)">
-          <div style="font-size:.8rem;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Tips</div>
-          <ul class="bullet-list">
-            <li>Works best with educational/tutorial videos</li>
-            <li>English transcripts give best results</li>
-            <li>Use manual transcript for non-English content</li>
-          </ul>
+        <!-- Recently Added Lectures -->
+        <div class="card card-sm" id="av-recents-card">
+          <div class="card-title" style="margin-bottom:12px">Recently Added</div>
+          <div id="av-recents-list" style="display:flex;flex-direction:column;gap:10px">
+            ${skel('100%', 36)}
+            ${skel('100%', 36)}
+          </div>
         </div>
+
       </div>
     </div>
-
-    <!-- Result -->
-    <div id="av-result" style="max-width:660px;margin-top:24px;display:none" class="enter"></div>
   `;
 
-  // Accordion
-  document.getElementById('manual-acc-hdr').addEventListener('click', () => {
-    document.getElementById('manual-acc').classList.toggle('open');
+  // Populate Existing Courses
+  try {
+    const courses = await API.get('/api/courses');
+    const dl = document.getElementById('existing-courses-dl');
+    if (dl) dl.innerHTML = courses.map(c => `<option value="${c.name}">`).join('');
+
+    const recentsList = document.getElementById('av-recents-list');
+    if (recentsList) {
+      const allVideos = [];
+      courses.forEach(c => {
+        (c.videos || []).forEach(v => allVideos.push({ ...v, courseName: c.name }));
+      });
+      const top3 = allVideos.slice(0, 3);
+      if (!top3.length) {
+        recentsList.innerHTML = `<div style="font-size:0.8rem;color:var(--faint)">No lectures processed yet.</div>`;
+      } else {
+        recentsList.innerHTML = top3.map(v => `
+          <div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="window.navigate('browse')">
+            <div class="icon-chip teal" style="width:28px;height:28px">${icon('video', '', 'width:14px;height:14px')}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:0.82rem;font-weight:600;color:var(--text);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${v.title}</div>
+              <div class="mono-meta" style="font-size:0.65rem">${v.courseName}</div>
+            </div>
+          </div>`).join('');
+      }
+    }
+  } catch { /**/ }
+
+  // Live Thumbnail Detection
+  const urlInput = document.getElementById('av-url');
+  const thumbWrap = document.getElementById('av-thumb-preview');
+  const thumbImg = document.getElementById('av-thumb-img');
+  const vidIdLbl = document.getElementById('av-vid-id-lbl');
+
+  function checkUrlForThumb() {
+    const val = urlInput.value.trim();
+    const id = ytId(val);
+    if (id) {
+      thumbImg.src = ytThumb(id);
+      vidIdLbl.textContent = `YouTube detected · ${id}`;
+      thumbWrap.style.display = 'flex';
+    } else {
+      thumbWrap.style.display = 'none';
+    }
+  }
+
+  urlInput.addEventListener('input', checkUrlForThumb);
+  urlInput.addEventListener('change', checkUrlForThumb);
+
+  // Paste Link Button
+  document.getElementById('av-paste-btn')?.addEventListener('click', async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        urlInput.value = text;
+        checkUrlForThumb();
+        showToast('Pasted YouTube link from clipboard', 'info');
+      }
+    } catch {
+      urlInput.focus();
+    }
   });
 
-  // Submit
+  // Manual Transcript Accordion Toggle
+  const accHdr = document.getElementById('manual-acc-hdr');
+  const accBody = document.getElementById('manual-acc-body');
+  const accChev = document.getElementById('manual-acc-chevron');
+  accHdr.addEventListener('click', () => {
+    const isHidden = accBody.style.display === 'none';
+    accBody.style.display = isHidden ? 'block' : 'none';
+    accChev.style.transform = isHidden ? 'rotate(180deg)' : '';
+  });
+
+  // Submit Handler
   document.getElementById('av-submit').addEventListener('click', async () => {
-    const url    = document.getElementById('av-url').value.trim();
-    const title  = document.getElementById('av-title').value.trim();
+    const url = urlInput.value.trim();
+    const title = document.getElementById('av-title').value.trim();
     const course = document.getElementById('av-course').value.trim();
     const manual = document.getElementById('av-manual').value.trim();
 
-    if (!title)            { showToast('Enter a video title', 'error'); return; }
-    if (!course)           { showToast('Enter a course/topic name', 'error'); return; }
-    if (!url && !manual)   { showToast('Provide a YouTube URL or paste a transcript', 'error'); return; }
+    if (!title) { showToast('Please enter a lecture title', 'error'); return; }
+    if (!course) { showToast('Please enter a course name', 'error'); return; }
+    if (!url && !manual) { showToast('Provide a YouTube URL or paste a transcript', 'error'); return; }
 
-    const btn    = document.getElementById('av-submit');
-    const status = document.getElementById('av-status');
+    const btn = document.getElementById('av-submit');
+    const btnSpin = document.getElementById('av-btn-spin');
+    const btnLabel = document.getElementById('av-btn-label');
+    const termWrap = document.getElementById('av-terminal-wrap');
+    const termBody = document.getElementById('av-terminal-body');
+    const resultBox = document.getElementById('av-result');
 
-    btn.classList.add('btn-loading');
+    btn.classList.add('loading');
     btn.disabled = true;
+    if (btnSpin) btnSpin.style.display = 'inline-block';
+    if (btnLabel) btnLabel.textContent = 'Processing Video…';
+    resultBox.style.display = 'none';
+    termWrap.style.display = 'block';
 
-    // Terminal visual
-    const STEPS = [
-      { text: 'Fetching video metadata…',        cls: '' },
-      { text: 'Extracting YouTube transcript…',   cls: '' },
-      { text: 'Sending to AI pipeline…',          cls: 'warn' },
-      { text: 'Generating summary (4-6 paragraphs)…', cls: '' },
-      { text: 'Extracting 16 key concepts…',      cls: '' },
-      { text: 'Building 20 quiz questions…',      cls: '' },
-      { text: 'Compiling 20 takeaways…',          cls: '' },
-      { text: 'Saving to database…',              cls: '' },
-    ];
-
-    status.innerHTML = `
-      <div style="margin-bottom:8px;font-size:.78rem;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.07em">Processing…</div>
-      <div class="terminal-panel" id="av-terminal">
-        <span class="terminal-cursor" id="av-cursor"></span>
+    termBody.innerHTML = `
+      <div class="term-line" id="av-cursor-line">
+        <span style="color:var(--teal)">$</span>
+        <span class="term-cursor"></span>
       </div>`;
 
-    let stepIdx = 0;
-    const terminal = document.getElementById('av-terminal');
-    const cursor   = document.getElementById('av-cursor');
+    const STEPS = [
+      'Extracting clean English transcript…',
+      'Initializing Gemini AI analysis engine…',
+      'Synthesizing structured lecture summary…',
+      'Extracting 16 core concepts & definitions…',
+      'Calibrating 20 practice quiz questions…',
+      'Writing course and card entities to database…',
+    ];
 
-    function appendLine(text, cls = '') {
+    let stepIdx = 0;
+    function appendTerminalLine(text, type = 'teal') {
+      const cursorLine = document.getElementById('av-cursor-line');
       const line = document.createElement('div');
-      line.className = 'terminal-line';
-      line.style.animationDelay = '0ms';
-      line.innerHTML = `<span class="term-prompt">$</span><span class="term-text ${cls}">${text}</span>`;
-      terminal.insertBefore(line, cursor);
-      terminal.scrollTop = terminal.scrollHeight;
+      line.className = `term-line ${type}`;
+      line.innerHTML = `<span>✓</span> <span>${text}</span>`;
+      termBody.insertBefore(line, cursorLine);
+      termBody.scrollTop = termBody.scrollHeight;
     }
 
-    const progInt = setInterval(() => {
+    const timer = setInterval(() => {
       if (stepIdx < STEPS.length) {
-        const s = STEPS[stepIdx++];
-        appendLine(s.text, s.cls);
+        appendTerminalLine(STEPS[stepIdx++]);
       }
     }, 1800);
 
     try {
-      const res = await API.post('/api/add-video', { url, title, course, manual_transcript: manual });
-      clearInterval(progInt);
-      // Show "done" in terminal before clearing
-      if (document.getElementById('av-terminal')) {
-        appendLine('Done. Saving to database… ✓', 'ok');
-      }
+      const res = await API.post('/api/add-video', {
+        url, title, course, manual_transcript: manual
+      });
+      clearInterval(timer);
+      appendTerminalLine('Video processed successfully. All cards saved.', 'done');
 
-      setTimeout(() => {
-        status.innerHTML = '';
-        const result = document.getElementById('av-result');
-        result.style.display = '';
-        result.innerHTML = `
-          <div class="card" style="border-color:rgba(132,204,22,0.3)">
-            <div style="display:flex;gap:14px;align-items:flex-start">
-              <div style="font-size:2.4rem;line-height:1">✓</div>
-              <div>
-                <div style="font-family:'Instrument Serif',serif;font-size:1.4rem;font-weight:400;color:var(--teal);margin-bottom:6px">Video processed.</div>
-                <div style="font-weight:600;color:var(--text)">${res.title}</div>
-                <div style="font-size:.82rem;color:var(--text-2);margin-top:4px">Summary, concepts &amp; quiz ready. Open <strong>Browse Content</strong> to explore.</div>
-              </div>
-            </div>
-          </div>`;
-        result.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      launchConfetti();
+      showToast(`"${res.title}" added to library`, 'success');
 
-        // Clear form
-        ['av-url','av-title','av-course','av-manual'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-        showToast(`"${res.title}" added!`, 'success');
-      }, 500);
+      resultBox.style.display = 'block';
+      resultBox.innerHTML = `
+        <div class="card" style="border-color:rgba(52,211,153,0.3);display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap">
+          <div>
+            <div style="font-weight:600;font-size:1rem;color:var(--text)">${res.title}</div>
+            <div style="font-size:0.8rem;color:var(--muted);margin-top:2px">Ready: Summary, 16 Concepts, 20 Takeaways, and Quiz.</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="window.navigate('browse')">
+            <span>Open in Library</span>
+            ${icon('arrow-right', '', 'width:14px;height:14px')}
+          </button>
+        </div>`;
+
+      urlInput.value = '';
+      document.getElementById('av-title').value = '';
+      document.getElementById('av-course').value = '';
+      document.getElementById('av-manual').value = '';
+      thumbWrap.style.display = 'none';
+
     } catch (e) {
-      clearInterval(progInt);
-      if (document.getElementById('av-terminal')) {
-        appendLine(`Error: ${e.message}`, 'err');
-      } else {
-        status.innerHTML = `
-          <div class="card card-sm" style="border-color:rgba(255,107,107,0.35);color:var(--coral)">
-            ❌ ${e.message}
-          </div>`;
-      }
+      clearInterval(timer);
+      appendTerminalLine(`Error: ${e.message}`, 'err');
       showToast(e.message, 'error');
     } finally {
-      btn.classList.remove('btn-loading');
+      btn.classList.remove('loading');
       btn.disabled = false;
+      if (btnSpin) btnSpin.style.display = 'none';
+      if (btnLabel) btnLabel.textContent = 'Process Lecture with AI';
     }
   });
-}
-
-function infoRow(icon, title, desc) {
-  return `
-    <div style="display:flex;gap:10px;align-items:flex-start">
-      <span style="font-size:1.1rem;flex-shrink:0;margin-top:1px">${icon}</span>
-      <div>
-        <div style="font-size:.82rem;font-weight:700;color:var(--text)">${title}</div>
-        <div style="font-size:.76rem;color:var(--text-2);margin-top:2px">${desc}</div>
-      </div>
-    </div>`;
 }

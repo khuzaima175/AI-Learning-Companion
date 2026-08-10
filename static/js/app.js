@@ -1,733 +1,524 @@
-/**
- * AI Learning Companion – App v2
- * Router · API client · Toast · Confetti · Streak · Global state
- */
-
+import { getUser, getToken, getSession, signOut } from './auth.js';
 import { renderDashboard } from './pages/dashboard.js';
-import { renderAddVideo } from './pages/add_video.js';
-import { renderBrowse } from './pages/browse.js';
-import { renderFlashcards } from './pages/flashcards.js';
-import { renderQuiz } from './pages/quiz.js';
-import { renderReview } from './pages/review.js';
-import { renderStats } from './pages/stats.js';
-import { renderManage } from './pages/manage.js';
-import { getUser, getToken, getSession, onAuthChange, signOut } from './auth.js';
-import { renderLogin } from './pages/login.js';
+import { renderBrowse }    from './pages/browse.js';
+import { renderAddVideo }  from './pages/add_video.js';
+import { renderFlashcards }from './pages/flashcards.js';
+import { renderQuiz }      from './pages/quiz.js';
+import { renderReview }    from './pages/review.js';
+import { renderStats }     from './pages/stats.js';
+import { renderManage }    from './pages/manage.js';
+import { renderLogin }     from './pages/login.js';
 
-// ══════════════════════════════════════════════════════════════════
-// Two-layer API cache:
-//   L1 = in-memory Map        (instant, same page session)
-//   L2 = localStorage         (persists across page refreshes)
-// Strategy: stale-while-revalidate
-//   → Return cached data immediately (even if slightly old)
-//   → Simultaneously fetch fresh data in background
-//   → Update UI when fresh data arrives (if different)
-// ══════════════════════════════════════════════════════════════════
-const _memCache = new Map();
-const LS_PREFIX = 'alc_cache_';
-
-// TTL config (ms) — L1 strict TTL, L2 soft TTL (stale ok, revalidate)
-const CACHE_TTL = {
-  '/api/courses': { l1: 20_000, l2: 5 * 60_000 },
-  '/api/stats': { l1: 15_000, l2: 3 * 60_000 },
-  '/api/review/due': { l1: 10_000, l2: 2 * 60_000 },
-  '/api/quiz/questions': { l1: 10_000, l2: 2 * 60_000 },
-  '/api/videos/': { l1: 60_000, l2: 10 * 60_000 },
-  'default': { l1: 10_000, l2: 60_000 },
+// Route Definitions
+const ROUTES = {
+  'dashboard':  renderDashboard,
+  'browse':     renderBrowse,
+  'add-video':  renderAddVideo,
+  'flashcards': renderFlashcards,
+  'quiz':       renderQuiz,
+  'review':     renderReview,
+  'stats':      renderStats,
+  'manage':     renderManage,
+  'login':      renderLogin,
 };
 
-function _getTtl(path) {
-  for (const [prefix, ttl] of Object.entries(CACHE_TTL)) {
-    if (prefix !== 'default' && path.startsWith(prefix)) return ttl;
+let _lastDueFetch = 0;
+let _cachedDue = null;
+
+// Progress Route Bar Simulation
+export function startRouteBar() {
+  const bar = document.getElementById('routebar');
+  if (!bar) return;
+  bar.style.opacity = '1';
+  bar.style.width = '35%';
+  setTimeout(() => { if (bar.style.opacity === '1') bar.style.width = '70%'; }, 120);
+}
+
+export function finishRouteBar() {
+  const bar = document.getElementById('routebar');
+  if (!bar) return;
+  bar.style.width = '100%';
+  setTimeout(() => {
+    bar.style.opacity = '0';
+    setTimeout(() => { bar.style.width = '0'; }, 300);
+  }, 180);
+}
+
+// Router
+export async function navigate(page) {
+  const user = getUser();
+  const target = user ? (ROUTES[page] ? page : 'dashboard') : 'login';
+
+  startRouteBar();
+
+  window.location.hash = target;
+  updateNav(target);
+
+  const container = document.getElementById('page-content');
+  if (!container) {
+    finishRouteBar();
+    return;
   }
-  return CACHE_TTL['default'];
-}
 
-function _l1Get(path) {
-  const e = _memCache.get(path);
-  if (!e || Date.now() > e.ex) { _memCache.delete(path); return null; }
-  return e.data;
-}
-function _l1Set(path, data, ttlMs) {
-  _memCache.set(path, { data, ex: Date.now() + ttlMs });
-}
+  // Smooth Route Transition (exit fade, render, entry rise)
+  container.classList.add('leaving');
+  await new Promise(r => setTimeout(r, 120));
 
-function _l2Get(path) {
+  container.innerHTML = '';
+  container.className = 'page';
+
   try {
-    const raw = localStorage.getItem(LS_PREFIX + btoa(path));
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch { return null; }
-}
-function _l2Set(path, data, ttlMs) {
-  try {
-    localStorage.setItem(LS_PREFIX + btoa(path), JSON.stringify({
-      data, ex: Date.now() + ttlMs, fresh: Date.now(),
-    }));
-  } catch { /* storage full — ignore */ }
-}
-
-function _cacheBust(prefix) {
-  for (const key of _memCache.keys()) {
-    if (prefix === '*' || key.startsWith(prefix)) _memCache.delete(key);
+    await ROUTES[target](container);
+    initRevealAnimations(container);
+    initCardSpotlights(container);
+    initImageFadeIns(container);
+  } catch (err) {
+    console.error(`Error rendering page "${target}":`, err);
+    container.innerHTML = `
+      <div class="card" style="text-align:center;padding:48px 24px;border-color:rgba(251,113,133,0.3)">
+        <div class="icon-chip coral" style="width:48px;height:48px;margin:0 auto 16px">
+          ${icon('help-circle', '', 'width:24px;height:24px')}
+        </div>
+        <h3 style="font-size:1.8rem;color:var(--coral)">Something went wrong</h3>
+        <p style="color:var(--muted);margin-top:8px;font-size:0.9rem">${err.message || 'Failed to render view'}</p>
+        <button class="btn btn-ghost btn-sm" onclick="window.navigate('dashboard')" style="margin-top:20px">
+          ${icon('arrow-left', '', 'width:14px;height:14px')}
+          <span>Back to Dashboard</span>
+        </button>
+      </div>`;
+  } finally {
+    finishRouteBar();
+    updateReviewBadge();
   }
-  if (prefix === '*') {
-    Object.keys(localStorage).filter(k => k.startsWith(LS_PREFIX))
-      .forEach(k => localStorage.removeItem(k));
+}
+
+window.navigate = navigate;
+
+// Update active sidebar state
+function updateNav(page) {
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.page === page);
+  });
+
+  const sidebar = document.getElementById('sidebar');
+  const menuBtn = document.getElementById('mobile-menu-btn');
+  const overlay = document.getElementById('sidebar-overlay');
+  const mainContent = document.getElementById('main-content');
+  const isAuth = page !== 'login';
+  
+  if (sidebar) sidebar.style.display = isAuth ? 'flex' : 'none';
+  if (menuBtn) menuBtn.style.display = isAuth && window.innerWidth <= 860 ? 'flex' : 'none';
+  if (overlay && !isAuth) overlay.classList.remove('active');
+  if (mainContent) mainContent.style.marginLeft = isAuth && window.innerWidth > 860 ? 'var(--sidebar-w)' : '0';
+
+  if (window.innerWidth <= 860 && sidebar) {
+    sidebar.classList.remove('open');
+    if (overlay) overlay.classList.remove('active');
+    updateMenuIcon(false);
+  }
+}
+
+// Single Source of Truth for Due Count (cached for 15s)
+export async function getDueCount() {
+  const now = Date.now();
+  if (_cachedDue !== null && (now - _lastDueFetch) < 15000) {
+    return _cachedDue;
+  }
+  try {
+    const data = await API.get('/api/review/due?limit=1');
+    _cachedDue = data.due_count ?? (data.questions ? data.questions.length : 0);
+    _lastDueFetch = now;
+    return _cachedDue;
+  } catch {
+    return 0;
+  }
+}
+
+export function invalidateDueCount() {
+  _cachedDue = null;
+  _lastDueFetch = 0;
+}
+
+// Update review badge in sidebar
+export async function updateReviewBadge() {
+  const badge = document.getElementById('review-badge');
+  if (!badge) return;
+
+  try {
+    const due = await getDueCount();
+    if (due > 0) {
+      badge.textContent = `${due} due`;
+      badge.style.display = 'inline-flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  } catch {
+    badge.style.display = 'none';
+  }
+}
+
+// Defensive mapping of /api/stats response to ensure no zeros/placeholders
+export function mapStats(s) {
+  if (!s || typeof s !== 'object') s = {};
+  const totalQ = s.total_questions || s.questions_count || s.total_cards || s.questions || 0;
+  const totalC = s.total_courses || s.courses_count || s.courses || 0;
+  const totalV = s.total_videos || s.videos_count || s.videos || 0;
+  const dueVal = s.due_count ?? s.due ?? s.due_cards ?? 0;
+  const accVal = Math.round(s.accuracy || s.accuracy_pct || s.recall_rate || 0);
+
+  return {
+    courses: totalC,
+    videos: totalV,
+    questions: totalQ,
+    due: dueVal,
+    accuracy: accVal,
+    recent_sessions: Array.isArray(s.recent_sessions) ? s.recent_sessions : [],
+    raw: s,
+  };
+}
+
+// Scroll Reveal Observer with Immediate Fallback
+export function initRevealAnimations(scope = document) {
+  const elements = scope.querySelectorAll('.rev');
+  if (!elements.length) return;
+
+  if ('IntersectionObserver' in window) {
+    const observer = new IntersectionObserver((entries, obs) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('in');
+          obs.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.01 });
+
+    elements.forEach((el, i) => {
+      el.style.setProperty('--i', i);
+      observer.observe(el);
+      setTimeout(() => el.classList.add('in'), 150 + i * 40);
+    });
   } else {
-    try {
-      const encoded = btoa(prefix);
-      Object.keys(localStorage)
-        .filter(k => k.startsWith(LS_PREFIX) && k.includes(encoded.slice(0, 10)))
-        .forEach(k => localStorage.removeItem(k));
-    } catch { /**/ }
+    elements.forEach(el => el.classList.add('in'));
   }
 }
 
-const _swr_listeners = new Map();
-export function onFreshData(path, cb) { _swr_listeners.set(path, cb); }
-
-// ══════════════════════════════════════════════════════════════════
-// API Client
-// ══════════════════════════════════════════════════════════════════
-export const API = {
-  async get(path, { revalidate = true } = {}) {
-    const ttl = _getTtl(path);
-    const token = await getToken();
-    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-
-    const l1 = _l1Get(path);
-    if (l1 !== null) return l1;
-
-    const l2 = _l2Get(path);
-    if (l2 !== null) {
-      _l1Set(path, l2.data, ttl.l1);
-      const isStale = Date.now() > l2.ex;
-      if (revalidate && isStale) {
-        fetch(path, { headers }).then(async r => {
-          if (!r.ok) {
-            if (r.status === 401) signOut();
-            return;
-          }
-          const fresh = await r.json();
-          _l1Set(path, fresh, ttl.l1);
-          _l2Set(path, fresh, ttl.l2);
-          const cb = _swr_listeners.get(path);
-          if (cb) cb(fresh);
-        }).catch(() => { });
-      }
-      return l2.data;
-    }
-
-    const r = await fetch(path, { headers });
-    if (!r.ok) {
-      if (r.status === 401) { signOut(); return; }
-      const e = await r.json().catch(() => ({ detail: r.statusText }));
-      throw new Error(e.detail || `HTTP ${r.status}`);
-    }
-    const data = await r.json();
-    _l1Set(path, data, ttl.l1);
-    _l2Set(path, data, ttl.l2);
-    return data;
-  },
-
-  async post(path, body) {
-    const token = await getToken();
-    const r = await fetch(path, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-      },
-      body: JSON.stringify(body),
+// Cursor Spotlight for Cards
+export function initCardSpotlights(scope = document) {
+  scope.querySelectorAll('.card').forEach(card => {
+    card.addEventListener('mousemove', e => {
+      const rect = card.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      card.style.setProperty('--mx', `${x}px`);
+      card.style.setProperty('--my', `${y}px`);
     });
-    if (!r.ok) {
-      if (r.status === 401) { signOut(); return; }
-      const e = await r.json().catch(() => ({ detail: r.statusText }));
-      throw new Error(e.detail || `HTTP ${r.status}`);
-    }
-    _cacheBust('/api/courses');
-    _cacheBust('/api/stats');
-    _cacheBust('/api/review/due');
-    return r.json();
-  },
-
-  async del(path) {
-    const token = await getToken();
-    const r = await fetch(path, {
-      method: 'DELETE',
-      headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-    });
-    if (!r.ok) {
-      if (r.status === 401) { signOut(); return; }
-      const e = await r.json().catch(() => ({ detail: r.statusText }));
-      throw new Error(e.detail || `HTTP ${r.status}`);
-    }
-    _cacheBust('*');
-    return r.json();
-  },
-};
-
-// ══════════════════════════════════════════════════════════════════
-// Toast
-// ══════════════════════════════════════════════════════════════════
-let _toastTimer;
-export function showToast(msg, type = 'info') {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.className = `toast ${type} show`;
-  clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(() => { el.className = 'toast'; }, 3800);
-}
-
-// ══════════════════════════════════════════════════════════════════
-// Streak (localStorage)
-// ══════════════════════════════════════════════════════════════════
-export const Streak = {
-  key: 'alc_streak',
-  get() {
-    try { return JSON.parse(localStorage.getItem(this.key)) || { count: 0, last: '' }; }
-    catch { return { count: 0, last: '' }; }
-  },
-  bump() {
-    const today = new Date().toLocaleDateString('en-CA'); // local YYYY-MM-DD
-    const s = this.get();
-    if (s.last === today) return s;
-    const yesterday = new Date(Date.now() - 864e5).toLocaleDateString('en-CA');
-    const count = s.last === yesterday ? s.count + 1 : 1;
-    const next = { count, last: today };
-    localStorage.setItem(this.key, JSON.stringify(next));
-    return next;
-  },
-};
-
-// ══════════════════════════════════════════════════════════════════
-// Daily Goal (localStorage)
-// ══════════════════════════════════════════════════════════════════
-export const DailyGoal = {
-  key: 'alc_daily_goal',
-
-  /** Returns the full goal object for today */
-  get() {
-    try {
-      const raw = localStorage.getItem(this.key);
-      const stored = raw ? JSON.parse(raw) : null;
-      const today = new Date().toLocaleDateString('en-CA'); // local YYYY-MM-DD (not UTC)
-      if (!stored) return this._default(today);
-      // Reset daily progress if it's a new day
-      if (stored.date !== today) {
-        const reset = { ...stored, date: today, progress: 0 };
-        localStorage.setItem(this.key, JSON.stringify(reset));
-        return reset;
-      }
-      return stored;
-    } catch {
-      return this._default(new Date().toLocaleDateString('en-CA'));
-    }
-  },
-
-  _default(today) {
-    const d = today ?? new Date().toLocaleDateString('en-CA');
-    return { type: 'cards', target: 15, progress: 0, date: d };
-  },
-
-  /** Save goal settings (type + target) */
-  save(type, target) {
-    const current = this.get();
-    const next = { ...current, type, target: Math.max(1, parseInt(target) || 15) };
-    localStorage.setItem(this.key, JSON.stringify(next));
-    return next;
-  },
-
-  /** Add progress units towards the goal; returns new goal state */
-  addProgress(units = 1) {
-    const g = this.get();
-    g.progress = Math.min(g.progress + units, g.target * 2); // cap at 2× so it doesn't overflow
-    localStorage.setItem(this.key, JSON.stringify(g));
-    return g;
-  },
-
-  /** Percentage complete 0–100 */
-  pct(g) {
-    if (!g) g = this.get();
-    return Math.min(100, Math.round((g.progress / g.target) * 100));
-  },
-
-  isDone(g) {
-    if (!g) g = this.get();
-    return g.progress >= g.target;
-  },
-};
-
-// ══════════════════════════════════════════════════════════════════
-// Animated number counter
-// ══════════════════════════════════════════════════════════════════
-export function animateCount(el, to, duration = 900, suffix = '') {
-  const from = 0;
-  const start = performance.now();
-  function tick(now) {
-    const t = Math.min((now - start) / duration, 1);
-    const ease = 1 - Math.pow(1 - t, 3);
-    el.textContent = Math.round(from + (to - from) * ease) + suffix;
-    if (t < 1) requestAnimationFrame(tick);
-  }
-  requestAnimationFrame(tick);
-}
-
-// ══════════════════════════════════════════════════════════════════
-// Confetti
-// ══════════════════════════════════════════════════════════════════
-export function launchConfetti() {
-  const canvas = document.getElementById('confetti-canvas');
-  canvas.style.display = '';
-  const ctx = canvas.getContext('2d');
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-
-  const colors = ['#00e5cc', '#f59e0b', '#ff6b6b', '#0ea5e9', '#10b981', '#fff'];
-  const pieces = Array.from({ length: 120 }, () => ({
-    x: Math.random() * canvas.width,
-    y: -20 - Math.random() * 100,
-    r: 6 + Math.random() * 6,
-    d: 2 + Math.random() * 4,
-    color: colors[Math.floor(Math.random() * colors.length)],
-    tilt: (Math.random() - 0.5) * 20,
-    tiltV: (Math.random() - 0.5) * 0.4,
-    rot: Math.random() * Math.PI * 2,
-    rotV: (Math.random() - 0.5) * 0.15,
-  }));
-
-  let frame;
-  const last = performance.now();
-
-  function draw(ts) {
-    const elapsed = ts - last;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    let alive = false;
-    for (const p of pieces) {
-      p.y += p.d; p.tilt += p.tiltV; p.rot += p.rotV;
-      if (p.y < canvas.height + 20) alive = true;
-      ctx.save();
-      ctx.translate(p.x, p.y);
-      ctx.rotate(p.rot);
-      ctx.fillStyle = p.color;
-      ctx.globalAlpha = Math.max(0, 1 - p.y / canvas.height);
-      ctx.beginPath();
-      ctx.ellipse(0, 0, p.r / 2, p.r, p.tilt, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-    if (alive) { frame = requestAnimationFrame(draw); }
-    else { canvas.style.display = 'none'; ctx.clearRect(0, 0, canvas.width, canvas.height); }
-  }
-  frame = requestAnimationFrame(draw);
-}
-
-// ══════════════════════════════════════════════════════════════════
-// Stagger animation helper
-// ══════════════════════════════════════════════════════════════════
-export function staggerElements(selector, delay = 60) {
-  document.querySelectorAll(selector).forEach((el, i) => {
-    el.style.animationDelay = `${i * delay}ms`;
   });
 }
 
-// ══════════════════════════════════════════════════════════════════
-// Router
-// ══════════════════════════════════════════════════════════════════
-const PAGES = {
-  'dashboard': renderDashboard,
-  'add-video': renderAddVideo,
-  'browse': renderBrowse,
-  'flashcards': renderFlashcards,
-  'quiz': renderQuiz,
-  'review': renderReview,
-  'stats': renderStats,
-  'manage': renderManage,
+// Smooth Image Fade-In
+export function initImageFadeIns(scope = document) {
+  scope.querySelectorAll('img.thumb').forEach(img => {
+    if (img.complete) {
+      img.classList.add('ld');
+    } else {
+      img.addEventListener('load', () => img.classList.add('ld'));
+      img.addEventListener('error', () => {
+        img.style.display = 'none';
+      });
+    }
+  });
+}
+
+// Global Number Count-Up Animation
+export function animateCount(el, target, duration = 650, suffix = '') {
+  if (!el) return;
+  const start = 0;
+  const end = typeof target === 'number' ? target : parseInt(target, 10) || 0;
+  if (end === 0) {
+    el.textContent = `0${suffix}`;
+    return;
+  }
+  const startTime = performance.now();
+
+  function update(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const easeProgress = 1 - Math.pow(1 - progress, 3);
+    const current = Math.round(start + (end - start) * easeProgress);
+
+    el.textContent = `${current}${suffix}`;
+
+    if (progress < 1) {
+      requestAnimationFrame(update);
+    } else {
+      el.textContent = `${end}${suffix}`;
+      el.classList.add('stat-pop');
+      setTimeout(() => el.classList.remove('stat-pop'), 250);
+    }
+  }
+
+  requestAnimationFrame(update);
+}
+
+// Skeleton Generator Helper
+export function skel(w, h, r = 10, extraStyle = '') {
+  const wStr = typeof w === 'number' ? `${w}px` : w;
+  const hStr = typeof h === 'number' ? `${h}px` : h;
+  const rStr = typeof r === 'number' ? `${r}px` : r;
+  return `<div class="skel" style="width:${wStr};height:${hStr};border-radius:${rStr};${extraStyle}"></div>`;
+}
+
+// Streak Store
+export const Streak = {
+  KEY: 'alc_streak_v2',
+  get() {
+    try {
+      const data = JSON.parse(localStorage.getItem(this.KEY) || '{}');
+      return {
+        count: data.count || 1,
+        lastDate: data.lastDate || new Date().toISOString().split('T')[0],
+        history: data.history || [new Date().toISOString().split('T')[0]],
+      };
+    } catch {
+      return { count: 1, lastDate: new Date().toISOString().split('T')[0], history: [] };
+    }
+  },
+  recordActivity() {
+    const today = new Date().toISOString().split('T')[0];
+    const s = this.get();
+    if (s.lastDate === today) return s;
+
+    const last = new Date(s.lastDate);
+    const curr = new Date(today);
+    const diffDays = Math.round((curr - last) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 1) {
+      s.count += 1;
+    } else if (diffDays > 1) {
+      s.count = 1;
+    }
+    s.lastDate = today;
+    if (!s.history.includes(today)) s.history.push(today);
+
+    localStorage.setItem(this.KEY, JSON.stringify(s));
+    updateSidebarStreak(s.count);
+    return s;
+  }
 };
 
-let _current = 'dashboard';
-
-export function navigate(page) {
-  if (!PAGES[page]) return;
-  _current = page;
-
-  document.querySelectorAll('.nav-item').forEach(el =>
-    el.classList.toggle('active', el.dataset.page === page)
-  );
-
-  const content = document.getElementById('page-content');
-  content.style.opacity = '0';
-  content.style.transform = 'translateY(10px)';
-
-  setTimeout(() => {
-    content.innerHTML = '';
-    PAGES[page](content);
-    polishPageChrome(page);
-    content.style.transition = 'opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)';
-    content.style.opacity = '1';
-    content.style.transform = 'translateY(0)';
-  }, 120);
-
-  if (window._closeMobileSidebar) window._closeMobileSidebar();
-  else document.getElementById('sidebar').classList.remove('open');
-  window.location.hash = page;
+function updateSidebarStreak(count) {
+  const countEl = document.getElementById('sidebar-streak-count');
+  if (countEl) countEl.textContent = `${count} day${count !== 1 ? 's' : ''}`;
 }
 
-// ══════════════════════════════════════════════════════════════════
-// Status bar (cloud connection check)
-// ══════════════════════════════════════════════════════════════════
-async function refreshStatus() {
-  const dot = document.getElementById('status-dot');
-  const text = document.getElementById('status-text');
-  try {
-    await API.get('/api/courses');
-    if (dot) dot.className = 'status-dot ok';
-    if (text) text.textContent = 'Connected ☑️';
-
+// Daily Goal Store
+export const DailyGoal = {
+  KEY: 'alc_daily_goal_v2',
+  get() {
     try {
-      const rev = await API.get('/api/review/due?limit=0');
-      const badge = document.getElementById('review-badge');
-      if (badge) {
-        if (rev.due_count > 0) {
-          badge.textContent = rev.due_count;
-          badge.style.display = '';
-        } else {
-          badge.style.display = 'none';
-        }
+      const today = new Date().toISOString().split('T')[0];
+      const data = JSON.parse(localStorage.getItem(this.KEY) || '{}');
+      if (data.date !== today) {
+        return { target: data.target || 15, progress: 0, date: today, type: 'cards' };
       }
-    } catch { /**/ }
-  } catch {
-    if (dot) dot.className = 'status-dot bad';
-    if (text) text.textContent = 'Server offline';
+      return data;
+    } catch {
+      return { target: 15, progress: 0, date: new Date().toISOString().split('T')[0], type: 'cards' };
+    }
+  },
+  save(type, target) {
+    const g = this.get();
+    g.type = type || g.type;
+    g.target = parseInt(target, 10) || g.target;
+    localStorage.setItem(this.KEY, JSON.stringify(g));
+    return g;
+  },
+  addProgress(n = 1) {
+    const g = this.get();
+    g.progress += n;
+    localStorage.setItem(this.KEY, JSON.stringify(g));
+    Streak.recordActivity();
+    return g;
+  },
+  pct(g) {
+    return Math.min(100, Math.round((g.progress / (g.target || 1)) * 100));
+  },
+  isDone(g) {
+    return g.progress >= g.target;
+  }
+};
+
+// Toast Service
+export function showToast(message, type = 'info') {
+  const t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = message;
+  t.className = `toast show ${type}`;
+  setTimeout(() => { t.className = 'toast'; }, 3400);
+}
+
+// SVG Icon Helper
+export function icon(id, extraClass = '', extraStyle = '') {
+  return `<svg class="icn ${extraClass}" style="${extraStyle}"><use href="#i-${id}"/></svg>`;
+}
+
+// YouTube Helpers
+export function ytId(url) {
+  if (!url) return null;
+  const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+  return m ? m[1] : null;
+}
+
+export function ytThumb(id) {
+  return id ? `https://img.youtube.com/vi/${id}/mqdefault.jpg` : '';
+}
+
+// Confetti Effect
+export function launchConfetti() {
+  const canvas = document.getElementById('confetti-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  canvas.style.display = 'block';
+
+  const pieces = Array.from({ length: 60 }, () => ({
+    x: canvas.width / 2,
+    y: canvas.height / 2,
+    vx: (Math.random() - 0.5) * 14,
+    vy: (Math.random() - 0.5) * 14 - 3,
+    size: Math.random() * 8 + 4,
+    color: ['#5eead4', '#2dd4a8', '#fbbf24', '#f97316', '#7dd3fc', '#34d399', '#fb7185'][Math.floor(Math.random() * 7)],
+    alpha: 1,
+    rot: Math.random() * 360,
+    vrot: (Math.random() - 0.5) * 10,
+  }));
+
+  let frame = 0;
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    let alive = false;
+    pieces.forEach(p => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.28;
+      p.rot += p.vrot;
+      p.alpha -= 0.015;
+      if (p.alpha > 0) {
+        alive = true;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate((p.rot * Math.PI) / 180);
+        ctx.globalAlpha = p.alpha;
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+        ctx.restore();
+      }
+    });
+
+    if (alive && frame++ < 120) {
+      requestAnimationFrame(draw);
+    } else {
+      canvas.style.display = 'none';
+    }
+  }
+  requestAnimationFrame(draw);
+}
+
+// API Service
+export const API = {
+  async req(method, path, body = null) {
+    const token = getToken();
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const opts = { method, headers };
+    if (body) opts.body = JSON.stringify(body);
+
+    const res = await fetch(path, opts);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+  get(path)        { return this.req('GET', path); },
+  post(path, body) { return this.req('POST', path, body); },
+  put(path, body)  { return this.req('PUT', path, body); },
+  del(path)        { return this.req('DELETE', path); },
+};
+
+function updateMenuIcon(isOpen) {
+  const ham = document.getElementById('menu-icon-ham');
+  const close = document.getElementById('menu-icon-close');
+  if (ham && close) {
+    ham.style.display = isOpen ? 'none' : 'block';
+    close.style.display = isOpen ? 'block' : 'none';
   }
 }
 
-// ══════════════════════════════════════════════════════════════════
-// Mobile sidebar – toggle · overlay · swipe gestures
-// ══════════════════════════════════════════════════════════════════
-function initMobile() {
+// Init App Bootloader
+function bootApp() {
+  const initialHash = window.location.hash.slice(1) || 'dashboard';
+
+  // Navigation Links
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.addEventListener('click', e => {
+      e.preventDefault();
+      const page = el.dataset.page;
+      navigate(page);
+    });
+  });
+
+  // Mobile Menu
+  const mobileBtn = document.getElementById('mobile-menu-btn');
   const sidebar = document.getElementById('sidebar');
-  const btn = document.getElementById('mobile-menu-btn');
   const overlay = document.getElementById('sidebar-overlay');
-  const iconHam = document.getElementById('menu-icon-ham');
-  const iconX = document.getElementById('menu-icon-close');
 
-  function openSidebar() {
-    sidebar.classList.add('open');
-    overlay.classList.add('active');
-    btn.classList.add('sidebar-open');
-    btn.setAttribute('aria-expanded', 'true');
-    iconHam.style.display = 'none';
-    iconX.style.display = '';
-  }
+  mobileBtn?.addEventListener('click', () => {
+    const isOpen = sidebar.classList.toggle('open');
+    overlay.classList.toggle('active', isOpen);
+    mobileBtn.setAttribute('aria-expanded', isOpen);
+    updateMenuIcon(isOpen);
+  });
 
-  function closeSidebar() {
+  overlay?.addEventListener('click', () => {
     sidebar.classList.remove('open');
     overlay.classList.remove('active');
-    btn.classList.remove('sidebar-open');
-    btn.setAttribute('aria-expanded', 'false');
-    iconHam.style.display = '';
-    iconX.style.display = 'none';
+    mobileBtn.setAttribute('aria-expanded', 'false');
+    updateMenuIcon(false);
+  });
+
+  // Logout Button
+  document.getElementById('logout-btn')?.addEventListener('click', () => {
+    signOut();
+  });
+
+  // Update user avatar in sidebar
+  const user = getUser();
+  if (user) {
+    const emailChip = document.getElementById('user-email-chip');
+    const avatarChip = document.getElementById('user-avatar-chip');
+    if (emailChip) emailChip.textContent = user.email || 'student';
+    if (avatarChip) avatarChip.textContent = (user.email || 'ST').slice(0, 2).toUpperCase();
   }
 
-  function toggleSidebar() {
-    sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
-  }
+  const s = Streak.get();
+  updateSidebarStreak(s.count);
 
-  btn.addEventListener('click', toggleSidebar);
-  overlay.addEventListener('click', closeSidebar);
+  navigate(initialHash);
 
-  // Hide hamburger menu button on scroll down, show on scroll up / top
-  let lastScrollY = window.scrollY;
-  window.addEventListener('scroll', () => {
-    const currentScrollY = window.scrollY;
-    // Don't animate if sidebar is open
-    if (sidebar.classList.contains('open')) return;
-    
-    if (currentScrollY > 60 && currentScrollY > lastScrollY) {
-      // Scrolling down -> hide button
-      btn.style.transform = 'translateY(-60px) scale(0.9)';
-      btn.style.opacity = '0';
-      btn.style.pointerEvents = 'none';
-    } else {
-      // Scrolling up or at the top -> show button
-      btn.style.transform = '';
-      btn.style.opacity = '';
-      btn.style.pointerEvents = '';
-    }
-    lastScrollY = currentScrollY;
-  }, { passive: true });
-
-  const SWIPE_THRESHOLD = 48;
-  const EDGE_ZONE = 28;
-  const VELOCITY_MIN = 0.25;
-  let touchStartX = 0, touchStartY = 0, touchStartTime = 0, swipeIntent = null;
-
-  document.addEventListener('touchstart', e => {
-    if (e.touches.length !== 1) return;
-    const t = e.touches[0];
-    touchStartX = t.clientX; touchStartY = t.clientY; touchStartTime = Date.now();
-    const sidebarOpen = sidebar.classList.contains('open');
-    swipeIntent = (!sidebarOpen && touchStartX <= EDGE_ZONE) ? 'open'
-      : sidebarOpen ? 'close' : null;
-  }, { passive: true });
-
-  document.addEventListener('touchmove', e => {
-    if (!swipeIntent) return;
-    const dx = e.touches[0].clientX - touchStartX;
-    const dy = Math.abs(e.touches[0].clientY - touchStartY);
-    if (dy > 50) { swipeIntent = null; return; }
-    if (swipeIntent === 'open' && dx > 0) {
-      sidebar.style.transition = 'none';
-      sidebar.style.transform = `translateX(calc(-272px + ${dx}px))`;
-      overlay.style.display = 'block';
-      overlay.style.opacity = String(Math.min(dx / 272, 1) * 0.55);
-    } else if (swipeIntent === 'close' && dx < 0) {
-      sidebar.style.transition = 'none';
-      sidebar.style.transform = `translateX(${dx}px)`;
-      overlay.style.opacity = String((1 - Math.min(-dx / 272, 1)) * 0.55);
-    }
-  }, { passive: true });
-
-  document.addEventListener('touchend', e => {
-    if (!swipeIntent) return;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - touchStartX;
-    const dy = Math.abs(t.clientY - touchStartY);
-    const dt = Date.now() - touchStartTime;
-    const vx = Math.abs(dx) / (dt || 1);
-    sidebar.style.transition = ''; sidebar.style.transform = '';
-    overlay.style.opacity = ''; overlay.style.display = '';
-    if (dy > 60) { swipeIntent = null; return; }
-    const isSwipe = Math.abs(dx) >= SWIPE_THRESHOLD || vx >= VELOCITY_MIN;
-    if (swipeIntent === 'open' && dx > 0 && isSwipe) openSidebar();
-    else if (swipeIntent === 'close' && dx < 0 && isSwipe) closeSidebar();
-    swipeIntent = null;
-  }, { passive: true });
-
-  window._closeMobileSidebar = closeSidebar;
-}
-
-// ══════════════════════════════════════════════════════════════════
-// Show login — fullscreen, bypasses sidebar layout
-// ══════════════════════════════════════════════════════════════════
-function showLoginScreen() {
-  const sidebar = document.getElementById('sidebar');
-  const mobileBtn = document.getElementById('mobile-menu-btn');
-
-  if (sidebar) sidebar.style.display = 'none';
-  if (mobileBtn) mobileBtn.style.display = 'none';
-
-  const appEl = document.getElementById('app');
-  if (appEl) appEl.style.display = 'block';
-
-  const mainEl = document.getElementById('main-content');
-  if (mainEl) {
-    mainEl.style.marginLeft = '0';
-    mainEl.style.padding = '0';
-    mainEl.style.minHeight = '100vh';
-    mainEl.style.display = 'flex';
-    mainEl.style.alignItems = 'center';
-    mainEl.style.justifyContent = 'center';
-  }
-
-  const pageContent = document.getElementById('page-content');
-  if (pageContent) {
-    pageContent.style.width = '100%';
-    renderLogin(pageContent);
-    polishLoginChrome(pageContent);
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════
-// ══════════════════════════════════════════════════════════════════
-// Boot
-// ══════════════════════════════════════════════════════════════════
-function init() {
-  // Show a minimal loading state while Supabase restores session
-  const pageContent = document.getElementById('page-content');
-  if (pageContent) {
-    pageContent.innerHTML = `
-      <div style="display:flex;align-items:center;
-                  justify-content:center;flex-direction:column;gap:16px;
-                  padding-top:120px">
-        <div style="font-size:2rem">🎓</div>
-        <div style="color:var(--text-3);font-size:.9rem">Loading…</div>
-      </div>`;
-  }
-
-  let booted = false;
-
-  onAuthChange(async (event, session) => {
-    // INITIAL_SESSION fires once on load with the persisted session (or null)
-    if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
-      if (booted) return; // prevent double-boot if both events fire
-      booted = true;
-
-      if (!session?.user) {
-        booted = false;
-        showLoginScreen();
-        return;
-      }
-      await bootApp();
-    }
-
-    if (event === 'SIGNED_OUT') {
-      window.location.reload();
-    }
+  window.addEventListener('hashchange', () => {
+    const hash = window.location.hash.slice(1) || 'dashboard';
+    navigate(hash);
   });
 }
 
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
+  document.addEventListener('DOMContentLoaded', bootApp);
 } else {
-  init();
+  bootApp();
 }
 
-async function bootApp() {
-  polishShellChrome();
-
-  const sidebar = document.getElementById('sidebar');
-  const mobileBtn = document.getElementById('mobile-menu-btn');
-  if (sidebar) { sidebar.style.visibility = 'visible'; sidebar.style.display = ''; }
-  if (mobileBtn) { mobileBtn.style.visibility = 'visible'; mobileBtn.style.display = ''; }
-
-  // Reset any inline styles set by showLoginScreen()
-  const mainEl = document.getElementById('main-content');
-  if (mainEl) {
-    mainEl.style.marginLeft = '';
-    mainEl.style.padding = '';
-    mainEl.style.minHeight = '';
-    mainEl.style.display = '';
-    mainEl.style.alignItems = '';
-    mainEl.style.justifyContent = '';
-  }
-  const appEl = document.getElementById('app');
-  if (appEl) appEl.style.display = '';
-  const pageContent = document.getElementById('page-content');
-  if (pageContent) pageContent.style.width = '';
-
-  // Force browser to recalculate layout with sidebar visible BEFORE rendering page
-  if (sidebar) void sidebar.offsetWidth;
-
-  initMobile();
-  refreshStatus();
-  Streak.bump();
-
-  // Ambient mouse light glow spotlight
-  const glow = document.getElementById('cursor-glow');
-  if (glow) {
-    let curX = 0, curY = 0, tgtX = 0, tgtY = 0;
-    window.addEventListener('mousemove', e => {
-      tgtX = e.clientX + window.scrollX;
-      tgtY = e.clientY + window.scrollY;
-      glow.style.opacity = '1';
-    }, { passive: true });
-    
-    function updateGlow() {
-      curX += (tgtX - curX) * 0.08;
-      curY += (tgtY - curY) * 0.08;
-      glow.style.transform = `translate3d(calc(${curX}px - 225px), calc(${curY}px - 225px), 0)`;
-      requestAnimationFrame(updateGlow);
-    }
-    requestAnimationFrame(updateGlow);
-  }
-
-  document.querySelectorAll('.nav-item').forEach(el => {
-    el.addEventListener('click', e => { e.preventDefault(); navigate(el.dataset.page); });
-  });
-
-  const hash = window.location.hash.replace('#', '');
-  navigate(PAGES[hash] ? hash : 'dashboard');
-
-  const logoutBtn = document.getElementById('logout-btn');
-  if (logoutBtn) logoutBtn.addEventListener('click', () => signOut());
-
-  let _lastPing = 0;
-  const PING_INTERVAL = 4 * 60 * 1000;
-  function _maybePing() {
-    const now = Date.now();
-    if (now - _lastPing > PING_INTERVAL) {
-      _lastPing = now;
-      fetch('/api/ping').catch(() => { });
-    }
-  }
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') _maybePing();
-  });
-  _maybePing();
-}
-
-function polishPageChrome(page) {
-  const pageIcon = document.querySelector('.page-icon-wrap');
-  const labels = {
-    'dashboard': 'DB',
-    'add-video': 'AV',
-    'browse': 'BR',
-    'flashcards': 'FC',
-    'quiz': 'QZ',
-    'review': 'RV',
-    'stats': 'ST',
-    'manage': 'MG',
-  };
-  if (pageIcon) pageIcon.textContent = labels[page] || 'AI';
-
-  document.querySelectorAll('.metric-icon').forEach((el, index) => {
-    el.textContent = ['CR', 'VD', 'QS', 'DU', 'AC'][index] || 'AI';
-  });
-
-  document.querySelectorAll('.quick-card').forEach(card => {
-    const title = card.querySelector('.quick-card-title')?.textContent || '';
-    const icon = card.querySelector('.quick-card-icon');
-    if (!icon) return;
-    if (title.includes('Add')) icon.textContent = 'AV';
-    else if (title.includes('Flash')) icon.textContent = 'FC';
-    else if (title.includes('Quiz')) icon.textContent = 'QZ';
-    else if (title.includes('Review')) icon.textContent = 'RV';
-  });
-
-  const editBtn = document.getElementById('goal-edit-btn');
-  if (editBtn) editBtn.textContent = 'Edit';
-}
-
-function polishShellChrome() {
-  const brand = document.querySelector('.brand-name');
-  if (brand) brand.textContent = 'AI Learning';
-
-  const tagline = document.querySelector('.brand-tagline');
-  if (tagline) tagline.textContent = 'Study workspace';
-
-  const logout = document.getElementById('logout-btn');
-  if (logout) logout.textContent = 'Sign Out';
-
-  document.querySelectorAll('.nav-item').forEach(item => {
-    const icon = item.querySelector('.nav-icon');
-    const page = item.dataset.page || '';
-    const labels = {
-      'dashboard': 'DB',
-      'add-video': 'AV',
-      'browse': 'BR',
-      'flashcards': 'FC',
-      'quiz': 'QZ',
-      'review': 'RV',
-      'stats': 'ST',
-      'manage': 'MG',
-    };
-    if (icon) icon.textContent = labels[page] || '';
-  });
-}
-
-function polishLoginChrome(root) {
-  const logo = root.querySelector('.card > div:first-child > div:first-child');
-  if (logo) logo.textContent = 'AI';
-
-  const title = root.querySelector('.card > div:first-child > div:nth-child(2)');
-  if (title) title.textContent = 'AI Learning Companion';
-
-  const subtitle = root.querySelector('.card > div:first-child > div:nth-child(3)');
-  if (subtitle) subtitle.textContent = 'Focused study, generated from your lessons';
-
-  const password = root.querySelector('#auth-password');
-  if (password) password.placeholder = 'Enter your password';
-}

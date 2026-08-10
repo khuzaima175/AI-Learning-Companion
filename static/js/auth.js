@@ -1,7 +1,6 @@
 // static/js/auth.js
 // Handles all Supabase Auth on the frontend
 
-// Fetch Supabase configuration dynamically from the backend at boot
 let SUPABASE_URL = '';
 let SUPABASE_ANON = '';
 
@@ -14,32 +13,46 @@ try {
     console.error("Failed to load Supabase config from server:", e);
 }
 
-// Supabase JS client (loaded from CDN in index.html)
 const { createClient } = supabase;
-const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+export const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+let _currentSession = null;
+let _currentUser = null;
+
+try {
+    const { data } = await sb.auth.getSession();
+    _currentSession = data?.session || null;
+    _currentUser = _currentSession?.user || null;
+} catch (e) {
+    console.error("Session load error:", e);
+}
+
+sb.auth.onAuthStateChange((event, session) => {
+    _currentSession = session || null;
+    _currentUser = session?.user || null;
+});
+
+// ── Get current user (synchronous) ─────────────────────────
+export function getUser() {
+    return _currentUser;
+}
+
+// ── Get current session ────────────────────────────────────
+export function getSession() {
+    return _currentSession;
+}
 
 // ── Get current session token ──────────────────────────────
-export async function getToken() {
-    const { data } = await sb.auth.getSession();
-    return data?.session?.access_token || null;
-}
-
-// ── Get current user ───────────────────────────────────────
-export async function getUser() {
-    const { data } = await sb.auth.getUser();
-    return data?.user || null;
-}
-
-// ── Get current session (faster/synchronous boot check) ──────
-export async function getSession() {
-    const { data } = await sb.auth.getSession();
-    return data?.session || null;
+export function getToken() {
+    return _currentSession?.access_token || null;
 }
 
 // ── Sign up ────────────────────────────────────────────────
 export async function signUp(email, password) {
     const { data, error } = await sb.auth.signUp({ email, password });
     if (error) throw new Error(error.message);
+    _currentSession = data?.session || null;
+    _currentUser = data?.user || null;
     return data;
 }
 
@@ -47,22 +60,30 @@ export async function signUp(email, password) {
 export async function signIn(email, password) {
     const { data, error } = await sb.auth.signInWithPassword({ email, password });
     if (error) throw new Error(error.message);
+    _currentSession = data?.session || null;
+    _currentUser = data?.user || null;
+    window.location.hash = 'dashboard';
+    window.location.reload();
     return data;
 }
 
 // ── Sign out ───────────────────────────────────────────────
 export async function signOut() {
     await sb.auth.signOut();
-    // Clear all cached data so next user starts fresh
+    _currentSession = null;
+    _currentUser = null;
     Object.keys(localStorage)
         .filter(k => k.startsWith('alc_'))
         .forEach(k => localStorage.removeItem(k));
+    window.location.hash = 'login';
     window.location.reload();
 }
 
 // ── Auth state listener ────────────────────────────────────
 export function onAuthChange(callback) {
     sb.auth.onAuthStateChange((event, session) => {
+        _currentSession = session || null;
+        _currentUser = session?.user || null;
         callback(event, session);
     });
 }

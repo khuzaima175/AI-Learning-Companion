@@ -1,334 +1,427 @@
-import { API, showToast, DailyGoal } from '../app.js';
+import { API, showToast, DailyGoal, icon, launchConfetti, navigate, skel } from '../app.js';
 
-let _questions    = [];
-let _idx          = 0;
-let _sessionId    = null;
-let _answered     = false;
-let _correct      = 0;
-let _questionStart = 0;   // performance.now() timestamp when question rendered
-let _hintUsed     = false;
+let _questions = [];
+let _idx = 0;
+let _sessionId = null;
+let _answered = false;
+let _correct = 0;
+let _questionStart = 0;
+let _hintUsed = false;
+let _keyListener = null;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Auto-rate based on time & correctness
-//   wrong OR hint used → "hard"
-//   right, < 15 s      → "easy"
-//   right, 15–20 s     → "good"
-//   right, > 20 s      → "hard"
-// ─────────────────────────────────────────────────────────────────────────────
 function autoRate(elapsedMs, isCorrect, hintUsed) {
   if (hintUsed || !isCorrect) return 'hard';
   const s = elapsedMs / 1000;
-  if (s < 15)  return 'easy';
+  if (s < 15) return 'easy';
   if (s <= 20) return 'good';
   return 'hard';
 }
 
 const RATING_META = {
-  easy: { emoji: '🚀', label: 'Easy',  note: 'Excellent recall! See you in 14+ days.',   color: 'var(--emerald)', bg: 'rgba(16,185,129,0.12)',  border: 'rgba(16,185,129,0.30)'  },
-  good: { emoji: '👍', label: 'Good',  note: 'Solid! Scheduled for 3–7 days.',            color: 'var(--teal)',    bg: 'rgba(0,229,204,0.10)',   border: 'rgba(0,229,204,0.28)'   },
-  hard: { emoji: '😓', label: 'Hard',  note: 'No worries — reviewing again in 1 day.',   color: 'var(--coral)',   bg: 'rgba(255,107,107,0.12)', border: 'rgba(255,107,107,0.30)' },
+  easy: { label: 'Easy (Fast Recall)', note: 'Interval: +14–180 days', pill: 'pill-green' },
+  good: { label: 'Good (Solid)', note: 'Interval: +3–7 days', pill: 'pill-teal' },
+  hard: { label: 'Hard (Needs Review)', note: 'Reset: 1 day', pill: 'pill-coral' },
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
 export async function renderReview(container) {
+  if (_keyListener) {
+    document.removeEventListener('keydown', _keyListener);
+    _keyListener = null;
+  }
+
   container.innerHTML = `
-    <div class="page-header enter">
-      <div class="page-icon-wrap">🔁</div>
-      <div class="page-title-text">
-        <h1>Daily Review</h1>
-        <p class="page-subtitle">Answer fast → rated Easy. Take your time → rated Hard. No clicking required.</p>
-      </div>
+    <!-- Header -->
+    <div style="margin-bottom:28px">
+      <div class="page-title">Daily <em>Review</em></div>
+      <p class="page-subtitle">Spaced repetition queue. Faster active recall earns longer intervals via the SM-2 algorithm.</p>
     </div>
     <div id="review-body">
-      <div class="loading-state"><div class="spinner"></div><span>Checking due cards…</span></div>
+      <div class="review-grid-v2" style="display:grid;grid-template-columns:minmax(0, 720px) 300px;gap:24px;align-items:start">
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            ${skel(180, 16)}
+            ${skel(80, 24, 99)}
+          </div>
+          ${skel('100%', 8, 99)}
+          <div class="card" style="padding:32px;display:flex;flex-direction:column;gap:16px">
+            ${skel(120, 14)}
+            ${skel('90%', 24)}
+            <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px">
+              ${skel('100%', 48, 14)}
+              ${skel('100%', 48, 14)}
+              ${skel('100%', 48, 14)}
+              ${skel('100%', 48, 14)}
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:16px">
+          ${skel('100%', 120, 12)}
+          ${skel('100%', 130, 12)}
+        </div>
+      </div>
     </div>
   `;
   await loadDue();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 async function loadDue() {
+  const body = document.getElementById('review-body');
+  if (!body) return;
+
   try {
     const data = await API.get('/api/review/due?limit=25');
-    _questions = data.questions; _idx = 0; _correct = 0;
+    _questions = data.questions || [];
+    _idx = 0;
+    _correct = 0;
     const totalDue = data.due_count ?? _questions.length;
-    const body = document.getElementById('review-body');
 
     if (!_questions.length) {
       body.innerHTML = `
-        <div class="card enter" style="max-width:480px;text-align:center;padding:52px 36px">
-          <div style="font-size:3.5rem;margin-bottom:16px">🎉</div>
-          <div style="font-family:'Space Grotesk',sans-serif;font-size:1.5rem;font-weight:700;margin-bottom:10px">All caught up!</div>
-          <div style="color:var(--text-2);font-size:.9rem;max-width:300px;margin:0 auto">No cards due for review today. Come back tomorrow to keep your streak going!</div>
-          <div class="badge badge-green" style="margin-top:18px;font-size:.9rem;padding:6px 16px">✅ 0 due today</div>
+        <div class="card" style="max-width:540px;margin:0 auto;text-align:center;padding:56px 28px">
+          <div class="icon-chip teal" style="width:56px;height:56px;margin:0 auto 16px">
+            ${icon('check', '', 'width:28px;height:28px')}
+          </div>
+          <h3 style="font-size:1.8rem">Queue Cleared!</h3>
+          <p style="font-size:0.92rem;color:var(--muted);margin-top:8px;max-width:360px;margin-left:auto;margin-right:auto;line-height:1.6">
+            Zero cards currently due for review today. Great job keeping your retention sharp!
+          </p>
+          <div style="display:flex;gap:12px;justify-content:center;margin-top:24px">
+            <button class="btn btn-ghost btn-sm" onclick="window.navigate('dashboard')">
+              ${icon('arrow-left', '', 'width:14px;height:14px')}
+              <span>Dashboard</span>
+            </button>
+            <button class="btn btn-primary btn-sm" onclick="window.navigate('quiz')">
+              <span>Practice Exam</span>
+              ${icon('arrow-right', '', 'width:14px;height:14px')}
+            </button>
+          </div>
         </div>`;
       return;
     }
 
-    const goal = DailyGoal.get();
-    const goalLabel = goal.progress >= goal.target
-      ? `✅ Daily goal done! ${goal.progress} / ${goal.target} cards`
-      : `📊 Today's goal: ${goal.progress} / ${goal.target} cards`;
-
     body.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;max-width:640px;margin-bottom:6px;gap:8px;flex-wrap:wrap">
-        <div>
-          <span style="font-size:.85rem;color:var(--text-2)"><strong style="color:var(--teal)">${totalDue}</strong> card${totalDue!==1?'s':''} due today</span>
-          <div id="goal-progress-line" style="font-size:.78rem;color:${goal.progress >= goal.target ? 'var(--emerald)' : 'var(--text-3)'};margin-top:3px">${goalLabel}</div>
+      <div class="review-grid-v2" style="display:grid;grid-template-columns:minmax(0, 720px) 300px;gap:24px;align-items:start">
+        
+        <!-- Main Column (Card & Options) -->
+        <div id="rev-main-col">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+            <span class="mono-meta"><strong style="color:var(--amber)">${totalDue}</strong> CARDS DUE TODAY</span>
+            <span class="pill pill-teal" id="rev-score-pill">0 / ${_questions.length}</span>
+          </div>
+
+          <div class="progress-track" style="margin-bottom:18px">
+            <div class="progress-fill" id="rev-progress-fill" style="width:${(1 / _questions.length) * 100}%"></div>
+          </div>
+
+          <div id="rev-card-area"></div>
         </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-          <span style="font-size:.65rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em">Session</span>
-          <span id="score-badge" class="badge badge-teal">✓ 0 / ${_questions.length}</span>
+
+        <!-- Right Rail Column (Live Stats, Rating Legend, Up Next) -->
+        <div style="display:flex;flex-direction:column;gap:16px">
+
+          <!-- Rail 1: Session Live Stats -->
+          <div class="card card-sm">
+            <div class="card-title" style="margin-bottom:12px">Session Stats</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div>
+                <div class="serif-num" style="font-size:1.8rem;color:var(--text)" id="rail-stat-answered">0</div>
+                <div class="mono-meta" style="font-size:0.7rem">Answered</div>
+              </div>
+              <div>
+                <div class="serif-num" style="font-size:1.8rem;color:var(--teal)" id="rail-stat-acc">0%</div>
+                <div class="mono-meta" style="font-size:0.7rem">Accuracy</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Rail 2: Rating Legend -->
+          <div class="card card-sm">
+            <div class="card-title" style="margin-bottom:10px">SM-2 Spaced Intervals</div>
+            <div style="display:flex;flex-direction:column;gap:8px;font-size:0.8rem">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="color:var(--emerald);font-weight:600">Easy (&lt;15s)</span>
+                <span class="mono-meta" style="font-size:0.7rem">+14–180d</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="color:var(--teal);font-weight:600">Good (15–20s)</span>
+                <span class="mono-meta" style="font-size:0.7rem">+3–7d</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="color:var(--coral);font-weight:600">Hard (&gt;20s / Hint)</span>
+                <span class="mono-meta" style="font-size:0.7rem">1d reset</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Rail 3: Up Next Queue -->
+          <div class="card card-sm">
+            <div class="card-title" style="margin-bottom:10px">Up Next in Queue</div>
+            <div id="rail-up-next" style="display:flex;flex-direction:column;gap:8px"></div>
+          </div>
+
         </div>
       </div>
-      <div class="progress-track" style="max-width:640px;margin-bottom:26px">
-        <div class="progress-fill" id="rev-bar" style="width:0%"></div>
-      </div>
-      <div id="rev-q-area" style="max-width:640px"></div>
     `;
 
     const res = await API.post('/api/quiz/start-session', {});
     _sessionId = res.session_id;
+
+    setupKeyboardBinds();
     renderRevQ();
   } catch (e) {
-    document.getElementById('review-body').innerHTML =
-      `<div class="empty-state"><div class="empty-icon">⚠️</div><div>${e.message}</div></div>`;
+    body.innerHTML = `
+      <div class="card" style="text-align:center;padding:48px;color:var(--coral)">
+        Error: ${e.message}
+      </div>`;
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 function renderRevQ() {
-  const area  = document.getElementById('rev-q-area');
-  const q     = _questions[_idx];
+  const area = document.getElementById('rev-card-area');
+  if (!area) return;
+
+  const q = _questions[_idx];
   const total = _questions.length;
-  const pct   = Math.round((_idx / total) * 100);
-  document.getElementById('rev-bar').style.width = pct + '%';
+  const pct = ((_idx + 1) / total) * 100;
+
+  const fill = document.getElementById('rev-progress-fill');
+  if (fill) fill.style.width = `${pct}%`;
 
   _hintUsed = false;
   _answered = false;
 
+  const LETTERS = ['A', 'B', 'C', 'D'];
+
   area.innerHTML = `
-    <div class="question-card enter">
-      <div class="question-num">Card ${_idx + 1} of ${total}</div>
-
-      <!-- Timer bar (shrinks over 20 s visually, purely decorative) -->
-      <div id="timer-track" style="height:4px;border-radius:4px;background:var(--border);margin-bottom:18px;overflow:hidden">
-        <div id="timer-fill" style="height:100%;width:100%;border-radius:4px;background:var(--grad-teal);transition:width 25s linear"></div>
+    <div class="card" style="padding:32px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <span class="mono-meta">CARD ${_idx + 1} OF ${total}</span>
+        <div style="display:flex;gap:4px;align-items:center">
+          <span class="kbd">1</span>
+          <span class="kbd">2</span>
+          <span class="kbd">3</span>
+          <span class="kbd">4</span>
+        </div>
       </div>
-      <div id="timer-label" style="font-size:.72rem;color:var(--text-3);text-align:right;margin-top:-14px;margin-bottom:14px">
-        ⏱ Answer quickly for a better rating
+
+      <div style="font-size:1.15rem;font-weight:600;line-height:1.6;color:var(--text);margin-bottom:24px">
+        ${q.question}
       </div>
 
-      <div class="question-text">${q.question}</div>
-
-      <div class="options-grid" id="rev-options">
+      <div style="display:grid;gap:10px" id="rev-options-list">
         ${q.options.map((opt, i) => `
-          <button class="option-btn" data-val="${opt.replace(/"/g,'&quot;')}">
-            <span class="option-letter">${String.fromCharCode(65+i)}</span>
+          <button class="opt" data-val="${opt.replace(/"/g, '&quot;')}" data-key="${i + 1}">
+            <span class="key">${LETTERS[i]}</span>
             <span style="flex:1">${opt}</span>
           </button>`).join('')}
       </div>
 
       <div id="rev-feedback" style="display:none;margin-top:20px"></div>
 
-      <!-- Show Answer button -->
-      <div id="hint-area" style="margin-top:16px;text-align:center">
-        <button id="hint-btn" class="btn btn-ghost btn-sm" style="opacity:.55;font-size:.8rem">
-          💡 Show Answer <span style="opacity:.6;font-size:.72rem">(counts as Hard)</span>
+      <div id="hint-wrap" style="margin-top:16px;text-align:center">
+        <button id="hint-btn" class="btn btn-ghost btn-sm" style="color:var(--muted);font-size:0.8rem">
+          ${icon('help-circle', '', 'width:13px;height:13px;color:var(--amber)')}
+          <span>Reveal Answer (Counts as Hard)</span>
         </button>
       </div>
     </div>
   `;
 
-  // Start timer
   _questionStart = performance.now();
 
-  // Animate timer bar: start shrinking immediately
-  requestAnimationFrame(() => {
-    const fill = document.getElementById('timer-fill');
-    if (fill) fill.style.width = '0%';
-  });
-
-  // Wire up answer buttons
-  area.querySelectorAll('.option-btn').forEach(btn => {
+  area.querySelectorAll('.opt').forEach(btn => {
     btn.addEventListener('click', () => onAnswer(btn, q));
   });
 
-  // Wire up Show Answer / Hint button
-  document.getElementById('hint-btn').addEventListener('click', () => onShowAnswer(q));
+  document.getElementById('hint-btn')?.addEventListener('click', () => onShowAnswer(q));
+
+  updateRailUpNext();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+function updateRailUpNext() {
+  const railNext = document.getElementById('rail-up-next');
+  if (!railNext) return;
+
+  const upcoming = _questions.slice(_idx + 1, _idx + 4);
+  if (!upcoming.length) {
+    railNext.innerHTML = `<span class="mono-meta" style="font-size:0.75rem;color:var(--faint)">Final card in queue</span>`;
+    return;
+  }
+
+  railNext.innerHTML = upcoming.map((q, i) => `
+    <div style="display:flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+      <span class="mono-meta" style="color:var(--teal);font-size:0.7rem">+${i + 1}</span>
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.question}</span>
+    </div>`).join('');
+}
+
+function updateLiveStats() {
+  const answeredEl = document.getElementById('rail-stat-answered');
+  const accEl = document.getElementById('rail-stat-acc');
+  const answered = _idx + (_answered ? 1 : 0);
+  if (answeredEl) answeredEl.textContent = String(answered);
+  if (accEl && answered > 0) {
+    accEl.textContent = `${Math.round((_correct / answered) * 100)}%`;
+  }
+}
+
 async function onAnswer(btn, q) {
   if (_answered) return;
   _answered = true;
 
-  const elapsed   = performance.now() - _questionStart;
+  const elapsed = performance.now() - _questionStart;
   const isCorrect = btn.dataset.val === q.answer;
-  const perf      = autoRate(elapsed, isCorrect, _hintUsed);
+  const perf = autoRate(elapsed, isCorrect, _hintUsed);
 
   if (isCorrect) _correct++;
 
-  // Visually lock all buttons
-  document.querySelectorAll('#rev-options .option-btn').forEach(b => {
+  document.querySelectorAll('#rev-options-list .opt').forEach(b => {
     b.disabled = true;
-    if (b.dataset.val === q.answer) b.classList.add('correct');
-    else if (b === btn && !isCorrect) b.classList.add('wrong');
+    if (b.dataset.val === q.answer) {
+      b.classList.add('correct');
+    } else if (b === btn && !isCorrect) {
+      b.classList.add('wrong');
+    } else {
+      b.classList.add('dim');
+    }
   });
 
-  document.getElementById('score-badge').textContent = `✓ ${_correct} / ${_questions.length}`;
+  const badge = document.getElementById('rev-score-pill');
+  if (badge) badge.textContent = `${_correct} / ${_questions.length}`;
 
-  // Update daily goal progress line
-  _updateGoalLine();
-
-  // Hide hint button
-  const hintArea = document.getElementById('hint-area');
-  if (hintArea) hintArea.style.display = 'none';
-
-  // Stop timer bar
-  const fill = document.getElementById('timer-fill');
-  if (fill) {
-    const pct = Math.max(0, 100 - (elapsed / 200));   // visual snapshot
-    fill.style.transition = 'none';
-    fill.style.width = pct + '%';
-  }
-
-  // Track daily goal progress (1 card reviewed)
   DailyGoal.addProgress(1);
+  updateLiveStats();
+  showFeedback(isCorrect, elapsed, perf, q.answer);
 
-  // Show feedback with auto-rating info
-  showFeedback(isCorrect, elapsed, perf, q.answer, isCorrect ? null : btn.dataset.val);
-
-  // Save to backend (fire-and-forget)
-  setTimeout(() => {
-    API.post('/api/review/answer', {
-      session_id:  _sessionId,
+  try {
+    await API.post('/api/review/answer', {
+      session_id: _sessionId,
       question_id: q.id,
-      is_correct:  isCorrect,
+      is_correct: isCorrect,
       performance: perf,
-    }).catch(e => console.error('Failed to save answer', e));
-  }, 50);
+    });
+  } catch { /**/ }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 async function onShowAnswer(q) {
   if (_answered) return;
   _answered = true;
   _hintUsed = true;
 
-  // Lock option buttons
-  document.querySelectorAll('#rev-options .option-btn').forEach(b => {
+  document.querySelectorAll('#rev-options-list .opt').forEach(b => {
     b.disabled = true;
     if (b.dataset.val === q.answer) b.classList.add('correct');
+    else b.classList.add('dim');
   });
 
-  // Hide hint button
-  const hintArea = document.getElementById('hint-area');
-  if (hintArea) hintArea.style.display = 'none';
-
-  // Stop timer bar
-  const fill = document.getElementById('timer-fill');
-  if (fill) { fill.style.transition = 'none'; fill.style.width = '0%'; }
-
   const elapsed = performance.now() - _questionStart;
-  showFeedback(false, elapsed, 'hard', q.answer, null, /*isHint=*/true);
-
-  // Track daily goal progress — hints still count as reviewed
   DailyGoal.addProgress(1);
-  _updateGoalLine();
+  updateLiveStats();
+  showFeedback(false, elapsed, 'hard', q.answer, true);
 
-  setTimeout(() => {
-    API.post('/api/review/answer', {
-      session_id:  _sessionId,
+  try {
+    await API.post('/api/review/answer', {
+      session_id: _sessionId,
       question_id: q.id,
-      is_correct:  false,
+      is_correct: false,
       performance: 'hard',
-    }).catch(e => console.error('Failed to save answer', e));
-  }, 50);
+    });
+  } catch { /**/ }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-function showFeedback(isCorrect, elapsedMs, perf, correctAnswer, chosenWrong, isHint = false) {
+function showFeedback(isCorrect, elapsedMs, perf, correctAnswer, isHint = false) {
   const fb = document.getElementById('rev-feedback');
-  const m  = RATING_META[perf];
+  const hintWrap = document.getElementById('hint-wrap');
+  if (hintWrap) hintWrap.style.display = 'none';
+  if (!fb) return;
+
+  const m = RATING_META[perf];
   const secs = (elapsedMs / 1000).toFixed(1);
 
-  let resultLine;
-  if (isHint) {
-    resultLine = `<span style="color:var(--text-2)">💡 You revealed the answer.</span>`;
-  } else if (isCorrect) {
-    resultLine = `<span style="color:var(--emerald)">✅ Correct!</span>`;
-  } else {
-    resultLine = `<span style="color:var(--coral)">❌ Correct answer: <em>${correctAnswer}</em></span>`;
-  }
-
-  fb.style.display = '';
+  fb.style.display = 'block';
   fb.innerHTML = `
-    <div style="border-radius:14px;background:var(--glass);border:1px solid var(--glass-border);padding:18px 20px">
-      <div style="font-weight:600;font-size:.95rem;margin-bottom:12px">${resultLine}</div>
-
-      <!-- Auto-rating chip -->
-      <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:10px;
-                  background:${m.bg};
-                  border:1px solid ${m.border}">
-        <span style="font-size:1.5rem">${m.emoji}</span>
-        <div>
-          <div style="font-weight:700;color:${m.color};font-size:.9rem">
-            ${m.label}
-            <span style="font-weight:400;font-size:.78rem;color:var(--text-3);margin-left:6px">
-              ⏱ ${secs}s${isHint ? ' · hint used' : ''}
-            </span>
-          </div>
-          <div style="font-size:.78rem;color:var(--text-3);margin-top:2px">${m.note}</div>
+    <div style="background:var(--sf2);border:1px solid var(--line);border-radius:var(--r-ctl);padding:16px 20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+        <div style="font-weight:600;font-size:0.95rem">
+          ${isCorrect ? '<span style="color:var(--emerald)">Correct Answer</span>' : `<span style="color:var(--coral)">Correct: ${correctAnswer}</span>`}
         </div>
+        <span class="pill ${m.pill}">${m.label} (${secs}s)</span>
       </div>
-
-      <button id="next-btn" class="btn btn-teal btn-sm" style="margin-top:14px;width:100%">
-        Next Card ➡️
+      <div style="font-size:0.78rem;color:var(--muted)">${m.note}</div>
+      <button id="next-rev-btn" class="btn btn-primary btn-full btn-sm" style="margin-top:14px">
+        <span>Next Review Card</span>
+        ${icon('arrow-right', '', 'width:14px;height:14px')}
       </button>
-    </div>
-  `;
+    </div>`;
 
-  document.getElementById('next-btn').addEventListener('click', () => {
+  document.getElementById('next-rev-btn')?.addEventListener('click', () => {
     _idx++;
     if (_idx < _questions.length) renderRevQ();
     else renderDone();
   });
-
-  // Auto-focus next button for keyboard flow
-  document.getElementById('next-btn').focus();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 function renderDone() {
-  document.getElementById('rev-bar').style.width = '100%';
+  if (_keyListener) {
+    document.removeEventListener('keydown', _keyListener);
+    _keyListener = null;
+  }
+
+  const col = document.getElementById('rev-main-col');
   const pct = Math.round((_correct / _questions.length) * 100);
-  document.getElementById('rev-q-area').innerHTML = `
-    <div class="card enter" style="text-align:center;padding:40px">
-      <div style="font-size:3.2rem;margin-bottom:12px">${pct >= 80 ? '🏆' : '💪'}</div>
-      <div style="font-family:'Space Grotesk',sans-serif;font-size:2.5rem;font-weight:800;
-                  background:var(--grad-teal);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">
+  launchConfetti();
+
+  if (!col) return;
+
+  col.innerHTML = `
+    <div class="card" style="text-align:center;padding:52px 28px">
+      <div class="icon-chip teal" style="width:56px;height:56px;margin:0 auto 16px">
+        ${icon('target', '', 'width:28px;height:28px')}
+      </div>
+      <div class="page-title" style="font-size:2.2rem">Queue <em>Cleared!</em></div>
+      <div class="serif-num" style="font-size:4.5rem;color:var(--teal);margin:10px 0">
         ${pct}%
       </div>
-      <div style="color:var(--text-2);margin:8px 0 6px">${_correct} / ${_questions.length} correct</div>
-      <div class="badge badge-teal" style="margin-bottom:22px">Next reviews scheduled via SRS</div>
-      <div class="progress-track" style="margin-bottom:24px">
-        <div class="progress-fill" style="width:${pct}%"></div>
+      <div style="font-size:0.95rem;color:var(--text);margin-bottom:8px">
+        ${_correct} of ${_questions.length} cards remembered
       </div>
-      <button class="btn btn-teal btn-sm" id="rev-again-btn">🔄 Review Again</button>
+      <div class="pill pill-green" style="margin-bottom:28px">Intervals updated in database</div>
+      <div style="display:flex;gap:12px;justify-content:center">
+        <button class="btn btn-ghost btn-sm" onclick="window.navigate('dashboard')">
+          ${icon('arrow-left', '', 'width:14px;height:14px')}
+          <span>Dashboard</span>
+        </button>
+        <button class="btn btn-primary btn-sm" id="rev-again-btn">
+          ${icon('rotate-cw', '', 'width:14px;height:14px')}
+          <span>Review Again</span>
+        </button>
+      </div>
     </div>`;
-  document.getElementById('rev-again-btn').addEventListener('click', loadDue);
+
+  document.getElementById('rev-again-btn')?.addEventListener('click', () => {
+    renderReview(document.getElementById('page-content'));
+  });
 }
-// ─────────────────────────────────────────────────────────────────────────────
-// Update the live daily goal progress line in the review header
-// ─────────────────────────────────────────────────────────────────────────────
-function _updateGoalLine() {
-  const el = document.getElementById('goal-progress-line');
-  if (!el) return;
-  const goal = DailyGoal.get();
-  const done = goal.progress >= goal.target;
-  el.textContent = done
-    ? `✅ Daily goal done! ${goal.progress} / ${goal.target} cards`
-    : `📊 Today's goal: ${goal.progress} / ${goal.target} cards`;
-  el.style.color = done ? 'var(--emerald)' : 'var(--text-3)';
+
+function setupKeyboardBinds() {
+  _keyListener = e => {
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+
+    if (['1', '2', '3', '4'].includes(e.key)) {
+      e.preventDefault();
+      const idx = parseInt(e.key) - 1;
+      const opts = document.querySelectorAll('#rev-options-list .opt');
+      if (opts[idx] && !opts[idx].disabled) {
+        opts[idx].click();
+      }
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      const nextBtn = document.getElementById('next-rev-btn');
+      if (nextBtn) {
+        e.preventDefault();
+        nextBtn.click();
+      }
+    }
+  };
+
+  document.addEventListener('keydown', _keyListener);
 }

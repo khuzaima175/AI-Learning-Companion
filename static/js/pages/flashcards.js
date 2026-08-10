@@ -1,35 +1,54 @@
-import { API, showToast, staggerElements } from '../app.js';
+import { API, showToast, icon, skel } from '../app.js';
+
+let _keyListener = null;
 
 export async function renderFlashcards(container) {
+  if (_keyListener) {
+    document.removeEventListener('keydown', _keyListener);
+    _keyListener = null;
+  }
+
   container.innerHTML = `
-    <div class="page-header enter">
-      <div class="page-icon-wrap amber">🃏</div>
-      <div class="page-title-text">
-        <h1 class="amber-title">Flashcards</h1>
-        <p class="page-subtitle">Flip through key concepts — click any card to reveal its definition</p>
-      </div>
+    <!-- Header -->
+    <div style="margin-bottom:28px">
+      <div class="page-title">3D <em>Flashcards</em></div>
+      <p class="page-subtitle">Interactive concept flip deck. Click or press Space to reveal key definitions.</p>
     </div>
 
-    <!-- Controls -->
-    <div class="card card-sm enter" style="animation-delay:80ms;margin-bottom:24px">
-      <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
-        <div class="form-group" style="flex:1;min-width:180px;margin-bottom:0">
+    <!-- Filters Deck Picker -->
+    <div class="card card-sm" style="margin-bottom:24px">
+      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end">
+        <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0">
           <label class="form-label">Course</label>
           <select id="fc-course" class="form-select">
-            <option value="">Loading…</option>
+            <option value="">Select course…</option>
           </select>
         </div>
-        <div class="form-group" style="flex:1;min-width:160px;margin-bottom:0">
-          <label class="form-label">Video</label>
+        <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0">
+          <label class="form-label">Lecture Video</label>
           <select id="fc-video" class="form-select" disabled>
             <option value="">Select course first</option>
           </select>
         </div>
-        <button class="btn btn-amber" id="fc-load-btn" disabled>Load Flashcards</button>
+        <button class="btn btn-primary" id="fc-load-btn" disabled>
+          <span class="spin" id="fc-btn-spin" style="display:none"></span>
+          <span id="fc-btn-lbl">Load Deck</span>
+        </button>
       </div>
     </div>
 
-    <div id="fc-body"></div>
+    <div id="fc-body">
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          ${skel(160, 16)}
+          ${skel(140, 28, 6)}
+        </div>
+        ${skel('100%', 8, 99)}
+        <div class="flip-scene" style="max-width:760px;height:360px">
+          ${skel('100%', 360, 20)}
+        </div>
+      </div>
+    </div>
   `;
 
   await populateCourses();
@@ -39,6 +58,7 @@ async function populateCourses() {
   try {
     const courses = await API.get('/api/courses');
     const sel = document.getElementById('fc-course');
+    if (!sel) return;
 
     if (!courses.length) {
       sel.innerHTML = '<option value="">No courses yet</option>';
@@ -49,7 +69,7 @@ async function populateCourses() {
     for (const c of courses) {
       const opt = document.createElement('option');
       opt.value = c.id;
-      opt.textContent = c.name;
+      opt.textContent = `${c.name} (${c.video_count} videos)`;
       sel.appendChild(opt);
     }
 
@@ -57,20 +77,32 @@ async function populateCourses() {
       const cid = sel.value;
       const vid = document.getElementById('fc-video');
       const btn = document.getElementById('fc-load-btn');
-      if (!cid) { vid.disabled = true; vid.innerHTML = '<option>Select course first</option>'; btn.disabled = true; return; }
+      if (!cid) {
+        if (vid) { vid.disabled = true; vid.innerHTML = '<option>Select course first</option>'; }
+        if (btn) btn.disabled = true;
+        return;
+      }
       const course = courses.find(c => String(c.id) === cid);
-      vid.disabled = false;
-      vid.innerHTML = '<option value="">All videos</option>' +
-        (course?.videos || []).map(v => `<option value="${v.id}">${v.title}</option>`).join('');
-      btn.disabled = false;
+      if (vid) {
+        vid.disabled = false;
+        vid.innerHTML = '<option value="">All Lectures in Course</option>' +
+          (course?.videos || []).map(v => `<option value="${v.id}">${v.title}</option>`).join('');
+      }
+      if (btn) btn.disabled = false;
     });
 
-    document.getElementById('fc-load-btn').addEventListener('click', async () => {
+    document.getElementById('fc-load-btn')?.addEventListener('click', async () => {
       const cid = document.getElementById('fc-course').value;
       const vid = document.getElementById('fc-video').value;
       if (!cid) { showToast('Select a course first', 'error'); return; }
       await loadFlashcards(vid || null, cid);
     });
+
+    if (courses.length > 0) {
+      sel.value = courses[0].id;
+      sel.dispatchEvent(new Event('change'));
+      await loadFlashcards(null, courses[0].id);
+    }
   } catch (e) {
     showToast(e.message, 'error');
   }
@@ -78,7 +110,29 @@ async function populateCourses() {
 
 async function loadFlashcards(videoId, courseId) {
   const body = document.getElementById('fc-body');
-  body.innerHTML = '<div class="loading-state"><div class="spinner"></div><span>Loading flashcards…</span></div>';
+  const btn = document.getElementById('fc-load-btn');
+  const btnSpin = document.getElementById('fc-btn-spin');
+  const btnLbl = document.getElementById('fc-btn-lbl');
+
+  if (btn) {
+    btn.classList.add('loading');
+    if (btnSpin) btnSpin.style.display = 'inline-block';
+    if (btnLbl) btnLbl.textContent = 'Loading Deck…';
+  }
+
+  if (body) {
+    body.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          ${skel(160, 16)}
+          ${skel(140, 28, 6)}
+        </div>
+        ${skel('100%', 8, 99)}
+        <div class="flip-scene" style="max-width:760px;height:360px">
+          ${skel('100%', 360, 20)}
+        </div>
+      </div>`;
+  }
 
   try {
     let concepts = [];
@@ -99,120 +153,176 @@ async function loadFlashcards(videoId, courseId) {
     }
 
     if (!concepts.length) {
-      body.innerHTML = `<div class="empty-state"><div class="empty-icon">🃏</div><div>No key concepts found.</div><div class="empty-sub" style="margin-top:6px">Process a video first to generate concepts.</div></div>`;
+      if (body) {
+        body.innerHTML = `
+          <div class="card" style="text-align:center;padding:48px 24px">
+            <div class="icon-chip glass" style="width:48px;height:48px;margin:0 auto 14px">
+              ${icon('layers', '', 'width:24px;height:24px')}
+            </div>
+            <h3 style="font-size:1.4rem">No concepts found</h3>
+            <p style="font-size:0.88rem;color:var(--muted);margin-top:6px">This lecture doesn't have extracted key concepts yet.</p>
+            <button class="btn btn-primary btn-sm" onclick="window.navigate('add-video')" style="margin-top:18px">Add Lecture</button>
+          </div>`;
+      }
       return;
     }
 
-    // Shuffle
     concepts.sort(() => Math.random() - 0.5);
-
     renderCardDeck(concepts);
   } catch (e) {
-    body.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div>${e.message}</div></div>`;
+    if (body) {
+      body.innerHTML = `
+        <div class="card" style="text-align:center;padding:40px;color:var(--coral)">
+          Error: ${e.message}
+        </div>`;
+    }
+  } finally {
+    if (btn) {
+      btn.classList.remove('loading');
+      if (btnSpin) btnSpin.style.display = 'none';
+      if (btnLbl) btnLbl.textContent = 'Load Deck';
+    }
   }
 }
 
 function renderCardDeck(concepts) {
   const body = document.getElementById('fc-body');
   let idx = 0;
+  const seenSet = new Set([0]);
 
   body.innerHTML = `
-    <!-- Progress -->
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <span style="font-size:.82rem;color:var(--text-2)" id="fc-progress">Card 1 of ${concepts.length}</span>
+    <!-- Top Progress Row -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <span class="mono-meta" id="fc-progress">CARD 1 OF ${concepts.length}</span>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-ghost btn-sm" id="fc-shuffle">🔀 Shuffle</button>
-        <button class="btn btn-ghost btn-sm" id="fc-restart">↩ Restart</button>
+        <button class="btn btn-ghost btn-sm" id="fc-shuffle" style="padding:5px 10px;font-size:0.8rem">
+          ${icon('rotate-cw', '', 'width:13px;height:13px')}
+          <span>Shuffle</span>
+        </button>
+        <button class="btn btn-ghost btn-sm" id="fc-restart" style="padding:5px 10px;font-size:0.8rem">
+          <span>Restart</span>
+        </button>
       </div>
     </div>
 
-    <div class="progress-track" style="margin-bottom:24px">
-      <div class="progress-fill amber" id="fc-bar" style="width:${(1/concepts.length)*100}%"></div>
+    <!-- Progress Track -->
+    <div class="progress-track" style="margin-bottom:20px">
+      <div class="progress-fill" id="fc-progress-fill" style="width:${(1 / concepts.length) * 100}%"></div>
     </div>
 
-    <!-- Flashcard -->
-    <div class="flashcard-scene" id="fc-scene">
-      <div class="flashcard" id="fc-card">
-        <div class="flashcard-face flashcard-front">
-          <div class="flashcard-hint">Tap to reveal definition</div>
-          <div class="flashcard-term" id="fc-term"></div>
-          <div style="margin-top:20px;font-size:.72rem;color:var(--text-3)" id="fc-source"></div>
+    <!-- 3D Flashcard Scene -->
+    <div class="flip-scene" id="fc-scene" style="margin-bottom:20px">
+      <div class="flip-card" id="fc-card">
+        
+        <!-- Front Face -->
+        <div class="face front">
+          <span class="pill pill-teal" style="font-size:0.7rem">KEY CONCEPT</span>
+          <div class="serif-title" style="font-size:2.8rem;color:var(--text);margin:10px 0" id="fc-term"></div>
+          <div class="mono-meta" style="color:var(--faint);font-size:0.75rem" id="fc-source"></div>
+          <div style="margin-top:auto;display:flex;align-items:center;gap:8px">
+            <kbd class="kbd">SPACE</kbd>
+            <span class="mono-meta" style="font-size:0.7rem">OR CLICK TO FLIP</span>
+          </div>
         </div>
-        <div class="flashcard-face flashcard-back">
-          <div class="flashcard-hint">Definition</div>
-          <div class="flashcard-def" id="fc-def"></div>
+
+        <!-- Back Face -->
+        <div class="face back">
+          <span class="pill pill-amber" style="font-size:0.7rem">DEFINITION &amp; MECHANISM</span>
+          <div style="font-size:1.15rem;color:var(--text);line-height:1.7;max-width:560px;margin:10px 0" id="fc-def"></div>
+          <div style="margin-top:auto;display:flex;align-items:center;gap:8px">
+            <kbd class="kbd">SPACE</kbd>
+            <span class="mono-meta" style="font-size:0.7rem">OR CLICK TO FLIP BACK</span>
+          </div>
         </div>
+
       </div>
     </div>
 
-    <div style="display:flex;gap:12px;justify-content:center;margin-top:20px;flex-wrap:wrap">
-      <button class="btn btn-ghost" id="fc-prev">← Previous</button>
-      <span style="color:var(--text-3);font-size:.82rem;align-self:center" id="fc-subprogress">${idx+1}/${concepts.length}</span>
-      <button class="btn btn-teal" id="fc-next">Next →</button>
+    <!-- Navigation Action Row -->
+    <div style="display:flex;gap:14px;justify-content:center;align-items:center;margin-top:16px">
+      <button class="btn btn-ghost btn-sm" id="fc-prev">
+        ${icon('arrow-left', '', 'width:14px;height:14px')}
+        <span>Previous</span>
+      </button>
+      <span class="mono-meta" id="fc-subprogress" style="padding:0 8px;font-size:0.85rem">${idx + 1} / ${concepts.length}</span>
+      <button class="btn btn-primary btn-sm" id="fc-next">
+        <span>Next</span>
+        ${icon('arrow-right', '', 'width:14px;height:14px')}
+      </button>
     </div>
 
-    <!-- Keyboard hint -->
-    <div style="display:flex;gap:10px;justify-content:center;margin-top:12px;flex-wrap:wrap;align-items:center">
-      <span style="font-size:.72rem;color:var(--text-3)">Keyboard:</span>
-      <span class="kbd">←</span><span style="font-size:.72rem;color:var(--text-3)">prev</span>
-      <span class="kbd">→</span><span style="font-size:.72rem;color:var(--text-3)">next</span>
-      <span class="kbd">Space</span><span style="font-size:.72rem;color:var(--text-3)">flip</span>
+    <!-- Deck Overview Grid -->
+    <div style="margin-top:40px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
+      <h3 style="font-size:1.3rem">Deck Overview</h3>
+      <span class="pill pill-teal">${concepts.length} concepts</span>
     </div>
-
-    <!-- Grid preview -->
-    <div class="section-hdr" style="margin-top:36px">
-      <div class="section-title">All Cards</div>
-      <span class="badge badge-amber">${concepts.length} concepts</span>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:4px" id="fc-grid"></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(240px, 1fr));gap:12px" id="fc-grid"></div>
   `;
 
   function showCard(i, flip = false) {
     idx = i;
+    seenSet.add(i);
     const c = concepts[i];
-    document.getElementById('fc-term').textContent    = c.concept || '';
-    document.getElementById('fc-def').textContent     = c.definition || '';
-    document.getElementById('fc-source').textContent  = c.source ? `📹 ${c.source}` : '';
-    document.getElementById('fc-progress').textContent= `Card ${i + 1} of ${concepts.length}`;
-    document.getElementById('fc-subprogress').textContent = `${i+1}/${concepts.length}`;
-    document.getElementById('fc-bar').style.width     = `${((i + 1) / concepts.length) * 100}%`;
+    document.getElementById('fc-term').textContent = c.concept || '';
+    document.getElementById('fc-def').textContent = c.definition || '';
+    document.getElementById('fc-source').textContent = c.source ? `Lecture: ${c.source}` : '';
+    document.getElementById('fc-progress').textContent = `CARD ${i + 1} OF ${concepts.length}`;
+    document.getElementById('fc-subprogress').textContent = `${i + 1} / ${concepts.length}`;
+    document.getElementById('fc-progress-fill').style.width = `${((i + 1) / concepts.length) * 100}%`;
+
     const card = document.getElementById('fc-card');
     card.classList.remove('flipped');
-    if (flip) setTimeout(() => card.classList.add('flipped'), 50);
+    if (flip) setTimeout(() => card.classList.add('flipped'), 60);
+
+    updateOverviewGrid();
   }
 
   showCard(0);
 
-  document.getElementById('fc-card').addEventListener('click', () => {
+  document.getElementById('fc-card')?.addEventListener('click', () => {
     document.getElementById('fc-card').classList.toggle('flipped');
   });
 
-  document.getElementById('fc-next').addEventListener('click', () => {
+  document.getElementById('fc-next')?.addEventListener('click', () => {
     if (idx < concepts.length - 1) showCard(idx + 1);
-    else showToast('You reached the end! 🎉', 'success');
+    else showToast('You reached the end of the deck', 'success');
   });
-  document.getElementById('fc-prev').addEventListener('click', () => {
+
+  document.getElementById('fc-prev')?.addEventListener('click', () => {
     if (idx > 0) showCard(idx - 1);
   });
-  document.getElementById('fc-shuffle').addEventListener('click', () => {
-    concepts.sort(() => Math.random() - 0.5);
-    buildGrid(); showCard(0);
-  });
-  document.getElementById('fc-restart').addEventListener('click', () => showCard(0));
 
-  // Grid of all concepts
-  function buildGrid() {
+  document.getElementById('fc-shuffle')?.addEventListener('click', () => {
+    concepts.sort(() => Math.random() - 0.5);
+    seenSet.clear();
+    showCard(0);
+    showToast('Deck shuffled', 'info');
+  });
+
+  document.getElementById('fc-restart')?.addEventListener('click', () => showCard(0));
+
+  function updateOverviewGrid() {
     const grid = document.getElementById('fc-grid');
+    if (!grid) return;
     grid.innerHTML = '';
     concepts.forEach((c, i) => {
+      const isCurrent = i === idx;
+      const isSeen = seenSet.has(i);
       const el = document.createElement('div');
       el.className = 'card card-xs';
       el.style.cursor = 'pointer';
-      el.style.transition = 'all 0.2s ease';
-      el.style.animationDelay = `${i * 30}ms`;
+      if (isCurrent) {
+        el.style.borderColor = 'var(--teal)';
+        el.style.background = 'var(--sf3)';
+      }
+
       el.innerHTML = `
-        <div style="font-size:.72rem;color:var(--teal);font-weight:700;margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em">${c.concept || ''}</div>
-        <div style="font-size:.8rem;color:var(--text-2);line-height:1.5">${(c.definition || '').slice(0, 80)}${(c.definition?.length > 80) ? '…' : ''}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span class="mono-meta" style="color:var(--teal)">#${String(i + 1).padStart(2, '0')}</span>
+          ${isSeen ? `<span style="color:var(--emerald);font-size:0.8rem">${icon('check', '', 'width:13px;height:13px')}</span>` : ''}
+        </div>
+        <div style="font-weight:600;font-size:0.88rem;color:var(--text);margin-bottom:4px">${c.concept || ''}</div>
+        <div style="font-size:0.78rem;color:var(--muted);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${c.definition || ''}</div>
       `;
       el.addEventListener('click', () => {
         showCard(i, true);
@@ -220,38 +330,24 @@ function renderCardDeck(concepts) {
       });
       grid.appendChild(el);
     });
-    staggerElements('#fc-grid .card', 30);
   }
-  buildGrid();
-  // Keyboard shortcuts
-  function handleKey(e) {
-    // Don't fire when user is typing in an input
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+
+  _keyListener = e => {
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
     const card = document.getElementById('fc-card');
     if (!card) return;
-    switch (e.key) {
-      case 'ArrowRight': case 'l':
-        if (idx < concepts.length - 1) showCard(idx + 1);
-        else showToast('You reached the end! 🎉', 'success');
-        break;
-      case 'ArrowLeft': case 'h':
-        if (idx > 0) showCard(idx - 1);
-        break;
-      case ' ':
-        e.preventDefault();
-        card.classList.toggle('flipped');
-        break;
-    }
-  }
-  document.addEventListener('keydown', handleKey);
 
-  // Clean up listener when page changes (app.js replaces #page-content innerHTML)
-  const observer = new MutationObserver(() => {
-    if (!document.getElementById('fc-card')) {
-      document.removeEventListener('keydown', handleKey);
-      observer.disconnect();
+    if (e.key === ' ' || e.code === 'Space') {
+      e.preventDefault();
+      card.classList.toggle('flipped');
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      if (idx < concepts.length - 1) showCard(idx + 1);
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      if (idx > 0) showCard(idx - 1);
     }
-  });
-  const pageContent = document.getElementById('page-content');
-  if (pageContent) observer.observe(pageContent, { childList: true, subtree: false });
+  };
+
+  document.addEventListener('keydown', _keyListener);
 }
