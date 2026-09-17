@@ -25,10 +25,19 @@ export async function renderQuiz(container) {
   }
 
   container.innerHTML = `
-    <!-- Header -->
-    <div style="margin-bottom:28px">
-      <div class="page-title">Practice <em>Exam</em></div>
-      <p class="page-subtitle">Timed active recall exam — test your comprehension under pressure with instant feedback.</p>
+    <!-- Header Banner with AI Visual Artwork -->
+    <div class="hero-art-banner rev" style="--i:0">
+      <img src="/static/img/quiz_arena_art.jpg" alt="Neural Exam Arena" class="hero-art-bg" />
+      <div class="hero-art-content">
+        <div class="pill pill-amber" style="margin-bottom:12px;font-size:0.72rem">
+          ${icon('brain-circuit', '', 'width:12px;height:12px')}
+          <span>Active Recall Engine</span>
+        </div>
+        <h1 class="page-title" style="font-size:2.4rem;margin-bottom:8px">Practice <em>Exam</em></h1>
+        <p class="page-subtitle" style="margin-top:0;font-size:0.92rem;max-width:540px">
+          Timed active recall drills with real-time feedback, comprehension scoring, and interval adjustments.
+        </p>
+      </div>
     </div>
 
     <!-- Quiz Setup Screen -->
@@ -36,7 +45,7 @@ export async function renderQuiz(container) {
       <div style="display:grid;grid-template-columns:1fr 320px;gap:24px;align-items:start">
 
         <!-- Main Config Column -->
-        <div class="card" style="padding:28px" id="quiz-config-card">
+        <div class="card tilt-card rev" style="padding:28px;--i:1" id="quiz-config-card">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
             <div class="icon-chip teal">${icon('brain-circuit', '', 'width:18px;height:18px')}</div>
             <h3 style="font-size:1.35rem">Exam Configuration</h3>

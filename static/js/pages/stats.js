@@ -2,10 +2,19 @@ import { API, animateCount, icon, skel, mapStats } from '../app.js';
 
 export async function renderStats(container) {
   container.innerHTML = `
-    <!-- Header -->
-    <div style="margin-bottom:28px">
-      <div class="page-title">Learning <em>Analytics</em></div>
-      <p class="page-subtitle">Historical quiz sessions, recall accuracy curves, and active study telemetry.</p>
+    <!-- Header Banner with AI Visual Artwork -->
+    <div class="hero-art-banner rev" style="--i:0">
+      <img src="/static/img/analytics_matrix_art.jpg" alt="Telemetry Matrix" class="hero-art-bg" />
+      <div class="hero-art-content">
+        <div class="pill pill-teal" style="margin-bottom:12px;font-size:0.72rem">
+          ${icon('bar-chart-3', '', 'width:12px;height:12px')}
+          <span>Spaced Repetition Telemetry</span>
+        </div>
+        <h1 class="page-title" style="font-size:2.4rem;margin-bottom:8px">Learning <em>Analytics</em></h1>
+        <p class="page-subtitle" style="margin-top:0;font-size:0.92rem;max-width:540px">
+          Historical exam session performance, recall accuracy curves, and study volume tracking.
+        </p>
+      </div>
     </div>
 
     <div id="stats-body">

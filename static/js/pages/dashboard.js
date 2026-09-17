@@ -48,35 +48,50 @@ export async function renderDashboard(container) {
   }).join('');
 
   container.innerHTML = `
-    <!-- Header -->
-    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:28px;flex-wrap:wrap;gap:16px">
-      <div>
-        <div class="page-title">Welcome back to your <em>Workspace</em></div>
-        <p class="page-subtitle">Your daily study telemetry, spaced repetition intervals, and active recall streak.</p>
-      </div>
-      <div style="display:flex;align-items:center;gap:10px">
-        <div class="pill pill-amber" style="padding:6px 12px;font-size:0.75rem">
-          ${icon('calendar', '', 'width:13px;height:13px')}
-          <span>${todayDateStr}</span>
+    <!-- Hero Banner with AI Visual Artwork Background -->
+    <div class="hero-art-banner rev" style="--i:0">
+      <img src="/static/img/hero_workspace.jpg" alt="Workspace Aura" class="hero-art-bg" />
+      <div class="hero-art-content">
+        <div class="pill pill-teal" style="margin-bottom:12px;font-size:0.72rem">
+          ${icon('sparkles', '', 'width:12px;height:12px')}
+          <span>AI Study Companion</span>
+        </div>
+        <h1 class="page-title" style="font-size:2.4rem;margin-bottom:8px">Welcome to your <em>Workspace</em></h1>
+        <p class="page-subtitle" style="margin-top:0;font-size:0.92rem;max-width:520px">
+          Continuous spaced repetition, active recall analytics, and lecture synthesis.
+        </p>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:20px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="window.navigate('review')">
+            ${icon('rotate-cw', '', 'width:14px;height:14px')}
+            <span>Start Daily Review</span>
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="window.navigate('add-video')">
+            ${icon('plus', '', 'width:14px;height:14px')}
+            <span>Import Lecture</span>
+          </button>
+          <div class="pill pill-amber" style="padding:6px 12px;font-size:0.75rem;margin-left:auto">
+            ${icon('calendar', '', 'width:13px;height:13px')}
+            <span>${todayDateStr}</span>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- Bento Grid Row 1: Streak (span-1) | Daily Goal (span-1) | Quote (span-2) -->
-    <div class="bento-grid rev" style="margin-bottom:16px">
+    <div class="bento-grid rev" style="margin-bottom:16px;--i:1">
 
-      <!-- 1. Active Streak Card (Flame Sticker + Big Num + 7 Dots) -->
-      <div class="card span-1" style="display:flex;flex-direction:column;justify-content:space-between">
+      <!-- 1. Active Streak Card -->
+      <div class="card tilt-card span-1" style="display:flex;flex-direction:column;justify-content:space-between">
         <div>
           <div style="display:flex;justify-content:space-between;align-items:flex-start">
             <span class="card-title">Active streak</span>
             <div class="flame-sticker">
-              ${icon('flame', '', 'width:20px;height:20px')}
+              ${icon('flame', '', 'width:18px;height:18px')}
             </div>
           </div>
-          <div style="display:flex;align-items:baseline;gap:6px;margin-top:8px">
-            <span class="serif-num" style="font-size:3.6rem;color:var(--amber)" id="dash-streak-num">${streak.count || 1}</span>
-            <span style="color:var(--muted);font-size:0.95rem;font-weight:500">days</span>
+          <div style="display:flex;align-items:baseline;gap:6px;margin-top:10px">
+            <span class="serif-num" style="font-size:3.4rem;color:var(--amber)" id="dash-streak-num">${streak.count || 1}</span>
+            <span style="color:var(--muted);font-size:0.95rem;font-weight:600">days</span>
           </div>
         </div>
         <div>
@@ -85,8 +100,8 @@ export async function renderDashboard(container) {
         </div>
       </div>
 
-      <!-- 2. Daily Goal (Side-by-side Ring + Stats) -->
-      <div class="card span-1" style="display:flex;flex-direction:column;justify-content:space-between">
+      <!-- 2. Daily Goal -->
+      <div class="card tilt-card span-1" style="display:flex;flex-direction:column;justify-content:space-between">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span class="card-title">Daily target</span>
           <button id="goal-edit-btn" class="btn btn-ghost btn-sm" style="padding:3px 7px" title="Change Target">
@@ -102,7 +117,7 @@ export async function renderDashboard(container) {
                       stroke-dasharray="${CIRC}" stroke-dashoffset="${CIRC}"/>
             </svg>
             <div class="goal-ring-center">
-              <div class="serif-num" style="font-size:1.45rem;color:var(--teal)" id="dash-goal-pct">0%</div>
+              <div class="serif-num" style="font-size:1.35rem;color:var(--teal)" id="dash-goal-pct">0%</div>
             </div>
           </div>
 
@@ -120,8 +135,8 @@ export async function renderDashboard(container) {
         <div style="font-size:0.72rem;color:var(--faint)">Resets at midnight automatically.</div>
       </div>
 
-      <!-- 3. Quote of the Day (Rotated Glyph + Serif Text) -->
-      <div class="card span-2" style="display:flex;flex-direction:column;justify-content:space-between;position:relative">
+      <!-- 3. Quote of the Day -->
+      <div class="card tilt-card span-2" style="display:flex;flex-direction:column;justify-content:space-between;position:relative">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span class="card-title" style="color:var(--muted)">Daily focus</span>
           <button id="dash-refresh-quote" class="btn btn-ghost btn-sm" style="padding:3px 7px" title="New Quote">
@@ -130,11 +145,11 @@ export async function renderDashboard(container) {
         </div>
 
         <div style="display:flex;gap:14px;align-items:flex-start;margin:12px 0">
-          <div style="color:var(--teal);opacity:0.3;transform:rotate(-6deg);flex-shrink:0;margin-top:-4px">
-            ${icon('quote', '', 'width:28px;height:28px')}
+          <div style="color:var(--teal);opacity:0.4;flex-shrink:0;margin-top:-2px">
+            ${icon('quote', '', 'width:24px;height:24px')}
           </div>
           <div>
-            <div id="dash-quote-text" style="font-family:'Instrument Serif', serif;font-size:1.35rem;line-height:1.4;color:var(--text);font-style:italic">
+            <div id="dash-quote-text" style="font-size:1.15rem;line-height:1.45;color:var(--text);font-weight:500;letter-spacing:-0.01em">
               "${quote.q}"
             </div>
             <div id="dash-quote-author" style="margin-top:8px;font-size:0.8rem;font-weight:600;color:var(--teal)">
@@ -147,11 +162,11 @@ export async function renderDashboard(container) {
       </div>
     </div>
 
-    <!-- Bento Grid Row 2: Rotating Conic Border Due CTA (span-2) | Merged Library Metrics (span-2) -->
-    <div class="bento-grid rev" style="margin-bottom:16px">
+    <!-- Bento Grid Row 2: Rotating Amber Border Due CTA (span-2) | Merged Library Metrics (span-2) -->
+    <div class="bento-grid rev" style="margin-bottom:16px;--i:2">
 
-      <!-- 4. Due Review Queue Card (Rotating Conic Border .cta-live) -->
-      <div class="card span-2 cta-live" style="display:flex;align-items:center;justify-content:space-between;gap:20px;padding:24px 28px">
+      <!-- 4. Due Review Queue Card -->
+      <div class="card tilt-card span-2 cta-live" style="display:flex;align-items:center;justify-content:space-between;gap:20px;padding:24px 28px">
         <div style="display:flex;align-items:center;gap:18px">
           <div class="icon-chip amber" style="width:48px;height:48px">
             ${icon('alarm-clock', '', 'width:24px;height:24px')}
@@ -159,21 +174,21 @@ export async function renderDashboard(container) {
           <div>
             <span class="card-title">Due for review</span>
             <div style="display:flex;align-items:baseline;gap:8px;margin-top:2px">
-              <span class="serif-num" style="font-size:3.2rem;color:var(--amber)" id="dash-due-count">0</span>
-              <span style="color:var(--muted);font-size:0.9rem">cards ready</span>
+              <span class="serif-num" style="font-size:3rem;color:var(--amber)" id="dash-due-count">0</span>
+              <span style="color:var(--muted);font-size:0.9rem;font-weight:500">cards ready</span>
             </div>
             <div style="font-size:0.75rem;color:var(--faint);margin-top:2px">SM-2 interval scheduling algorithm active</div>
           </div>
         </div>
 
-        <button class="btn btn-amber btn-lg" id="dash-start-review" style="white-space:nowrap;box-shadow:0 4px 20px rgba(249,115,22,0.35)">
+        <button class="btn btn-amber btn-lg" id="dash-start-review" style="white-space:nowrap">
           <span>Start Review</span>
           ${icon('arrow-right', '', 'width:16px;height:16px')}
         </button>
       </div>
 
       <!-- 5. Merged Library Metrics Card (3 Columns: Courses | Lectures | Questions) -->
-      <div class="card span-2 library-split-card" style="padding:14px 10px">
+      <div class="card tilt-card span-2 library-split-card" style="padding:14px 10px">
         
         <div class="library-split-col">
           <div>
@@ -181,7 +196,7 @@ export async function renderDashboard(container) {
               <div class="icon-chip teal" style="width:28px;height:28px">${icon('book-open', '', 'width:14px;height:14px')}</div>
               <span class="card-title" style="font-size:0.8rem">Courses</span>
             </div>
-            <div class="serif-num" style="font-size:2.4rem;margin:6px 0;color:var(--text)" id="dash-courses-num">0</div>
+            <div class="serif-num" style="font-size:2.2rem;margin:6px 0;color:var(--text-pure)" id="dash-courses-num">0</div>
           </div>
           <button class="btn btn-ghost btn-sm" onclick="window.navigate('browse')" style="justify-content:space-between;padding:4px 8px;font-size:0.75rem">
             <span>Browse</span>
@@ -195,7 +210,7 @@ export async function renderDashboard(container) {
               <div class="icon-chip sky" style="width:28px;height:28px">${icon('clapperboard', '', 'width:14px;height:14px')}</div>
               <span class="card-title" style="font-size:0.8rem">Lectures</span>
             </div>
-            <div class="serif-num" style="font-size:2.4rem;margin:6px 0;color:var(--text)" id="dash-videos-num">0</div>
+            <div class="serif-num" style="font-size:2.2rem;margin:6px 0;color:var(--text-pure)" id="dash-videos-num">0</div>
           </div>
           <button class="btn btn-ghost btn-sm" onclick="window.navigate('add-video')" style="justify-content:space-between;padding:4px 8px;font-size:0.75rem">
             <span>Add New</span>
@@ -209,7 +224,7 @@ export async function renderDashboard(container) {
               <div class="icon-chip amber" style="width:28px;height:28px">${icon('help-circle', '', 'width:14px;height:14px')}</div>
               <span class="card-title" style="font-size:0.8rem">Quiz Cards</span>
             </div>
-            <div class="serif-num" style="font-size:2.4rem;margin:6px 0;color:var(--amber)" id="dash-questions-num">0</div>
+            <div class="serif-num" style="font-size:2.2rem;margin:6px 0;color:var(--amber)" id="dash-questions-num">0</div>
           </div>
           <button class="btn btn-ghost btn-sm" onclick="window.navigate('quiz')" style="justify-content:space-between;padding:4px 8px;font-size:0.75rem">
             <span>Take Quiz</span>
@@ -221,10 +236,10 @@ export async function renderDashboard(container) {
     </div>
 
     <!-- 7-Day Activity Flex Bars -->
-    <div class="card rev" style="margin-bottom:28px">
+    <div class="card tilt-card rev" style="margin-bottom:24px;--i:3">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
         <div>
-          <h3 style="font-size:1.3rem">7-Day Study Volume</h3>
+          <h3 style="font-size:1.15rem">7-Day Study Volume</h3>
           <span class="mono-meta">Cards reviewed per day</span>
         </div>
         <span id="dash-act-max-lbl" class="mono-meta">MAX: 10 CARDS</span>
@@ -242,38 +257,38 @@ export async function renderDashboard(container) {
     </div>
 
     <!-- Quick Navigation Tiles -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:16px" class="rev">
-      <div class="quick-action-tile" onclick="window.navigate('add-video')">
-        <div class="icon-chip teal" style="width:44px;height:44px">
-          ${icon('video', '', 'width:22px;height:22px')}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:16px" class="rev" style="--i:4">
+      <div class="quick-action-tile tilt-card" onclick="window.navigate('add-video')">
+        <div class="icon-chip teal" style="width:42px;height:42px">
+          ${icon('video', '', 'width:20px;height:20px')}
         </div>
         <div>
-          <div style="font-weight:600;font-size:0.95rem;color:var(--text)">Add Video Lecture</div>
+          <div style="font-weight:600;font-size:0.92rem;color:var(--text-pure)">Add Video Lecture</div>
           <div style="font-size:0.78rem;color:var(--muted);margin-top:2px">Import YouTube transcripts to auto-generate cards.</div>
         </div>
-        <span class="action-arrow">${icon('chevron-right', '', 'width:18px;height:18px')}</span>
+        <span class="action-arrow">${icon('chevron-right', '', 'width:16px;height:16px')}</span>
       </div>
 
-      <div class="quick-action-tile" onclick="window.navigate('flashcards')">
-        <div class="icon-chip sky" style="width:44px;height:44px">
-          ${icon('layers', '', 'width:22px;height:22px')}
+      <div class="quick-action-tile tilt-card" onclick="window.navigate('flashcards')">
+        <div class="icon-chip sky" style="width:42px;height:42px">
+          ${icon('layers', '', 'width:20px;height:20px')}
         </div>
         <div>
-          <div style="font-weight:600;font-size:0.95rem;color:var(--text)">3D Flashcard Decks</div>
+          <div style="font-weight:600;font-size:0.92rem;color:var(--text-pure)">3D Flashcard Decks</div>
           <div style="font-size:0.78rem;color:var(--muted);margin-top:2px">Interactive concept flip cards with spacebar shortcuts.</div>
         </div>
-        <span class="action-arrow">${icon('chevron-right', '', 'width:18px;height:18px')}</span>
+        <span class="action-arrow">${icon('chevron-right', '', 'width:16px;height:16px')}</span>
       </div>
 
-      <div class="quick-action-tile" onclick="window.navigate('stats')">
-        <div class="icon-chip amber" style="width:44px;height:44px">
-          ${icon('bar-chart-3', '', 'width:22px;height:22px')}
+      <div class="quick-action-tile tilt-card" onclick="window.navigate('stats')">
+        <div class="icon-chip amber" style="width:42px;height:42px">
+          ${icon('bar-chart-3', '', 'width:20px;height:20px')}
         </div>
         <div>
-          <div style="font-weight:600;font-size:0.95rem;color:var(--text)">Retention Analytics</div>
+          <div style="font-weight:600;font-size:0.92rem;color:var(--text-pure)">Retention Analytics</div>
           <div style="font-size:0.78rem;color:var(--muted);margin-top:2px">Comprehension graphs & historical sessions.</div>
         </div>
-        <span class="action-arrow">${icon('chevron-right', '', 'width:18px;height:18px')}</span>
+        <span class="action-arrow">${icon('chevron-right', '', 'width:16px;height:16px')}</span>
       </div>
     </div>
   `;

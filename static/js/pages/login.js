@@ -3,42 +3,66 @@ import { icon } from '../app.js';
 
 export async function renderLogin(container) {
   container.innerHTML = `
-    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;width:100%">
-      <div class="card" style="width:100%;max-width:420px;padding:38px 32px">
+    <div style="min-height:90vh;display:flex;align-items:center;justify-content:center;padding:24px;width:100%">
+      <div class="card rev" style="width:100%;max-width:920px;padding:0;overflow:hidden;display:grid;grid-template-columns:1fr 1fr;min-height:560px;--i:0" id="login-split-card">
 
-        <!-- Logo & Title -->
-        <div style="text-align:center;margin-bottom:28px">
-          <div class="icon-chip teal" style="width:52px;height:52px;margin:0 auto 14px">
-            ${icon('sparkles', '', 'width:26px;height:26px')}
+        <!-- Left: Auth Form -->
+        <div style="padding:48px 40px;display:flex;flex-direction:column;justify-content:center">
+          
+          <!-- Logo & Title -->
+          <div style="margin-bottom:28px">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+              <div class="icon-chip teal" style="width:40px;height:40px">
+                ${icon('sparkles', '', 'width:20px;height:20px')}
+              </div>
+              <span class="mono-meta" style="font-size:0.75rem;color:var(--teal)">SMART STUDY SUITE</span>
+            </div>
+            <h2 style="font-size:2rem;color:var(--text-pure);letter-spacing:-0.03em">AI Learning <em>Companion</em></h2>
+            <p style="font-size:0.86rem;color:var(--muted);margin-top:4px">Spaced repetition and AI-synthesized lecture notes</p>
           </div>
-          <h2 style="font-size:1.8rem;color:var(--text)">AI Learning <em>Companion</em></h2>
-          <p style="font-size:0.82rem;color:var(--muted);margin-top:4px">Your personalized AI study companion</p>
+
+          <!-- Tab Switching -->
+          <div class="tabs-segmented" style="margin-bottom:20px">
+            <button class="tab-btn-v2 active" id="tab-signin" style="flex:1">Sign In</button>
+            <button class="tab-btn-v2" id="tab-signup" style="flex:1">Create Account</button>
+          </div>
+
+          <!-- Form Fields -->
+          <div class="form-group">
+            <label class="form-label" for="auth-email">Email Address</label>
+            <input id="auth-email" class="form-input input" type="email" placeholder="you@university.edu" />
+          </div>
+
+          <div class="form-group" style="margin-top:14px">
+            <label class="form-label" for="auth-password">Password</label>
+            <input id="auth-password" class="form-input input" type="password" placeholder="••••••••" />
+          </div>
+
+          <div id="auth-error" style="display:none;margin-top:14px;padding:10px 14px;border-radius:var(--r-ctl);font-size:0.82rem;background:rgba(244,63,94,0.1);color:var(--coral);border:1px solid rgba(244,63,94,0.25)"></div>
+          <div id="auth-success" style="display:none;margin-top:14px;padding:10px 14px;border-radius:var(--r-ctl);font-size:0.82rem;background:rgba(16,185,129,0.1);color:var(--emerald);border:1px solid rgba(16,185,129,0.25);text-align:center"></div>
+
+          <button class="btn btn-primary btn-full btn-lg" id="auth-submit" style="margin-top:22px">
+            <span>Sign In</span>
+            ${icon('arrow-right', '', 'width:16px;height:16px')}
+          </button>
         </div>
 
-        <!-- Tab Switching -->
-        <div class="tabs-segmented" style="margin-bottom:20px">
-          <button class="tab-btn-v2 active" id="tab-signin" style="flex:1">Sign In</button>
-          <button class="tab-btn-v2" id="tab-signup" style="flex:1">Create Account</button>
+        <!-- Right: AI Showcase Art Visual -->
+        <div style="position:relative;background:#05070a;border-left:1px solid var(--line);overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:36px 32px">
+          <img src="/static/img/auth_showcase.jpg" alt="Study Sanctuary" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.75" />
+          <div style="position:absolute;inset:0;background:linear-gradient(to top, rgba(7,9,14,0.95) 15%, rgba(7,9,14,0.3) 60%, transparent 100%)"></div>
+          
+          <div style="position:relative;z-index:2">
+            <div class="pill pill-teal" style="margin-bottom:10px;font-size:0.7rem">
+              ${icon('brain-circuit', '', 'width:12px;height:12px')}
+              <span>Next-Gen Recall Engine</span>
+            </div>
+            <h3 style="font-size:1.35rem;color:#ffffff;line-height:1.3;margin-bottom:6px">Master any curriculum in half the time.</h3>
+            <p style="font-size:0.82rem;color:var(--muted);line-height:1.5">
+              Automated video summarization, SM-2 flashcard scheduling, and real-time comprehension drills.
+            </p>
+          </div>
         </div>
-
-        <!-- Form Fields -->
-        <div class="form-group">
-          <label class="form-label" for="auth-email">Email Address</label>
-          <input id="auth-email" class="form-input input" type="email" placeholder="you@university.edu" />
-        </div>
-
-        <div class="form-group" style="margin-top:14px">
-          <label class="form-label" for="auth-password">Password</label>
-          <input id="auth-password" class="form-input input" type="password" placeholder="••••••••" />
-        </div>
-
-        <div id="auth-error" style="display:none;margin-top:14px;padding:10px 14px;border-radius:var(--r-ctl);font-size:0.82rem;background:rgba(251,113,133,0.1);color:var(--coral);border:1px solid rgba(251,113,133,0.3)"></div>
-        <div id="auth-success" style="display:none;margin-top:14px;padding:10px 14px;border-radius:var(--r-ctl);font-size:0.82rem;background:rgba(52,211,153,0.1);color:var(--emerald);border:1px solid rgba(52,211,153,0.3);text-align:center"></div>
-
-        <button class="btn btn-primary btn-full btn-lg" id="auth-submit" style="margin-top:22px">
-          <span>Sign In</span>
-          ${icon('arrow-right', '', 'width:16px;height:16px')}
-        </button>
 
       </div>
     </div>

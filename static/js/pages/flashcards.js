@@ -9,14 +9,23 @@ export async function renderFlashcards(container) {
   }
 
   container.innerHTML = `
-    <!-- Header -->
-    <div style="margin-bottom:28px">
-      <div class="page-title">3D <em>Flashcards</em></div>
-      <p class="page-subtitle">Interactive concept flip deck. Click or press Space to reveal key definitions.</p>
+    <!-- Header Banner with AI Visual Artwork -->
+    <div class="hero-art-banner rev" style="--i:0">
+      <img src="/static/img/flashcards_deck_art.jpg" alt="3D Flashcard Matrix" class="hero-art-bg" />
+      <div class="hero-art-content">
+        <div class="pill pill-sky" style="margin-bottom:12px;font-size:0.72rem">
+          ${icon('layers', '', 'width:12px;height:12px')}
+          <span>Concept Retention Arena</span>
+        </div>
+        <h1 class="page-title" style="font-size:2.4rem;margin-bottom:8px">3D <em>Flashcards</em></h1>
+        <p class="page-subtitle" style="margin-top:0;font-size:0.92rem;max-width:540px">
+          Interactive concept flip deck with spacebar shortcuts, interval ratings, and tactile 3D perspective.
+        </p>
+      </div>
     </div>
 
     <!-- Filters Deck Picker -->
-    <div class="card card-sm" style="margin-bottom:24px">
+    <div class="card card-sm rev" style="margin-bottom:24px;--i:1">
       <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end">
         <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0">
           <label class="form-label">Course</label>

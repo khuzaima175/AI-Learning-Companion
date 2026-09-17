@@ -8,20 +8,29 @@ let _autosaveTimer = null;
 
 export async function renderBrowse(container) {
   container.innerHTML = `
-    <!-- Header -->
-    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:24px;flex-wrap:wrap;gap:16px">
-      <div>
-        <div class="page-title">Course <em>Library</em></div>
-        <p class="page-subtitle">Structured lecture summaries, key concepts, markdown notes, and AI question assistant.</p>
+    <!-- Header Banner with AI Visual Artwork -->
+    <div class="hero-art-banner rev" style="--i:0">
+      <img src="/static/img/course_library_art.jpg" alt="Course Archive" class="hero-art-bg" />
+      <div class="hero-art-content">
+        <div class="pill pill-sky" style="margin-bottom:12px;font-size:0.72rem">
+          ${icon('library', '', 'width:12px;height:12px')}
+          <span>Digital Knowledge Archive</span>
+        </div>
+        <h1 class="page-title" style="font-size:2.4rem;margin-bottom:8px">Course <em>Library</em></h1>
+        <p class="page-subtitle" style="margin-top:0;font-size:0.92rem;max-width:540px">
+          Structured lecture summaries, key concepts, markdown notes, and AI question assistant.
+        </p>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:18px">
+          <button class="btn btn-primary btn-sm" onclick="window.navigate('add-video')">
+            ${icon('plus', '', 'width:14px;height:14px')}
+            <span>Add Lecture</span>
+          </button>
+        </div>
       </div>
-      <button class="btn btn-ghost btn-sm" onclick="window.navigate('add-video')">
-        ${icon('plus', '', 'width:14px;height:14px')}
-        <span>Add Lecture</span>
-      </button>
     </div>
 
     <!-- Search Input with Clear Button -->
-    <div class="card card-xs" style="padding:8px 16px;display:flex;align-items:center;gap:12px;margin-bottom:24px">
+    <div class="card card-xs rev" style="padding:10px 18px;display:flex;align-items:center;gap:12px;margin-bottom:24px;--i:1">
       <span style="color:var(--faint)">${icon('library', '', 'width:18px;height:18px')}</span>
       <input id="browse-search" class="form-input input" 
              placeholder="Search courses, lecture titles, or concepts..." 
