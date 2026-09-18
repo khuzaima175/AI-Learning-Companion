@@ -56,7 +56,7 @@ function renderData(s) {
 
   body.innerHTML = `
     <!-- Top Grid: Accuracy Ring + 4 Metric Cards -->
-    <div style="display:grid;grid-template-columns:220px 1fr;gap:16px;margin-bottom:16px;align-items:stretch">
+    <div class="rev" style="display:grid;grid-template-columns:220px 1fr;gap:16px;margin-bottom:16px;align-items:stretch">
 
       <!-- Accuracy Ring Card -->
       <div class="card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px">
@@ -67,7 +67,7 @@ function renderData(s) {
                     stroke-dasharray="${C}" stroke-dashoffset="${C}"/>
           </svg>
           <div class="goal-ring-center">
-            <div class="serif-num" style="font-size:1.8rem;color:var(--teal)" id="stat-acc-val">0%</div>
+            <div class="serif-num" style="font-size:1.8rem;color:var(--cyan)" id="stat-acc-val">0%</div>
             <div class="mono-meta" style="font-size:0.6rem">RETENTION</div>
           </div>
         </div>
@@ -77,12 +77,12 @@ function renderData(s) {
       <!-- 4 Bento Metric Cards -->
       <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));gap:12px">
         <div class="card card-sm">
-          <div class="icon-chip teal" style="width:32px;height:32px;margin-bottom:8px">${icon('book-open', '', 'width:16px;height:16px')}</div>
+          <div class="icon-chip cyan" style="width:32px;height:32px;margin-bottom:8px">${icon('book-open', '', 'width:16px;height:16px')}</div>
           <div class="serif-num" style="font-size:2.2rem;color:var(--text)" id="sm-courses">0</div>
           <div class="card-title" style="font-size:0.8rem">Courses</div>
         </div>
         <div class="card card-sm">
-          <div class="icon-chip sky" style="width:32px;height:32px;margin-bottom:8px">${icon('clapperboard', '', 'width:16px;height:16px')}</div>
+          <div class="icon-chip indigo" style="width:32px;height:32px;margin-bottom:8px">${icon('clapperboard', '', 'width:16px;height:16px')}</div>
           <div class="serif-num" style="font-size:2.2rem;color:var(--text)" id="sm-videos">0</div>
           <div class="card-title" style="font-size:0.8rem">Lectures</div>
         </div>
@@ -100,13 +100,13 @@ function renderData(s) {
     </div>
 
     <!-- Recent Sessions History -->
-    <div class="card" style="margin-bottom:16px;padding:24px">
+    <div class="card rev" style="margin-bottom:16px;padding:24px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
         <div>
           <h3 style="font-size:1.25rem">Session History</h3>
           <span class="mono-meta">Recorded practice exam logs</span>
         </div>
-        <span class="pill pill-teal">${sessions.length} sessions</span>
+        <span class="pill pill-cyan">${sessions.length} sessions</span>
       </div>
 
       ${sessions.length === 0 ? `
@@ -115,7 +115,7 @@ function renderData(s) {
         </div>` : sessions.map((sess, i) => {
           const sessAcc = sess.answered ? Math.round((sess.correct / sess.answered) * 100) : 0;
           const barPct = Math.round((sess.answered / maxAns) * 100);
-          const pillCls = sessAcc >= 80 ? 'pill-green' : sessAcc >= 60 ? 'pill-teal' : 'pill-coral';
+          const pillCls = sessAcc >= 80 ? 'pill-green' : sessAcc >= 60 ? 'pill-cyan' : 'pill-coral';
           return `
             <div style="margin-bottom:${i < sessions.length - 1 ? '12px' : '0'};padding-bottom:${i < sessions.length - 1 ? '12px' : '0'};border-bottom:${i < sessions.length - 1 ? '1px solid var(--line)' : 'none'}">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
@@ -133,9 +133,9 @@ function renderData(s) {
     </div>
 
     <!-- Cloud Info -->
-    <div class="card card-sm" style="display:flex;justify-content:space-between;align-items:center;background:rgba(45,212,168,0.03)">
+    <div class="card card-sm rev" style="display:flex;justify-content:space-between;align-items:center;background:rgba(0,240,255,0.02)">
       <div style="display:flex;align-items:center;gap:10px">
-        <span style="width:8px;height:8px;border-radius:50%;background:var(--emerald);box-shadow:0 0 8px rgba(52,211,153,0.6)"></span>
+        <span style="width:8px;height:8px;border-radius:50%;background:var(--emerald);box-shadow:0 0 8px rgba(16,185,129,0.7)"></span>
         <div>
           <div style="font-weight:600;font-size:0.85rem">Supabase PostgreSQL Cloud DB</div>
           <div class="mono-meta" style="font-size:0.65rem">Multi-Tenant Tenant Isolation Active</div>

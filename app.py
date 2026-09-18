@@ -148,7 +148,7 @@ async def save_api_key(req: ApiKeyRequest):
 # ══════════════════════════════════════════════════════════════════════════
 
 @app.get("/api/courses")
-async def list_courses(user: dict = Depends(verify_token)):
+def list_courses(user: dict = Depends(verify_token)):
     db = get_db()
     result = db.get_all_courses_full(user_id=user["id"])   # 3 queries instead of 1+2N+V
     response = JSONResponse(content=result)
@@ -157,13 +157,19 @@ async def list_courses(user: dict = Depends(verify_token)):
     return response
 
 
+@app.get("/api/courses/{course_id}/flashcards")
+def get_course_flashcards(course_id: int, user: dict = Depends(verify_token)):
+    db = get_db()
+    return db.get_course_flashcards(course_id, user_id=user["id"])
+
+
 @app.get("/api/videos/{video_id}")
-async def get_video(video_id: int, user: dict = Depends(verify_token)):
+def get_video(video_id: int, user: dict = Depends(verify_token)):
     db = get_db()
     row = db.get_video_details(video_id, user_id=user["id"])
     if not row:
         raise HTTPException(404, "Video not found")
-    title, summary, key_concepts_raw, bullet_points_raw, user_notes = row
+    title, summary, key_concepts_raw, bullet_points_raw, user_notes, yt_vid_id = row
     try:
         key_concepts = json.loads(key_concepts_raw) if key_concepts_raw else []
     except Exception:
@@ -174,14 +180,14 @@ async def get_video(video_id: int, user: dict = Depends(verify_token)):
         bullet_points = []
     q_count = db.get_video_stats(video_id, user_id=user["id"])
     return {
-        "id": video_id, "title": title, "summary": summary,
+        "id": video_id, "video_id": yt_vid_id, "title": title, "summary": summary,
         "key_concepts": key_concepts, "bullet_points": bullet_points,
         "user_notes": user_notes or "", "question_count": q_count,
     }
 
 
 @app.post("/api/add-video")
-async def add_video(req: AddVideoRequest, user: dict = Depends(verify_token)):
+def add_video(req: AddVideoRequest, user: dict = Depends(verify_token)):
     db = get_db()
     api = get_api()
 
@@ -219,13 +225,13 @@ async def add_video(req: AddVideoRequest, user: dict = Depends(verify_token)):
 
 
 @app.post("/api/notes")
-async def update_notes(req: UpdateNotesRequest, user: dict = Depends(verify_token)):
+def update_notes(req: UpdateNotesRequest, user: dict = Depends(verify_token)):
     get_db().update_user_notes(req.video_id, req.notes, user_id=user["id"])
     return {"ok": True}
 
 
 @app.post("/api/ask")
-async def ask_question(req: AskQuestionRequest, user: dict = Depends(verify_token)):
+def ask_question(req: AskQuestionRequest, user: dict = Depends(verify_token)):
     db = get_db()
     api = get_api()
     row = db.get_video_info_for_quiz(req.video_id, user_id=user["id"])
@@ -243,7 +249,7 @@ async def ask_question(req: AskQuestionRequest, user: dict = Depends(verify_toke
 # ══════════════════════════════════════════════════════════════════════════
 
 @app.get("/api/quiz/questions")
-async def get_quiz_questions(
+def get_quiz_questions(
     scope: str = "all",
     scope_id: int = 0,
     limit: int = 10,
@@ -271,7 +277,7 @@ async def get_quiz_questions(
 
 
 @app.post("/api/quiz/generate")
-async def generate_quiz(req: GenerateQuizRequest, user: dict = Depends(verify_token)):
+def generate_quiz(req: GenerateQuizRequest, user: dict = Depends(verify_token)):
     db = get_db()
     api = get_api()
     row = db.get_video_info_for_quiz(req.video_id, user_id=user["id"])
@@ -291,13 +297,13 @@ async def generate_quiz(req: GenerateQuizRequest, user: dict = Depends(verify_to
 
 
 @app.post("/api/quiz/start-session")
-async def start_quiz_session(user: dict = Depends(verify_token)):
+def start_quiz_session(user: dict = Depends(verify_token)):
     sid = get_db().create_quiz_session(user_id=user["id"])
     return {"session_id": sid}
 
 
 @app.post("/api/quiz/answer")
-async def submit_answer(req: QuizAnswerRequest, user: dict = Depends(verify_token)):
+def submit_answer(req: QuizAnswerRequest, user: dict = Depends(verify_token)):
     db = get_db()
     db.update_srs_level(req.question_id, req.performance, user_id=user["id"])
     db.update_quiz_session(req.session_id, req.is_correct, user_id=user["id"])
@@ -309,7 +315,7 @@ async def submit_answer(req: QuizAnswerRequest, user: dict = Depends(verify_toke
 # ══════════════════════════════════════════════════════════════════════════
 
 @app.get("/api/review/due")
-async def get_due_questions(limit: int = 0, user: dict = Depends(verify_token)):
+def get_due_questions(limit: int = 0, user: dict = Depends(verify_token)):
     db = get_db()
     count = db.get_due_review_count(user_id=user["id"])
     rows = db.get_due_questions(user_id=user["id"], limit=limit)
@@ -327,7 +333,7 @@ async def get_due_questions(limit: int = 0, user: dict = Depends(verify_token)):
 
 
 @app.post("/api/review/answer")
-async def submit_review_answer(req: QuizAnswerRequest, user: dict = Depends(verify_token)):
+def submit_review_answer(req: QuizAnswerRequest, user: dict = Depends(verify_token)):
     db = get_db()
     db.update_srs_level(req.question_id, req.performance, user_id=user["id"])
     db.update_quiz_session(req.session_id, req.is_correct, user_id=user["id"])
@@ -339,16 +345,9 @@ async def submit_review_answer(req: QuizAnswerRequest, user: dict = Depends(veri
 # ══════════════════════════════════════════════════════════════════════════
 
 @app.get("/api/stats")
-async def get_stats(user: dict = Depends(verify_token)):
+def get_stats(user: dict = Depends(verify_token)):
     db = get_db()
-    quiz_stats = db.get_quiz_stats(user_id=user["id"])
-    db_info = db.get_database_info(user_id=user["id"])
-    sessions = db.get_recent_sessions(user_id=user["id"], limit=10)
-    session_data = [
-        {"date": str(s[0]), "answered": s[1], "correct": s[2]}
-        for s in sessions
-    ]
-    return {**quiz_stats, **db_info, "recent_sessions": session_data}
+    return db.get_full_stats(user_id=user["id"])
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -356,7 +355,7 @@ async def get_stats(user: dict = Depends(verify_token)):
 # ══════════════════════════════════════════════════════════════════════════
 
 @app.delete("/api/videos/{video_id}")
-async def delete_video(video_id: int, user: dict = Depends(verify_token)):
+def delete_video(video_id: int, user: dict = Depends(verify_token)):
     ok, msg = get_db().delete_video(video_id, user_id=user["id"])
     if not ok:
         raise HTTPException(500, msg)
@@ -364,7 +363,7 @@ async def delete_video(video_id: int, user: dict = Depends(verify_token)):
 
 
 @app.delete("/api/courses/{course_id}")
-async def delete_course(course_id: int, user: dict = Depends(verify_token)):
+def delete_course(course_id: int, user: dict = Depends(verify_token)):
     ok, msg = get_db().delete_course(course_id, user_id=user["id"])
     if not ok:
         raise HTTPException(500, msg)

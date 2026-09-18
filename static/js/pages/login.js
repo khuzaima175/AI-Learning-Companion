@@ -12,12 +12,12 @@ export async function renderLogin(container) {
           <!-- Logo & Title -->
           <div style="margin-bottom:28px">
             <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-              <div class="icon-chip teal" style="width:40px;height:40px">
+              <div class="icon-chip cyan" style="width:40px;height:40px">
                 ${icon('sparkles', '', 'width:20px;height:20px')}
               </div>
-              <span class="mono-meta" style="font-size:0.75rem;color:var(--teal)">SMART STUDY SUITE</span>
+              <span class="mono-meta" style="font-size:0.75rem;color:var(--cyan)">SMART STUDY SUITE</span>
             </div>
-            <h2 style="font-size:2rem;color:var(--text-pure);letter-spacing:-0.03em">AI Learning <em>Companion</em></h2>
+            <h2 style="font-size:2rem;color:var(--text);letter-spacing:-0.03em">AI Learning <em>Companion</em></h2>
             <p style="font-size:0.86rem;color:var(--muted);margin-top:4px">Spaced repetition and AI-synthesized lecture notes</p>
           </div>
 

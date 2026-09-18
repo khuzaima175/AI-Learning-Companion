@@ -178,9 +178,9 @@ export function mapStats(s) {
   };
 }
 
-// Scroll Reveal Observer with Immediate Fallback
+// Scroll Reveal Observer with Immediate Fallback & Stagger
 export function initRevealAnimations(scope = document) {
-  const elements = scope.querySelectorAll('.rev');
+  const elements = scope.querySelectorAll('.rev, .stagger-in');
   if (!elements.length) return;
 
   if ('IntersectionObserver' in window) {
@@ -191,12 +191,15 @@ export function initRevealAnimations(scope = document) {
           obs.unobserve(entry.target);
         }
       });
-    }, { threshold: 0.01 });
+    }, { threshold: 0.05, rootMargin: '0px 0px -20px 0px' });
 
     elements.forEach((el, i) => {
-      el.style.setProperty('--i', i);
+      if (!el.style.getPropertyValue('--i')) {
+        el.style.setProperty('--i', i);
+      }
       observer.observe(el);
-      setTimeout(() => el.classList.add('in'), 150 + i * 40);
+      // Fallback timer in case element is already in viewport
+      setTimeout(() => el.classList.add('in'), 120 + i * 35);
     });
   } else {
     elements.forEach(el => el.classList.add('in'));
@@ -205,7 +208,7 @@ export function initRevealAnimations(scope = document) {
 
 // Cursor Spotlight for Cards
 export function initCardSpotlights(scope = document) {
-  scope.querySelectorAll('.card').forEach(card => {
+  scope.querySelectorAll('.card, .quick-action-tile').forEach(card => {
     card.addEventListener('mousemove', e => {
       const rect = card.getBoundingClientRect();
       const x = e.clientX - rect.left;
@@ -429,7 +432,7 @@ export function launchConfetti() {
     vx: (Math.random() - 0.5) * 14,
     vy: (Math.random() - 0.5) * 14 - 3,
     size: Math.random() * 8 + 4,
-    color: ['#5eead4', '#2dd4a8', '#fbbf24', '#f97316', '#7dd3fc', '#34d399', '#fb7185'][Math.floor(Math.random() * 7)],
+    color: ['#00f0ff', '#38bdf8', '#818cf8', '#6366f1', '#f59e0b', '#10b981', '#f43f5e'][Math.floor(Math.random() * 7)],
     alpha: 1,
     rot: Math.random() * 360,
     vrot: (Math.random() - 0.5) * 10,

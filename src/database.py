@@ -84,7 +84,7 @@ class DatabaseManager:
     def get_video_details(self, video_id: int, user_id: str):
         result = (
             self.sb.table("videos")
-            .select("title, summary, key_concepts, bullet_points, user_notes")
+            .select("title, summary, key_concepts, bullet_points, user_notes, video_id")
             .eq("id", video_id)
             .eq("user_id", user_id)
             .execute()
@@ -98,6 +98,7 @@ class DatabaseManager:
             row["key_concepts"],
             row["bullet_points"],
             row["user_notes"],
+            row.get("video_id", ""),
         )
 
     def update_user_notes(self, video_id: int, notes: str, user_id: str):
@@ -227,6 +228,7 @@ class DatabaseManager:
                 .select("id", count="exact")
                 .eq("video_id", video_id)
                 .eq("user_id", user_id)
+                .limit(0)
                 .execute()
             )
             return result.count or 0
@@ -384,35 +386,103 @@ class DatabaseManager:
         }).eq("id", question_id).eq("user_id", user_id).execute()
 
     # ------------------------------------------------------------------
-    # Stats
+    # Flashcards
     # ------------------------------------------------------------------
 
-    def get_quiz_stats(self, user_id: str) -> dict:
-        total_result = (
-            self.sb.table("quiz_questions").select("id", count="exact").eq("user_id", user_id).execute()
-        )
-        total = total_result.count or 0
-        due = self.get_due_review_count(user_id)
-
-        acc_result = (
-            self.sb.table("quiz_questions")
-            .select("times_answered, times_correct")
+    def get_course_flashcards(self, course_id: int, user_id: str) -> list:
+        """Fetch all extracted key concepts for an entire course in a single query."""
+        res = (
+            self.sb.table("videos")
+            .select("id, title, key_concepts")
+            .eq("course_id", course_id)
             .eq("user_id", user_id)
-            .gt("times_answered", 0)
             .execute()
         )
-        rows = acc_result.data
-        if rows:
-            accuracy = (
-                sum(r["times_correct"] / r["times_answered"] for r in rows) / len(rows)
-            ) * 100
-        else:
-            accuracy = 0.0
+        concepts = []
+        for row in (res.data or []):
+            try:
+                raw_kc = row.get("key_concepts")
+                kc_list = json.loads(raw_kc) if raw_kc else []
+                if isinstance(kc_list, list):
+                    for c in kc_list:
+                        if isinstance(c, dict):
+                            concepts.append({**c, "source": row.get("title", ""), "video_id": row["id"]})
+            except Exception:
+                pass
+        return concepts
+
+    # ------------------------------------------------------------------
+    # Stats & Telemetry
+    # ------------------------------------------------------------------
+
+    def get_full_stats(self, user_id: str) -> dict:
+        """Unified, thread-safe, single-pass telemetry stats.
+        Replaces 7 separate queries and avoids multi-thread socket collisions.
+        """
+        today = datetime.now().date().isoformat()
+
+        # 1. Courses count (fast header count, 0 payload bytes)
+        courses_res = self.sb.table("courses").select("id", count="exact").eq("user_id", user_id).limit(0).execute()
+        courses_count = courses_res.count or 0
+
+        # 2. Videos count (fast header count, 0 payload bytes)
+        videos_res = self.sb.table("videos").select("id", count="exact").eq("user_id", user_id).limit(0).execute()
+        videos_count = videos_res.count or 0
+
+        # 3. All questions telemetry (computes count, due review count, and accuracy in Python memory)
+        q_res = self.sb.table("quiz_questions").select("next_review_date, times_answered, times_correct").eq("user_id", user_id).execute()
+        q_rows = q_res.data or []
+        questions_count = len(q_rows)
+
+        due_count = 0
+        acc_total = 0.0
+        acc_counted = 0
+        for r in q_rows:
+            nrd = r.get("next_review_date")
+            if nrd and nrd <= today:
+                due_count += 1
+            ans = r.get("times_answered") or 0
+            if ans > 0:
+                cor = r.get("times_correct") or 0
+                acc_total += (cor / ans)
+                acc_counted += 1
+
+        accuracy = round((acc_total / acc_counted * 100), 1) if acc_counted > 0 else 0.0
+
+        # 4. Recent sessions (1 query)
+        sessions_res = (
+            self.sb.table("quiz_sessions")
+            .select("session_date, questions_answered, questions_correct")
+            .eq("user_id", user_id)
+            .order("id", desc=True)
+            .limit(10)
+            .execute()
+        )
+        recent_sessions = [
+            {"date": str(r["session_date"]), "answered": r["questions_answered"], "correct": r["questions_correct"]}
+            for r in (sessions_res.data or [])
+        ]
 
         return {
-            "total_questions": total,
-            "due_questions":   due,
-            "accuracy":        round(accuracy, 1),
+            "courses":          courses_count,
+            "videos":           videos_count,
+            "questions":        questions_count,
+            "total_questions":  questions_count,
+            "due":              due_count,
+            "due_questions":    due_count,
+            "due_count":        due_count,
+            "accuracy":         accuracy,
+            "recent_sessions":  recent_sessions,
+            "path":             "Supabase (cloud)",
+            "size_kb":          0,
+        }
+
+    def get_quiz_stats(self, user_id: str) -> dict:
+        stats = self.get_full_stats(user_id)
+        return {
+            "total_questions": stats["questions"],
+            "due_questions":   stats["due"],
+            "accuracy":        stats["accuracy"],
         }
 
     def create_quiz_session(self, user_id: str) -> int:
@@ -425,14 +495,12 @@ class DatabaseManager:
         return result.data[0]["id"]
 
     def update_quiz_session(self, session_id: int, correct: bool, user_id: str):
-        # Use Supabase RPC for atomic increment to avoid read-then-write
         try:
             self.sb.rpc("increment_session", {
                 "s_id": session_id,
                 "add_correct": 1 if correct else 0,
             }).execute()
         except Exception:
-            # Fallback: read-then-write if RPC not available
             result = (
                 self.sb.table("quiz_sessions")
                 .select("questions_answered, questions_correct")
@@ -463,19 +531,11 @@ class DatabaseManager:
         ]
 
     def get_database_info(self, user_id: str) -> dict:
-        # Fire all three count queries concurrently via threads to avoid serial round trips
-        from concurrent.futures import ThreadPoolExecutor
-        def _count(table):
-            return self.sb.table(table).select("id", count="exact").eq("user_id", user_id).execute().count or 0
-        with ThreadPoolExecutor(max_workers=3) as ex:
-            fc = ex.submit(_count, "courses")
-            fv = ex.submit(_count, "videos")
-            fq = ex.submit(_count, "quiz_questions")
-            courses, videos, questions = fc.result(), fv.result(), fq.result()
+        stats = self.get_full_stats(user_id)
         return {
             "path":      "Supabase (cloud)",
             "size_kb":   0,
-            "courses":   courses,
-            "videos":    videos,
-            "questions": questions,
+            "courses":   stats["courses"],
+            "videos":    stats["videos"],
+            "questions": stats["questions"],
         }

@@ -80,18 +80,18 @@ export async function renderDashboard(container) {
     <!-- Bento Grid Row 1: Streak (span-1) | Daily Goal (span-1) | Quote (span-2) -->
     <div class="bento-grid rev" style="margin-bottom:16px;--i:1">
 
-      <!-- 1. Active Streak Card -->
-      <div class="card tilt-card span-1" style="display:flex;flex-direction:column;justify-content:space-between">
+      <!-- 1. Active Streak Card (Streak Badge + Big Num + 7 Dots) -->
+      <div class="card span-1" style="display:flex;flex-direction:column;justify-content:space-between">
         <div>
           <div style="display:flex;justify-content:space-between;align-items:flex-start">
             <span class="card-title">Active streak</span>
-            <div class="flame-sticker">
+            <div class="streak-badge">
               ${icon('flame', '', 'width:18px;height:18px')}
             </div>
           </div>
-          <div style="display:flex;align-items:baseline;gap:6px;margin-top:10px">
-            <span class="serif-num" style="font-size:3.4rem;color:var(--amber)" id="dash-streak-num">${streak.count || 1}</span>
-            <span style="color:var(--muted);font-size:0.95rem;font-weight:600">days</span>
+          <div style="display:flex;align-items:baseline;gap:6px;margin-top:8px">
+            <span class="serif-num" style="font-size:3.5rem;color:var(--amber)" id="dash-streak-num">${streak.count || 1}</span>
+            <span style="color:var(--muted);font-size:0.92rem;font-weight:500">days</span>
           </div>
         </div>
         <div>
@@ -101,7 +101,7 @@ export async function renderDashboard(container) {
       </div>
 
       <!-- 2. Daily Goal -->
-      <div class="card tilt-card span-1" style="display:flex;flex-direction:column;justify-content:space-between">
+      <div class="card span-1" style="display:flex;flex-direction:column;justify-content:space-between">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span class="card-title">Daily target</span>
           <button id="goal-edit-btn" class="btn btn-ghost btn-sm" style="padding:3px 7px" title="Change Target">
@@ -117,16 +117,16 @@ export async function renderDashboard(container) {
                       stroke-dasharray="${CIRC}" stroke-dashoffset="${CIRC}"/>
             </svg>
             <div class="goal-ring-center">
-              <div class="serif-num" style="font-size:1.35rem;color:var(--teal)" id="dash-goal-pct">0%</div>
+              <div class="serif-num" style="font-size:1.45rem;color:var(--cyan)" id="dash-goal-pct">0%</div>
             </div>
           </div>
 
           <div>
             <div style="font-size:0.92rem;font-weight:600;color:var(--text)">
-              <span style="color:var(--teal)">${goal.progress}</span> / ${goal.target}
+              <span style="color:var(--cyan)">${goal.progress}</span> / ${goal.target}
             </div>
             <div style="font-size:0.75rem;color:var(--muted);margin-top:2px">cards reviewed today</div>
-            <span class="pill ${done ? 'pill-green' : 'pill-teal'}" style="font-size:0.62rem;margin-top:6px">
+            <span class="pill ${done ? 'pill-green' : 'pill-cyan'}" style="font-size:0.62rem;margin-top:6px">
               ${done ? 'Target Met' : 'In Progress'}
             </span>
           </div>
@@ -136,7 +136,7 @@ export async function renderDashboard(container) {
       </div>
 
       <!-- 3. Quote of the Day -->
-      <div class="card tilt-card span-2" style="display:flex;flex-direction:column;justify-content:space-between;position:relative">
+      <div class="card span-2" style="display:flex;flex-direction:column;justify-content:space-between;position:relative">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span class="card-title" style="color:var(--muted)">Daily focus</span>
           <button id="dash-refresh-quote" class="btn btn-ghost btn-sm" style="padding:3px 7px" title="New Quote">
@@ -145,14 +145,14 @@ export async function renderDashboard(container) {
         </div>
 
         <div style="display:flex;gap:14px;align-items:flex-start;margin:12px 0">
-          <div style="color:var(--teal);opacity:0.4;flex-shrink:0;margin-top:-2px">
-            ${icon('quote', '', 'width:24px;height:24px')}
+          <div style="color:var(--cyan);opacity:0.35;transform:rotate(-6deg);flex-shrink:0;margin-top:-4px">
+            ${icon('quote', '', 'width:28px;height:28px')}
           </div>
           <div>
             <div id="dash-quote-text" style="font-size:1.15rem;line-height:1.45;color:var(--text);font-weight:500;letter-spacing:-0.01em">
               "${quote.q}"
             </div>
-            <div id="dash-quote-author" style="margin-top:8px;font-size:0.8rem;font-weight:600;color:var(--teal)">
+            <div id="dash-quote-author" style="margin-top:8px;font-size:0.8rem;font-weight:600;color:var(--cyan)">
               — ${quote.a}
             </div>
           </div>
@@ -162,11 +162,11 @@ export async function renderDashboard(container) {
       </div>
     </div>
 
-    <!-- Bento Grid Row 2: Rotating Amber Border Due CTA (span-2) | Merged Library Metrics (span-2) -->
+    <!-- Bento Grid Row 2: Due CTA (span-2) | Merged Library Metrics (span-2) -->
     <div class="bento-grid rev" style="margin-bottom:16px;--i:2">
 
-      <!-- 4. Due Review Queue Card -->
-      <div class="card tilt-card span-2 cta-live" style="display:flex;align-items:center;justify-content:space-between;gap:20px;padding:24px 28px">
+      <!-- 4. Due Review Queue Card (Laser Border .cta-live) -->
+      <div class="card span-2 cta-live" style="display:flex;align-items:center;justify-content:space-between;gap:20px;padding:24px 28px">
         <div style="display:flex;align-items:center;gap:18px">
           <div class="icon-chip amber" style="width:48px;height:48px">
             ${icon('alarm-clock', '', 'width:24px;height:24px')}
@@ -193,7 +193,7 @@ export async function renderDashboard(container) {
         <div class="library-split-col">
           <div>
             <div style="display:flex;align-items:center;gap:8px">
-              <div class="icon-chip teal" style="width:28px;height:28px">${icon('book-open', '', 'width:14px;height:14px')}</div>
+              <div class="icon-chip cyan" style="width:28px;height:28px">${icon('book-open', '', 'width:14px;height:14px')}</div>
               <span class="card-title" style="font-size:0.8rem">Courses</span>
             </div>
             <div class="serif-num" style="font-size:2.2rem;margin:6px 0;color:var(--text-pure)" id="dash-courses-num">0</div>
@@ -207,7 +207,7 @@ export async function renderDashboard(container) {
         <div class="library-split-col">
           <div>
             <div style="display:flex;align-items:center;gap:8px">
-              <div class="icon-chip sky" style="width:28px;height:28px">${icon('clapperboard', '', 'width:14px;height:14px')}</div>
+              <div class="icon-chip indigo" style="width:28px;height:28px">${icon('clapperboard', '', 'width:14px;height:14px')}</div>
               <span class="card-title" style="font-size:0.8rem">Lectures</span>
             </div>
             <div class="serif-num" style="font-size:2.2rem;margin:6px 0;color:var(--text-pure)" id="dash-videos-num">0</div>
@@ -326,22 +326,13 @@ export async function renderDashboard(container) {
 
   // Hydrate Live Backend Data
   try {
-    const [rawStats, courses, dueCount] = await Promise.all([
-      API.get('/api/stats').catch(() => ({})),
-      API.get('/api/courses').catch(() => []),
-      getDueCount(),
-    ]);
-
+    const rawStats = await API.get('/api/stats').catch(() => ({}));
     const s = mapStats(rawStats);
-    const totalCourses = s.courses || courses.length || 0;
-    const totalVideos = s.videos || courses.reduce((a, c) => a + (c.videos?.length || c.video_count || 0), 0);
-    const totalQuestions = s.questions || courses.reduce((a, c) => a + (c.question_count || 0), 0);
-    const finalDue = dueCount || s.due || 0;
 
-    animateCount(document.getElementById('dash-due-count'), finalDue);
-    animateCount(document.getElementById('dash-questions-num'), totalQuestions);
-    animateCount(document.getElementById('dash-courses-num'), totalCourses);
-    animateCount(document.getElementById('dash-videos-num'), totalVideos);
+    animateCount(document.getElementById('dash-due-count'), s.due || 0);
+    animateCount(document.getElementById('dash-questions-num'), s.questions || 0);
+    animateCount(document.getElementById('dash-courses-num'), s.courses || 0);
+    animateCount(document.getElementById('dash-videos-num'), s.videos || 0);
 
     // Populate Activity Bars
     const sessions = s.recent_sessions || [];

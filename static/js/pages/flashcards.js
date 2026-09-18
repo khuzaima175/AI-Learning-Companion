@@ -150,15 +150,7 @@ async function loadFlashcards(videoId, courseId) {
       const v = await API.get(`/api/videos/${videoId}`);
       concepts = (v.key_concepts || []).map(c => ({ ...c, source: v.title }));
     } else {
-      const courses = await API.get('/api/courses');
-      const course = courses.find(c => String(c.id) === String(courseId));
-      for (const v of (course?.videos || [])) {
-        try {
-          const vd = await API.get(`/api/videos/${v.id}`);
-          const kc = (vd.key_concepts || []).map(c => ({ ...c, source: vd.title }));
-          concepts.push(...kc);
-        } catch { /**/ }
-      }
+      concepts = await API.get(`/api/courses/${courseId}/flashcards`);
     }
 
     if (!concepts.length) {
