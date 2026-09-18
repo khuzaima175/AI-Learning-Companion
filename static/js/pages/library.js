@@ -33,10 +33,21 @@ export async function renderLibrary(container, options = {}) {
       </div>
     </div>
 
+    <!-- Mobile Course Pills Selector Bar (Visible on <768px) -->
+    <div class="lib-mobile-course-bar">
+      <div class="lib-mobile-pills-scroll" id="lib-mobile-courses-pills">
+        ${_courses.map(c => `
+          <button class="lib-mobile-pill ${c.id === _selectedCourseId ? 'active' : ''}" data-cid="${c.id}">
+            ${c.name} (${c.video_count || 0})
+          </button>
+        `).join('')}
+      </div>
+    </div>
+
     <!-- Master-Detail Split Grid -->
     <div class="library-split">
       
-      <!-- Left Pane: Courses List (280px) -->
+      <!-- Left Pane: Courses List (280px, Desktop only) -->
       <div class="library-courses-pane">
         <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px 8px">
           <span class="side-label" style="padding:0">All Courses</span>
@@ -78,7 +89,7 @@ export async function renderLibrary(container, options = {}) {
 async function loadCoursesData() {
   try {
     _courses = await API.get('/api/courses');
-    renderCoursesLeftPane();
+    renderCoursesPanes();
 
     if (_courses.length) {
       if (!_selectedCourseId || !_courses.find(c => c.id === _selectedCourseId)) {
@@ -103,12 +114,32 @@ async function loadCoursesData() {
   }
 }
 
-function renderCoursesLeftPane() {
+function renderCoursesPanes() {
   const list = document.getElementById('lib-courses-list');
   const countLbl = document.getElementById('lib-course-count-lbl');
-  if (!list) return;
+  const mobilePills = document.getElementById('lib-mobile-courses-pills');
 
   if (countLbl) countLbl.textContent = _courses.length;
+
+  if (mobilePills) {
+    mobilePills.innerHTML = _courses.map(c => `
+      <button class="lib-mobile-pill ${c.id === _selectedCourseId ? 'active' : ''}" data-cid="${c.id}">
+        <span>${c.name}</span>
+        <span class="mono" style="opacity:0.75;margin-left:4px">${c.video_count || 0}</span>
+      </button>
+    `).join('');
+
+    mobilePills.querySelectorAll('.lib-mobile-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        _selectedCourseId = parseInt(btn.dataset.cid, 10);
+        _selectedLectureIds.clear();
+        renderCoursesPanes();
+        renderSelectedCourseWorkspace();
+      });
+    });
+  }
+
+  if (!list) return;
 
   if (!_courses.length) {
     list.innerHTML = `<div class="caption-text" style="padding:8px">No courses yet.</div>`;
@@ -128,7 +159,7 @@ function renderCoursesLeftPane() {
     el.addEventListener('click', () => {
       _selectedCourseId = parseInt(el.dataset.cid, 10);
       _selectedLectureIds.clear();
-      renderCoursesLeftPane();
+      renderCoursesPanes();
       renderSelectedCourseWorkspace();
     });
   });
@@ -148,7 +179,7 @@ function renderSelectedCourseWorkspace() {
     <!-- Course Header Card -->
     <div class="card" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px">
       <div>
-        <div style="display:flex;align-items:center;gap:10px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <h2 style="font-size:18px;font-weight:600;color:var(--txt-1)">${course.name}</h2>
           <span class="chip chip-neutral mono">${allVideos.length} lectures</span>
         </div>
@@ -157,7 +188,7 @@ function renderSelectedCourseWorkspace() {
         </div>
       </div>
 
-      <div style="display:flex;align-items:center;gap:8px">
+      <div class="lib-course-actions">
         <button class="btn btn-secondary btn-sm" onclick="window.navigate('review?src=course:${course.id}')">
           <svg style="width:13px;height:13px"><use href="#i-rotate-cw"/></svg>
           <span>Review Course</span>
@@ -174,7 +205,7 @@ function renderSelectedCourseWorkspace() {
 
     <!-- Toolbar: Search & Bulk Bar -->
     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-      <div style="position:relative;width:280px">
+      <div class="lib-search-box">
         <input class="form-input" id="lib-search-input" placeholder="Search lectures in course ( / )" value="${_filterTerm}" style="height:32px;padding-left:30px;font-size:12.5px" />
         <svg style="position:absolute;left:10px;top:9px;width:14px;height:14px;color:var(--txt-3);pointer-events:none"><use href="#i-search"/></svg>
       </div>
@@ -185,8 +216,41 @@ function renderSelectedCourseWorkspace() {
       </div>
     </div>
 
-    <!-- Lectures Table -->
-    <div class="tbl-wrap">
+    <!-- Mobile Lecture Cards (Visible on mobile screens) -->
+    <div class="lib-lecture-cards-mobile">
+      ${!filteredVideos.length ? `
+        <div class="card empty-state" style="padding:24px 12px">
+          <div class="caption-text">No lectures found in this course.</div>
+        </div>
+      ` : filteredVideos.map(v => `
+        <div class="card card-xs lib-lecture-card-item">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+            <div style="flex:1;min-width:0">
+              <a href="#lecture/${v.id}" onclick="window.navigate('lecture/${v.id}');return false;" class="lib-lecture-card-title">
+                <svg style="width:14px;height:14px;color:var(--acc-400);flex-shrink:0"><use href="#i-video"/></svg>
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.title}</span>
+              </a>
+              <div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap">
+                <span class="chip chip-neutral mono" style="font-size:10.5px">${v.concept_count || 16} cards</span>
+                <span class="chip chip-neutral mono" style="font-size:10.5px">${v.question_count || 20} Qs</span>
+                <span class="chip chip-ok" style="font-size:10px">Ready</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px">
+              <button class="btn btn-secondary btn-sm" onclick="window.navigate('lecture/${v.id}')" style="padding:0 8px;height:28px">
+                <span>View</span>
+              </button>
+              <button class="btn btn-ghost btn-icon btn-sm row-del-btn" data-vid="${v.id}" data-vtitle="${v.title}" title="Delete Video" style="color:var(--danger-400)">
+                <svg style="width:13px;height:13px"><use href="#i-trash-2"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+
+    <!-- Desktop Lectures Table -->
+    <div class="tbl-wrap lib-desktop-table">
       <table class="tbl">
         <thead>
           <tr>

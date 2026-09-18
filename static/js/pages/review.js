@@ -31,14 +31,14 @@ export async function renderReview(container, options = {}) {
 
   container.innerHTML = `
     <!-- Distraction-Free Session Bar (52px) -->
-    <div id="focused-session-bar" style="padding:0 28px">
-      <div style="display:flex;align-items:center;gap:14px">
+    <div id="focused-session-bar">
+      <div class="session-bar-left">
         <button class="btn btn-ghost btn-sm" id="session-exit-btn" title="Exit Review (ESC)">
           <svg style="width:14px;height:14px"><use href="#i-x"/></svg>
-          <span>Exit (<span class="kbd" style="font-size:10px">Esc</span>)</span>
+          <span class="session-exit-label">Exit (<span class="kbd" style="font-size:10px">Esc</span>)</span>
         </button>
-        <span class="caption-text" style="color:var(--txt-3)">|</span>
-        <div style="display:flex;align-items:center;gap:8px">
+        <span class="caption-text session-sep" style="color:var(--txt-3)">|</span>
+        <div class="session-src-wrap">
           <div class="icon-tile accent" style="width:24px;height:24px">
             <svg style="width:13px;height:13px"><use href="#i-rotate-cw"/></svg>
           </div>
@@ -46,17 +46,17 @@ export async function renderReview(container, options = {}) {
         </div>
       </div>
 
-      <div style="display:flex;align-items:center;gap:16px;flex:1;max-width:440px;margin:0 32px">
+      <div class="session-bar-center">
         <div class="progress-track" style="height:6px">
           <div class="progress-fill" id="session-prog-fill" style="width:0%"></div>
         </div>
         <span class="caption-text mono" id="session-prog-lbl" style="white-space:nowrap;font-weight:500">0 / 0</span>
       </div>
 
-      <div style="display:flex;align-items:center;gap:14px">
+      <div class="session-bar-right">
         <div class="chip chip-warn mono" id="session-streak-chip">
           <svg style="width:12px;height:12px"><use href="#i-flame"/></svg>
-          <span>${Streak.get().count}d streak</span>
+          <span class="session-streak-text">${Streak.get().count}d streak</span>
         </div>
         <span class="caption-text mono" id="session-timer-lbl" style="font-size:13px">00:00</span>
         <button class="btn btn-ghost btn-icon btn-sm" id="session-help-btn" title="Shortcuts (?)">
@@ -317,7 +317,7 @@ function renderCurrentCard() {
         <div class="card card-sm">
           <span class="card-title" style="margin-bottom:14px;display:block">Session Live Telemetry</span>
           
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+          <div class="stat-grid-2" style="margin-bottom:16px">
             <div style="background:var(--bg-2);padding:12px;border-radius:var(--r-sm)">
               <div class="caption-text">Reviewed</div>
               <div class="mono" style="font-size:22px;font-weight:600;color:var(--txt-1)">${_currentIndex}</div>
@@ -522,7 +522,7 @@ function renderEndScreen() {
       <h2 style="font-size:24px;font-weight:600;color:var(--txt-1);margin-bottom:8px">Session Complete!</h2>
       <p class="body-text" style="margin-bottom:32px;font-size:14.5px">All items in this review queue have been calibrated with spaced repetition intervals.</p>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:32px">
+      <div class="stat-grid-3" style="margin-bottom:32px">
         <div class="card card-xs" style="background:var(--bg-2);padding:16px">
           <div class="caption-text">Reviewed</div>
           <div class="mono" style="font-size:24px;font-weight:600;color:var(--txt-1)">${_items.length}</div>

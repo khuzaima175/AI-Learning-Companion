@@ -43,7 +43,7 @@ export async function renderPractice(container, options = {}) {
     </div>
 
     <!-- 2-Column Hub Layout -->
-    <div style="display:grid;grid-template-columns:2fr 1.2fr;gap:16px" class="grid-2fr-1fr">
+    <div class="grid-2fr-1fr">
       
       <!-- Left Column: Exam Configuration -->
       <div class="card" style="display:flex;flex-direction:column;gap:18px">
@@ -358,29 +358,29 @@ function renderActiveSession(container) {
 
   container.innerHTML = `
     <!-- Session Bar -->
-    <div id="focused-session-bar" style="padding:0 28px">
-      <div style="display:flex;align-items:center;gap:14px">
+    <div id="focused-session-bar">
+      <div class="session-bar-left">
         <button class="btn btn-ghost btn-sm" id="session-abort-btn">
           <svg style="width:14px;height:14px"><use href="#i-x"/></svg>
-          <span>Exit Drill (<span class="kbd" style="font-size:10px">Esc</span>)</span>
+          <span class="session-exit-label">Exit Drill (<span class="kbd" style="font-size:10px">Esc</span>)</span>
         </button>
-        <span class="caption-text" style="color:var(--txt-3)">|</span>
-        <div style="display:flex;align-items:center;gap:8px">
+        <span class="caption-text session-sep" style="color:var(--txt-3)">|</span>
+        <div class="session-src-wrap">
           <div class="icon-tile accent" style="width:24px;height:24px">
             <svg style="width:13px;height:13px"><use href="#i-brain-circuit"/></svg>
           </div>
-          <span style="font-size:13.5px;font-weight:600;color:var(--txt-1)">Practice Drill</span>
+          <span style="font-size:13.5px;font-weight:600;color:var(--txt-1)" id="session-src-title">Practice Drill</span>
         </div>
       </div>
 
-      <div style="display:flex;align-items:center;gap:16px;flex:1;max-width:440px;margin:0 32px">
+      <div class="session-bar-center">
         <div class="progress-track" style="height:6px">
           <div class="progress-fill" style="width:${Math.round(((_activeIdx + 1) / _questions.length) * 100)}%"></div>
         </div>
-        <span class="caption-text mono" style="font-weight:500">${_activeIdx + 1} / ${_questions.length}</span>
+        <span class="caption-text mono" id="session-prog-lbl" style="white-space:nowrap;font-weight:500">${_activeIdx + 1} / ${_questions.length}</span>
       </div>
 
-      <div style="display:flex;align-items:center;gap:14px">
+      <div class="session-bar-right">
         ${_timerSeconds > 0 ? `<div class="chip chip-warn mono" id="drill-timer-chip" style="font-size:13px">${_timeLeft}s</div>` : ''}
       </div>
     </div>
@@ -435,7 +435,7 @@ function renderActiveSession(container) {
         <div class="study-telemetry-rail">
           <div class="card card-sm">
             <span class="card-title" style="margin-bottom:14px;display:block">Drill Performance</span>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+            <div class="stat-grid-2" style="margin-bottom:16px">
               <div style="background:var(--bg-2);padding:12px;border-radius:var(--r-sm)">
                 <div class="caption-text">Score</div>
                 <div class="mono" style="font-size:22px;font-weight:600;color:var(--acc-400)">${_score}</div>

@@ -46,7 +46,7 @@ export async function renderToday(container) {
 
     <!-- Queue Hero Card (Full Width) -->
     <div class="card" style="margin-bottom:16px;background:var(--bg-1)">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:center" class="hero-grid">
+      <div class="hero-grid">
         <div>
           <div style="display:flex;align-items:baseline;gap:10px">
             <span class="mono" style="font-size:36px;font-weight:600;color:var(--txt-1);line-height:1" id="today-due-hero">0</span>
@@ -79,7 +79,7 @@ export async function renderToday(container) {
     </div>
 
     <!-- Row B (2fr / 1fr): Continue Learning | Due by Course -->
-    <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px" class="grid-2fr-1fr">
+    <div class="grid-2fr-1fr" style="margin-bottom:16px">
       
       <!-- Continue Learning List -->
       <div class="card" style="display:flex;flex-direction:column;gap:14px">
@@ -108,7 +108,7 @@ export async function renderToday(container) {
     </div>
 
     <!-- Row C (2fr / 1fr): Recent Sessions Table | 7-Day Forecast & Weak Spots -->
-    <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px" class="grid-2fr-1fr">
+    <div class="grid-2fr-1fr">
       
       <!-- Recent Practice & Review Sessions Table -->
       <div class="card" style="display:flex;flex-direction:column;gap:14px;padding:0;overflow:hidden">

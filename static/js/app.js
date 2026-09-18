@@ -590,8 +590,10 @@ export function icon(id, extraClass = '', extraStyle = '') {
 }
 
 export function ytId(url) {
-  if (!url) return null;
-  const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+  if (!url || typeof url !== 'string') return null;
+  const str = url.trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(str)) return str;
+  const m = str.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
   return m ? m[1] : null;
 }
 

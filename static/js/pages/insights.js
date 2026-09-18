@@ -16,7 +16,7 @@ export async function renderInsights(container) {
     </div>
 
     <!-- Row 1: 4 KPI Cards -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:14px;margin-bottom:16px">
+    <div class="kpi-grid-4" style="margin-bottom:16px">
       
       <div class="stat-card">
         <div class="stat-header">
@@ -65,7 +65,7 @@ export async function renderInsights(container) {
     </div>
 
     <!-- Row 2: 30-Day Volume Bars & Annual Calendar Heatmap -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px" class="grid-1fr-1fr">
+    <div class="grid-1fr-1fr" style="margin-bottom:16px">
       
       <!-- 30-Day Activity Volume -->
       <div class="card">

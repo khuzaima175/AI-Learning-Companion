@@ -2,6 +2,63 @@
    AI Learning Companion — Page-Specific Layouts & Overlays
    ══════════════════════════════════════════════════════════════════ */
 
+/* ── 0. Responsive Grid Utilities ───────────────────────────────── */
+.grid-2fr-1fr {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+}
+
+.hero-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: center;
+}
+
+.grid-1fr-1fr {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.kpi-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+.stat-grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+}
+
+.stat-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.lib-search-box {
+  position: relative;
+  width: 280px;
+  max-width: 100%;
+}
+
+.lib-course-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 /* ── 1. Master-Detail Library Layout (`#/library`) ─────────────── */
 .library-split {
   display: grid;
@@ -64,6 +121,14 @@
   gap: 4px;
   border-bottom: 1px solid var(--line-1);
   margin-bottom: 18px;
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.lecture-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .lecture-tab-btn {
@@ -75,6 +140,8 @@
   cursor: pointer;
   transition: color var(--t-fast), border-color var(--t-fast);
   margin-bottom: -1px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .lecture-tab-btn:hover {
@@ -119,12 +186,6 @@
   gap: 24px;
   align-items: start;
   width: 100%;
-}
-
-@media (max-width: 1024px) {
-  .study-cockpit-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 .study-telemetry-rail {
@@ -492,3 +553,301 @@
   border-color: rgba(79, 184, 121, 0.4);
   color: var(--ok-400);
 }
+
+/* ── 8. Mobile Page Responsive Overrides ─────────────────────────── */
+.lib-mobile-course-bar {
+  display: none;
+  margin-bottom: 12px;
+}
+
+.lib-mobile-pills-scroll {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 4px 0 6px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  max-width: 100%;
+}
+
+.lib-mobile-pills-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.lib-mobile-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--r-full);
+  background: var(--bg-2);
+  border: 1px solid var(--line-1);
+  color: var(--txt-2);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
+}
+
+.lib-mobile-pill.active {
+  background: var(--acc-tint);
+  border-color: var(--acc-500);
+  color: var(--acc-400);
+  font-weight: 600;
+}
+
+.lib-lecture-cards-mobile {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lib-lecture-card-item {
+  background: var(--bg-1);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+}
+
+.lib-lecture-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--txt-1);
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.lec-mobile-cta-card {
+  display: none;
+  margin-bottom: 14px;
+  background: var(--bg-2);
+}
+
+.lecture-right-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Question Card styling in Lecture Detail */
+.lec-questions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lec-question-item {
+  background: var(--bg-2);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lec-question-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.lec-question-text {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--txt-1);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.lec-options-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lec-option-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--r-sm);
+  background: var(--bg-1);
+  border: 1px solid var(--line-1);
+  font-size: 12.5px;
+  color: var(--txt-2);
+  cursor: pointer;
+  transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
+  word-break: break-word;
+}
+
+.lec-option-row:hover:not(.answered) {
+  background: var(--bg-3);
+  color: var(--txt-1);
+}
+
+.lec-option-row.correct {
+  background: var(--ok-tint);
+  border-color: var(--ok-400);
+  color: var(--ok-400);
+  font-weight: 500;
+}
+
+.lec-option-row.wrong {
+  background: var(--danger-tint);
+  border-color: var(--danger-400);
+  color: var(--danger-400);
+}
+
+@media (max-width: 1024px) {
+  .study-cockpit-grid {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+}
+
+@media (max-width: 860px) {
+  .grid-2fr-1fr {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+  .grid-1fr-1fr {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+  .lecture-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 14px !important;
+  }
+  .lecture-layout > * {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+}
+
+@media (max-width: 768px) {
+  #lecture-head-area .page-head-actions {
+    display: none !important;
+  }
+  .library-courses-pane {
+    display: none !important;
+  }
+  .lib-mobile-course-bar {
+    display: block;
+  }
+  .library-split {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 12px;
+  }
+  .library-split > * {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+  .lec-mobile-cta-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .lecture-right-rail {
+    display: none !important;
+  }
+  .lecture-layout > .card {
+    padding: 16px 14px !important;
+  }
+  .lecture-tabs {
+    margin-bottom: 14px;
+    gap: 2px;
+  }
+  .lecture-tab-btn {
+    padding: 7px 10px;
+    font-size: 12.5px;
+  }
+  .hero-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+  .review-scene-wrap {
+    padding: 8px 0;
+  }
+  .flip-scene, .flip-card {
+    min-height: 300px;
+  }
+  .card-face {
+    padding: 22px 18px;
+  }
+}
+
+@media (max-width: 640px) {
+  .lib-lecture-cards-mobile {
+    display: flex;
+  }
+  .tbl-wrap.lib-desktop-table {
+    display: none !important;
+  }
+  #ai-drawer {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    border-left: none;
+  }
+  .palette-backdrop {
+    padding: 12px;
+    padding-top: 6vh;
+  }
+  .palette-modal {
+    width: 100%;
+    max-width: 100%;
+  }
+  .lib-search-box {
+    width: 100%;
+  }
+  .form-grid-2 {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+  .stat-grid-3 {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+  .kpi-grid-4 {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+  }
+  .concept-cards-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .lecture-layout > .card {
+    padding: 12px 10px !important;
+  }
+  .lec-question-item {
+    padding: 12px 10px;
+  }
+  .kpi-grid-4 {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+  .stat-grid-2 {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+  .lib-course-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .lib-course-actions .btn {
+    flex: 1;
+    font-size: 11.5px;
+    padding: 0 6px;
+  }
+}
+

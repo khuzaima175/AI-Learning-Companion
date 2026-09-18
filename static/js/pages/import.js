@@ -19,13 +19,13 @@ export async function renderImport(container) {
     </div>
 
     <!-- 2-Column Ingestion Console Grid -->
-    <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px" class="grid-2fr-1fr">
+    <div class="grid-2fr-1fr">
       
       <!-- Left Column: Ingestion Form -->
       <div class="card" style="display:flex;flex-direction:column;gap:16px">
         
         <!-- Source Selector -->
-        <div class="segmented" style="width:fit-content" id="import-source-seg">
+        <div class="segmented" id="import-source-seg">
           <button class="segmented-btn active" data-src="youtube">YouTube URL</button>
           <button class="segmented-btn" data-src="manual">Manual Transcript</button>
         </div>
@@ -58,7 +58,7 @@ export async function renderImport(container) {
         </div>
 
         <!-- Title and Course Inputs -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div class="form-grid-2">
           <div class="form-group">
             <label class="form-label" for="av-title">Lecture Title</label>
             <input class="form-input" id="av-title" placeholder="e.g., Attention &amp; Transformer Architecture" />

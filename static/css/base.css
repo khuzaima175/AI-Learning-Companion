@@ -499,8 +499,11 @@ input, select, textarea {
   margin-top: var(--topbar-h);
   min-height: calc(100vh - var(--topbar-h));
   min-width: 0;
+  max-width: 100vw;
+  box-sizing: border-box;
   padding: 28px 32px;
   transition: margin-left var(--t-med);
+  overflow-x: hidden;
 }
 
 #sidebar.sidebar-collapsed + #main-content,
@@ -512,6 +515,8 @@ body.sidebar-collapsed #main-content {
   max-width: var(--page-max);
   margin: 0 auto;
   width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 /* Page Header Standard */
@@ -572,28 +577,77 @@ body.mode-focused #main-content {
 }
 
 /* Mobile Toggle & Off-canvas Drawer */
+/* Mobile Toggle & Off-canvas Drawer */
 .mobile-nav-toggle {
   display: none;
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: var(--r-sm);
   background: var(--bg-2);
   border: 1px solid var(--line-1);
   align-items: center;
   justify-content: center;
   color: var(--txt-2);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+
+.mobile-nav-toggle:hover {
+  background: var(--bg-3);
+  color: var(--txt-1);
 }
 
 .mobile-overlay {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.7);
   z-index: 35;
+  transition: opacity var(--t-fast);
 }
 
 .mobile-overlay.active {
   display: block;
+}
+
+/* ── Focused Session Bar (Review & Practice Session) ────────────── */
+#focused-session-bar {
+  height: var(--sessionbar-h);
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--line-1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  gap: 12px;
+}
+
+.session-bar-left, .session-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.session-src-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.session-bar-center {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  max-width: 440px;
+  margin: 0 24px;
+  min-width: 0;
 }
 
 /* ── Responsive Breakpoints ────────────────────────────────────── */
@@ -620,7 +674,7 @@ body.mode-focused #main-content {
   }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 768px) {
   .mobile-nav-toggle {
     display: flex;
   }
@@ -629,6 +683,7 @@ body.mode-focused #main-content {
     width: 260px !important;
     top: 0;
     z-index: 40;
+    box-shadow: var(--sh-2);
   }
   #sidebar.mobile-open {
     transform: translateX(0);
@@ -647,13 +702,134 @@ body.mode-focused #main-content {
     padding: 0 10px;
   }
   #topbar {
-    padding: 0 12px;
+    padding: 0 10px;
+    gap: 8px;
+  }
+  .topbar-brand {
+    width: auto;
+  }
+  .topbar-brand-title {
+    font-size: 13px;
+  }
+  .breadcrumbs {
+    display: none;
   }
   .topbar-center {
     display: none;
   }
+  .topbar-right {
+    gap: 6px;
+  }
+  #top-start-review {
+    padding: 0 8px;
+    height: 30px;
+    font-size: 12px;
+    gap: 5px;
+  }
+  #top-start-review .top-start-review-text {
+    display: none;
+  }
   #main-content {
     margin-left: 0 !important;
-    padding: 18px 14px;
+    padding: 16px 12px;
+    min-height: calc(100vh - var(--topbar-h));
+  }
+  .page-head {
+    margin-bottom: 16px;
+    gap: 10px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .page-head-title {
+    font-size: 20px;
+  }
+  .page-head-desc {
+    font-size: 12.5px;
+  }
+  .page-head-actions {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .page-head-actions .btn {
+    flex: 1 1 auto;
+    min-width: 120px;
+  }
+
+  /* Focused Session Bar Mobile */
+  #focused-session-bar {
+    padding: 0 10px;
+    height: 48px;
+    gap: 8px;
+  }
+  .session-sep {
+    display: none;
+  }
+  .session-bar-center {
+    margin: 0 6px;
+    max-width: 220px;
+    gap: 8px;
+  }
+  #session-src-title {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12.5px;
+  }
+  .session-bar-left, .session-bar-right {
+    gap: 6px;
+  }
+}
+
+@media (max-width: 480px) {
+  #topbar {
+    padding: 0 8px;
+  }
+  .topbar-left {
+    gap: 8px;
+  }
+  .topbar-brand-title {
+    font-size: 12.5px;
+  }
+  #top-streak-chip {
+    padding: 2px 5px;
+    font-size: 10.5px;
+  }
+  #top-assistant-btn {
+    width: 28px;
+    height: 28px;
+  }
+  #top-user-avatar {
+    width: 24px;
+    height: 24px;
+    font-size: 10.5px;
+  }
+  #main-content {
+    padding: 12px 8px;
+  }
+  .page-head-title {
+    font-size: 18px;
+  }
+  .page-head-actions .btn {
+    flex: 1 1 100%;
+  }
+
+  /* Compact Session Bar for small screens */
+  #session-exit-btn .session-exit-label {
+    display: none;
+  }
+  #session-streak-chip .session-streak-text {
+    display: none;
+  }
+  #session-streak-chip {
+    padding: 3px 6px;
+  }
+  #session-help-btn {
+    display: none;
+  }
+  #session-timer-lbl {
+    font-size: 11.5px;
   }
 }

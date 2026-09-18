@@ -157,10 +157,23 @@ def list_courses(user: dict = Depends(verify_token)):
     return response
 
 
+class CreateCourseRequest(BaseModel):
+    name: str
+
+
 @app.get("/api/courses/{course_id}/flashcards")
 def get_course_flashcards(course_id: int, user: dict = Depends(verify_token)):
     db = get_db()
     return db.get_course_flashcards(course_id, user_id=user["id"])
+
+
+@app.post("/api/courses")
+def create_course(req: CreateCourseRequest, user: dict = Depends(verify_token)):
+    if not req.name.strip():
+        raise HTTPException(400, "Course name cannot be empty")
+    db = get_db()
+    cid = db.get_or_create_course(req.name.strip(), user_id=user["id"])
+    return {"ok": True, "id": cid, "name": req.name.strip()}
 
 
 @app.get("/api/videos/{video_id}")

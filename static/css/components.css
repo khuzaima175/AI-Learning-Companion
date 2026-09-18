@@ -800,3 +800,94 @@
   color: var(--txt-2);
   max-width: 360px;
 }
+
+/* ── Component Responsive Rules ─────────────────────────────────── */
+@media (max-width: 768px) {
+  .card {
+    padding: 16px 14px;
+    border-radius: var(--r-md);
+  }
+  .card-sm {
+    padding: 12px 12px;
+  }
+  .stat-card {
+    padding: 12px 14px;
+    gap: 8px;
+  }
+  .stat-value {
+    font-size: 20px;
+  }
+  .tbl th, .tbl td {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+  .tbl-wrap {
+    border-radius: var(--r-md);
+    -webkit-overflow-scrolling: touch;
+  }
+  .chart-bars-wrap {
+    gap: 4px;
+    height: 110px;
+  }
+  .chart-bar-fill {
+    max-width: 16px;
+  }
+  .empty-state {
+    padding: 32px 14px;
+  }
+}
+
+@media (max-width: 640px) {
+  .radio-card-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .quiz-options-list {
+    gap: 8px;
+    margin: 14px 0;
+  }
+  .quiz-opt-row {
+    padding: 12px 14px;
+    min-height: 48px;
+    gap: 10px;
+    font-size: 13.5px;
+  }
+  .quiz-opt-key {
+    width: 24px;
+    height: 24px;
+    font-size: 11px;
+    border-radius: 4px;
+  }
+  .toast-msg {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: auto;
+    font-size: 12px;
+    padding: 10px 14px;
+    text-align: center;
+  }
+  .segmented-btn {
+    padding: 0 8px;
+    font-size: 11.5px;
+    height: 26px;
+  }
+}
+
+@media (max-width: 540px) {
+  .anki-rating-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .anki-btn {
+    padding: 10px 8px;
+    min-height: 48px;
+  }
+  .anki-btn-title {
+    font-size: 12.5px;
+  }
+  .anki-btn-interval {
+    font-size: 11px;
+  }
+}
+
