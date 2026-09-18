@@ -177,7 +177,7 @@ function renderSelectedCourseWorkspace() {
 
   pane.innerHTML = `
     <!-- Course Header Card -->
-    <div class="card" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px">
+    <div class="card spot" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px">
       <div>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <h2 style="font-size:18px;font-weight:600;color:var(--txt-1)">${course.name}</h2>
@@ -217,7 +217,7 @@ function renderSelectedCourseWorkspace() {
     </div>
 
     <!-- Mobile Lecture Cards (Visible on mobile screens) -->
-    <div class="lib-lecture-cards-mobile">
+    <div class="lib-lecture-cards-mobile" data-stagger>
       ${!filteredVideos.length ? `
         <div class="card empty-state" style="padding:24px 12px">
           <div class="caption-text">No lectures found in this course.</div>

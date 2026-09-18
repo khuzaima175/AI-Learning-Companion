@@ -176,8 +176,12 @@
 .review-scene-wrap {
   max-width: 1340px;
   margin: 0 auto;
-  padding: 28px 24px;
+  padding: 24px;
   width: 100%;
+  min-height: calc(100vh - var(--sessionbar-h) - 32px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .study-cockpit-grid {
@@ -186,6 +190,21 @@
   gap: 24px;
   align-items: start;
   width: 100%;
+}
+
+.review-slide-in {
+  animation: answerSlideIn var(--dur-reveal) var(--ease-out);
+}
+
+@keyframes answerSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .study-telemetry-rail {

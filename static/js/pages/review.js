@@ -213,7 +213,7 @@ function renderCurrentCard() {
       <!-- Left Column: Active Study Question Stage -->
       <div style="display:flex;flex-direction:column;gap:18px">
         
-        <div class="card" style="padding:34px 32px;min-height:420px;display:flex;flex-direction:column;justify-content:space-between">
+        <div class="card spot" style="padding:34px 32px;min-height:420px;display:flex;flex-direction:column;justify-content:space-between">
           
           <div>
             <!-- Card Header Meta -->
@@ -447,7 +447,10 @@ function revealQuizAnswer(chosenVal, selectedEl) {
   if (hint) hint.style.display = 'none';
 
   const controls = document.getElementById('review-controls-area');
-  if (controls) controls.style.display = 'flex';
+  if (controls) {
+    controls.style.display = 'flex';
+    controls.classList.add('review-slide-in');
+  }
 }
 
 function toggleFlip() {

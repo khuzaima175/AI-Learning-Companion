@@ -413,8 +413,11 @@
 
 .tbl th {
   padding: 10px 14px;
-  background: var(--bg-0);
+  background: var(--bg-1);
   border-bottom: 1px solid var(--line-1);
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 
 .tbl td {
@@ -888,6 +891,100 @@
   }
   .anki-btn-interval {
     font-size: 11px;
+  }
+}
+
+/* ── Motion & Reveal System ──────────────────────────────────────── */
+@media (hover: hover) {
+  .card.spot {
+    position: relative;
+    overflow: clip;
+  }
+  .card.spot::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--dur-reveal) var(--ease-out);
+    background: radial-gradient(280px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, 0.045), transparent 65%);
+    z-index: 1;
+  }
+  .card.spot:hover::before {
+    opacity: 1;
+  }
+}
+
+.reveal {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.reveal.in {
+  opacity: 1;
+  transform: none;
+  transition: opacity var(--dur-reveal) var(--ease-out), transform var(--dur-reveal) var(--ease-out);
+  transition-delay: calc(var(--i, 0) * 45ms);
+}
+
+/* Page Entry */
+.page-enter {
+  animation: pageIn var(--dur-page) var(--ease-out);
+}
+
+@keyframes pageIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Count-up CLS containment */
+[data-count], .count-val {
+  display: inline-block;
+  min-width: 2.8ch;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Amber Due Dot Subtle Pulse */
+.quiet-badge.pulse .quiet-dot,
+#top-start-review .status-dot.warn {
+  animation: dueDotPulse 2.2s ease-in-out infinite;
+}
+
+@keyframes dueDotPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.85);
+  }
+}
+
+/* Accessibility: Reduced Motion (preserves static ambient layers) */
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+  .page-enter {
+    animation: none !important;
+  }
+  .quiet-badge.pulse .quiet-dot,
+  #top-start-review .status-dot.warn {
+    animation: none !important;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
   }
 }
 

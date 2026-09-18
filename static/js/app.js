@@ -13,6 +13,7 @@ import { renderPractice } from './pages/practice.js';
 import { renderInsights } from './pages/insights.js';
 import { renderSettings } from './pages/settings.js';
 import { renderLogin } from './pages/login.js';
+import { initMotion, cleanupMotion } from './motion.js';
 
 let _cachedDue = null;
 let _lastDueFetch = 0;
@@ -99,12 +100,16 @@ export async function navigate(rawRoute) {
   const container = document.getElementById('page-content');
   if (!container) return;
 
+  // Cleanup active motion observers and rAF before page transition
+  cleanupMotion();
+
   // Global Page Transition: 120ms fade out, swap content, 160ms fade in
   container.style.opacity = '0';
   container.style.transition = 'opacity 120ms ease';
 
   await new Promise(r => setTimeout(r, 120));
   container.innerHTML = '';
+  container.classList.remove('page-enter');
 
   try {
     if (primary === 'login') {
@@ -147,6 +152,8 @@ export async function navigate(rawRoute) {
   } finally {
     container.style.opacity = '1';
     container.style.transition = 'opacity 160ms ease';
+    container.classList.add('page-enter');
+    initMotion(container);
     updateGlobalMetrics();
   }
 }

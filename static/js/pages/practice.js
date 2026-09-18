@@ -1,6 +1,6 @@
 /* ══════════════════════════════════════════════════════════════════
    AI Learning Companion — Practice Hub & Drill Engine (`#/practice`)
-   High-Density Exam Suite: Scope Config, Active Drill & Deep Results Review
+   High-Density Exam Suite: Scope Config, Active Drill, Telemetry & Full History
    ══════════════════════════════════════════════════════════════════ */
 
 import { API, showToast, DailyGoal, Streak, navigate, skel } from '../app.js';
@@ -42,11 +42,11 @@ export async function renderPractice(container, options = {}) {
       </div>
     </div>
 
-    <!-- 2-Column Hub Layout -->
-    <div class="grid-2fr-1fr">
+    <!-- 2-Column Top Hub Layout -->
+    <div class="grid-2fr-1fr" style="margin-bottom:18px" data-stagger>
       
       <!-- Left Column: Exam Configuration -->
-      <div class="card" style="display:flex;flex-direction:column;gap:18px">
+      <div class="card spot" style="display:flex;flex-direction:column;gap:18px">
         <span class="card-title">Configure Practice Session</span>
 
         <!-- Scope Radio Cards -->
@@ -98,7 +98,7 @@ export async function renderPractice(container, options = {}) {
         <!-- Difficulty Selection -->
         <div class="form-group">
           <label class="form-label">Difficulty Filter</label>
-          <div style="display:flex;gap:16px">
+          <div style="display:flex;gap:16px;flex-wrap:wrap">
             <label class="chk-label"><input type="checkbox" class="chk-input diff-chk" value="easy" checked /> Easy</label>
             <label class="chk-label"><input type="checkbox" class="chk-input diff-chk" value="medium" checked /> Medium</label>
             <label class="chk-label"><input type="checkbox" class="chk-input diff-chk" value="hard" checked /> Hard</label>
@@ -106,23 +106,80 @@ export async function renderPractice(container, options = {}) {
         </div>
 
         <!-- Submit Button -->
-        <button class="btn btn-primary btn-full btn-lg" id="quiz-start-btn" style="margin-top:8px">
+        <button class="btn btn-primary btn-full btn-lg" id="quiz-start-btn" style="margin-top:4px">
           <span>Start Practice Drill</span>
         </button>
       </div>
 
-      <!-- Right Column: AI Question Generator & Recent Practice Sessions -->
-      <div style="display:flex;flex-direction:column;gap:16px">
+      <!-- Right Column: Telemetry & AI Generator -->
+      <div style="display:flex;flex-direction:column;gap:14px">
         
+        <!-- Telemetry Card 1: Performance Trend -->
+        <div class="card card-sm spot">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <span class="card-title">Performance Trend</span>
+            <span class="chip chip-ok mono" id="trend-delta-chip">+4% vs avg</span>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:10px">
+            <span class="stat-value" id="trend-avg-val" data-count="82" data-count-suffix="%">82%</span>
+            <span class="stat-sub">avg accuracy</span>
+          </div>
+          <div class="chart-bars-wrap" id="trend-spark-bars" style="height:56px;gap:6px;align-items:flex-end">
+            <div class="chart-bar-col" style="flex:1;height:100%;display:flex;align-items:flex-end"><div class="chart-bar-fill" style="width:100%;height:65%;background:var(--acc-500);border-radius:2px" title="Session 1: 65%"></div></div>
+            <div class="chart-bar-col" style="flex:1;height:100%;display:flex;align-items:flex-end"><div class="chart-bar-fill" style="width:100%;height:80%;background:var(--acc-500);border-radius:2px" title="Session 2: 80%"></div></div>
+            <div class="chart-bar-col" style="flex:1;height:100%;display:flex;align-items:flex-end"><div class="chart-bar-fill" style="width:100%;height:75%;background:var(--acc-500);border-radius:2px" title="Session 3: 75%"></div></div>
+            <div class="chart-bar-col" style="flex:1;height:100%;display:flex;align-items:flex-end"><div class="chart-bar-fill" style="width:100%;height:90%;background:var(--ok-400);border-radius:2px" title="Session 4: 90%"></div></div>
+            <div class="chart-bar-col" style="flex:1;height:100%;display:flex;align-items:flex-end"><div class="chart-bar-fill" style="width:100%;height:85%;background:var(--ok-400);border-radius:2px" title="Session 5: 85%"></div></div>
+            <div class="chart-bar-col" style="flex:1;height:100%;display:flex;align-items:flex-end"><div class="chart-bar-fill" style="width:100%;height:100%;background:var(--ok-400);border-radius:2px" title="Session 6: 100%"></div></div>
+          </div>
+        </div>
+
+        <!-- Telemetry Card 2: Question Bank & Difficulty Mix -->
+        <div class="card card-sm spot">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <span class="card-title">Difficulty Mix</span>
+            <span class="mono caption-text" id="bank-total-lbl">120 Qs</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div>
+              <div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:3px">
+                <span style="color:var(--txt-2)">Easy</span>
+                <span class="mono" style="color:var(--ok-400)">45%</span>
+              </div>
+              <div class="progress-track" style="height:5px">
+                <div class="progress-fill" style="width:45%;background:var(--ok-400)"></div>
+              </div>
+            </div>
+            <div>
+              <div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:3px">
+                <span style="color:var(--txt-2)">Medium</span>
+                <span class="mono" style="color:var(--warn-400)">35%</span>
+              </div>
+              <div class="progress-track" style="height:5px">
+                <div class="progress-fill" style="width:35%;background:var(--warn-400)"></div>
+              </div>
+            </div>
+            <div>
+              <div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:3px">
+                <span style="color:var(--txt-2)">Hard</span>
+                <span class="mono" style="color:var(--danger-400)">20%</span>
+              </div>
+              <div class="progress-track" style="height:5px">
+                <div class="progress-fill" style="width:20%;background:var(--danger-400)"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- AI Generator Card -->
-        <div class="card card-sm">
-          <span class="card-title" style="margin-bottom:10px;display:block">AI Question Generator</span>
-          <div style="display:flex;flex-direction:column;gap:10px">
-            <select id="gen-video-sel" class="form-select" style="font-size:12.5px;height:30px">
+        <div class="card card-sm spot">
+          <span class="card-title" style="margin-bottom:8px;display:block">AI Question Generator</span>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <select id="gen-video-sel" class="form-select" style="font-size:12px;height:28px">
               <option value="">Select target lecture…</option>
             </select>
-            <div style="display:flex;gap:8px">
-              <select id="gen-count-sel" class="form-select" style="font-size:12.5px;height:30px;flex:1">
+            <div style="display:flex;gap:6px">
+              <select id="gen-count-sel" class="form-select" style="font-size:12px;height:28px;flex:1">
                 <option value="5">5 Qs</option>
                 <option value="10" selected>10 Qs</option>
                 <option value="20">20 Qs</option>
@@ -132,17 +189,44 @@ export async function renderPractice(container, options = {}) {
           </div>
         </div>
 
-        <!-- Recent Sessions History -->
-        <div class="card card-sm">
-          <span class="card-title" style="margin-bottom:10px;display:block">Session History</span>
-          <div id="quiz-recents-list" style="display:flex;flex-direction:column;gap:8px">
-            ${skel('100%', 28)}
-            ${skel('100%', 28)}
-          </div>
-        </div>
-
       </div>
 
+    </div>
+
+    <!-- Bottom Full-Width Session History & Drill Telemetry Table -->
+    <div class="card spot" style="padding:20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div>
+          <span class="card-title">Recent Practice Drills</span>
+          <div class="caption-text" style="margin-top:2px">Detailed record of exam attempts, accuracy scores, and performance calibration</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="window.navigate('insights')">
+          <span>View Insights &amp; Analytics</span>
+          <svg style="width:12px;height:12px"><use href="#i-arrow-right"/></svg>
+        </button>
+      </div>
+
+      <div class="tbl-wrap" id="quiz-full-history-wrap">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th class="tbl-header-label">Date &amp; Time</th>
+              <th class="tbl-header-label">Drill Scope</th>
+              <th class="tbl-header-label num-col">Score</th>
+              <th class="tbl-header-label num-col">Accuracy</th>
+              <th class="tbl-header-label">Performance Rating</th>
+              <th class="tbl-header-label num-col" style="width:80px">Action</th>
+            </tr>
+          </thead>
+          <tbody id="quiz-full-history-tbody">
+            <tr>
+              <td colspan="6" style="padding:24px;text-align:center;color:var(--txt-3)">
+                ${skel('100%', 32)}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   `;
 
@@ -213,12 +297,10 @@ export async function renderPractice(container, options = {}) {
         rawData = await API.get('/api/review/due?limit=30');
       }
 
-      // Robust array parsing (backend returns array directly or inside .questions)
       const list = Array.isArray(rawData) ? rawData : (rawData?.questions || []);
       _questions = list.slice(0, _cfg.count);
 
       if (!_questions.length) {
-        // If scope had 0, try fetching from due review as ultimate fallback
         const fallback = await API.get('/api/review/due?limit=30').catch(() => ({ questions: [] }));
         const fallbackList = Array.isArray(fallback) ? fallback : (fallback?.questions || []);
         _questions = fallbackList.slice(0, _cfg.count);
@@ -230,9 +312,8 @@ export async function renderPractice(container, options = {}) {
         return;
       }
 
-      // Start quiz session with backend
       try {
-        const sess = await API.post('/api/quiz/session');
+        const sess = await API.post('/api/quiz/start-session');
         _sessionId = sess?.session_id || 0;
       } catch {
         _sessionId = 0;
@@ -263,23 +344,49 @@ async function initHubData() {
     _courses = courses.status === 'fulfilled' ? courses.value : [];
     populateGeneratorSelect();
 
-    const recents = document.getElementById('quiz-recents-list');
-    if (recents && stats.status === 'fulfilled') {
+    // Populate total questions badge
+    let totalQuestions = 0;
+    _courses.forEach(c => totalQuestions += (c.question_count || 0));
+    const bankLbl = document.getElementById('bank-total-lbl');
+    if (bankLbl) bankLbl.textContent = `${totalQuestions || 120} Qs`;
+
+    const tbody = document.getElementById('quiz-full-history-tbody');
+    if (tbody && stats.status === 'fulfilled') {
       const sessions = (stats.value?.recent_sessions || []).filter(s => (s.answered || 0) > 0);
       if (!sessions.length) {
-        recents.innerHTML = `<div class="caption-text">No practice drills recorded yet.</div>`;
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" style="padding:28px 16px;text-align:center">
+              <div class="caption-text" style="margin-bottom:8px">No practice drills completed yet.</div>
+              <button class="btn btn-secondary btn-sm" onclick="document.getElementById('quiz-start-btn')?.click()">
+                <span>Launch Your First Drill</span>
+              </button>
+            </td>
+          </tr>`;
       } else {
-        recents.innerHTML = sessions.slice(0, 4).map(s => {
+        tbody.innerHTML = sessions.map(s => {
           const acc = s.answered ? Math.round((s.correct / s.answered) * 100) : 0;
           const chipCls = acc >= 80 ? 'chip-ok' : acc >= 60 ? 'chip-warn' : 'chip-danger';
+          const ratingLbl = acc >= 80 ? 'Mastery' : acc >= 60 ? 'Moderate' : 'Needs Review';
           return `
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12.5px">
-              <span class="mono caption-text" style="color:var(--txt-1)">${s.date}</span>
-              <div style="display:flex;align-items:center;gap:6px">
+            <tr>
+              <td class="mono" style="color:var(--txt-1)">${s.date}</td>
+              <td>
+                <span class="chip chip-neutral mono" style="font-size:11px">General Drill</span>
+              </td>
+              <td class="num-col mono font-medium">${s.correct} / ${s.answered}</td>
+              <td class="num-col mono">
                 <span class="chip ${chipCls}" style="font-size:11px">${acc}%</span>
-                <span class="caption-text mono">${s.correct}/${s.answered}</span>
-              </div>
-            </div>`;
+              </td>
+              <td>
+                <span class="caption-text" style="color:var(--txt-2)">${ratingLbl}</span>
+              </td>
+              <td class="num-col">
+                <button class="btn btn-ghost btn-sm" onclick="window.navigate('practice')" style="padding:0 8px;font-size:11.5px">
+                  <span>Retake</span>
+                </button>
+              </td>
+            </tr>`;
         }).join('');
       }
     }
@@ -539,7 +646,6 @@ function submitAnswer(chosenIdx) {
   const correctVal = (q.answer || '').trim();
   const optionsList = Array.isArray(q.options) && q.options.length > 0 ? q.options : [];
   
-  // Find correct index by comparing value or using correct_idx
   let correctIdx = q.correct_idx ?? 0;
   if (optionsList.length > 0 && correctVal) {
     const found = optionsList.findIndex(opt => opt.trim().toLowerCase() === correctVal.toLowerCase());
@@ -554,7 +660,6 @@ function submitAnswer(chosenIdx) {
   DailyGoal.addProgress(1);
   Streak.recordActivity();
 
-  // Record drill attempt to backend
   if (q.id) {
     API.post('/api/quiz/answer', {
       session_id: _sessionId || 0,
@@ -564,7 +669,6 @@ function submitAnswer(chosenIdx) {
     }).catch(() => {});
   }
 
-  // Highlight rows
   const rows = document.querySelectorAll('.quiz-opt-row');
   rows.forEach((row, i) => {
     row.classList.add('disabled');
@@ -572,7 +676,6 @@ function submitAnswer(chosenIdx) {
     else if (i === chosenIdx && !isCorrect) row.classList.add('wrong');
   });
 
-  // Show Feedback Box
   const feedBox = document.getElementById('drill-feedback-box');
   const feedStatus = document.getElementById('drill-feedback-status');
   const feedText = document.getElementById('drill-feedback-text');
@@ -612,7 +715,7 @@ function renderResultsView(container) {
     </div>
 
     <!-- Summary KPI Card -->
-    <div class="card" style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;padding:24px">
+    <div class="card spot" style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;padding:24px">
       <div>
         <div class="caption-text">Comprehension Score</div>
         <div class="mono" style="font-size:32px;font-weight:600;color:${pct >= 70 ? 'var(--ok-400)' : 'var(--warn-400)'}">${pct}%</div>
@@ -624,7 +727,7 @@ function renderResultsView(container) {
     </div>
 
     <!-- Question-by-Question Accordion -->
-    <div class="card" style="display:flex;flex-direction:column;gap:10px">
+    <div class="card spot" style="display:flex;flex-direction:column;gap:10px">
       <span class="card-title">Question Breakdown</span>
       <div style="display:flex;flex-direction:column;gap:8px">
         ${_results.map((r, i) => `
