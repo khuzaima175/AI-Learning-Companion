@@ -305,13 +305,13 @@ function renderVideoDetail(panel, course) {
 
   panel.innerHTML = `
     <!-- Top Bar Navigation -->
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;flex-wrap:wrap">
       <button class="btn btn-ghost btn-sm" id="detail-back-btn">
         ${icon('arrow-left', '', 'width:14px;height:14px')}
         <span>Back to Lectures</span>
       </button>
 
-      <div style="display:flex;align-items:center;gap:10px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span class="pill pill-teal">${d.question_count || 20} Qs</span>
         ${ytLink ? `
           <a href="${ytLink}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="color:var(--teal)">
@@ -323,8 +323,8 @@ function renderVideoDetail(panel, course) {
 
     <!-- Title & Metadata -->
     <div style="margin-bottom:24px">
-      <h2 style="font-size:1.85rem;line-height:1.25">${d.title}</h2>
-      <div style="display:flex;align-items:center;gap:12px;margin-top:8px;flex-wrap:wrap">
+      <h2 style="font-size:clamp(1.35rem, 4vw, 1.85rem);line-height:1.25;word-break:break-word">${d.title}</h2>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap">
         <span class="mono-meta">COURSE: ${course?.name || 'Library'}</span>
         <span class="mono-meta">·</span>
         <span class="mono-meta">~${readTime} MIN READ</span>

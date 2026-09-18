@@ -512,6 +512,15 @@ function bootApp() {
     el.addEventListener('click', e => {
       e.preventDefault();
       const page = el.dataset.page;
+      const sidebar = document.getElementById('sidebar');
+      const overlay = document.getElementById('sidebar-overlay');
+      const mobileBtn = document.getElementById('mobile-menu-btn');
+      if (window.innerWidth <= 860 && sidebar) {
+        sidebar.classList.remove('open');
+        overlay?.classList.remove('active');
+        mobileBtn?.setAttribute('aria-expanded', 'false');
+        updateMenuIcon(false);
+      }
       navigate(page);
     });
   });
