@@ -1561,12 +1561,19 @@ h3 {
   }
   #main-content {
     margin-left: 0 !important;
-    padding: 68px 18px 36px !important;
+    padding: 82px 18px 40px !important;
     width: 100% !important;
     max-width: 100vw !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
   }
   .bento-grid {
     grid-template-columns: 1fr !important;
+  }
+  .bento-grid > *, .browse-split > *, .review-grid-v2 > *, .add-video-grid > * {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
   }
   .span-1, .span-2, .span-3, .span-4 {
     grid-column: span 1 !important;
@@ -1580,6 +1587,7 @@ h3 {
   }
   .review-grid-v2 {
     grid-template-columns: 1fr !important;
+    gap: 16px !important;
   }
   .rcard-grid {
     grid-template-columns: 1fr !important;
@@ -1596,10 +1604,10 @@ h3 {
     display: none !important;
   }
   .card {
-    padding: 20px !important;
+    padding: 18px !important;
   }
   .card-sm {
-    padding: 16px !important;
+    padding: 14px !important;
   }
   .flip-scene {
     height: 290px !important;
@@ -1611,21 +1619,21 @@ h3 {
 
 @media (max-width: 520px) {
   #main-content {
-    padding: 64px 12px 28px !important;
+    padding: 76px 14px 28px !important;
   }
   .page-title {
-    font-size: 1.65rem !important;
+    font-size: 1.6rem !important;
   }
   .serif-num {
-    font-size: 1.85rem !important;
+    font-size: 1.75rem !important;
   }
   .btn {
-    padding: 8px 14px;
-    font-size: 0.82rem;
+    padding: 8px 12px;
+    font-size: 0.8rem;
   }
   .btn-sm {
     padding: 6px 10px;
-    font-size: 0.76rem;
+    font-size: 0.75rem;
   }
   .tab-btn-v2 {
     padding: 6px 10px;
@@ -1637,6 +1645,11 @@ h3 {
   .notes-toolbar {
     flex-wrap: wrap;
     gap: 6px;
+  }
+  .lecture-top-bar {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 10px !important;
   }
 }
 

@@ -31,19 +31,19 @@ export async function renderReview(container) {
 
   container.innerHTML = `
     <!-- Header -->
-    <div style="margin-bottom:28px">
+    <div style="margin-bottom:24px">
       <div class="page-title">Daily <em>Review</em></div>
       <p class="page-subtitle">Spaced repetition queue. Faster active recall earns longer intervals via the SM-2 algorithm.</p>
     </div>
     <div id="review-body">
-      <div class="review-grid-v2" style="display:grid;grid-template-columns:minmax(0, 720px) 300px;gap:24px;align-items:start">
-        <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="review-grid-v2">
+        <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
           <div style="display:flex;justify-content:space-between;align-items:center">
             ${skel(180, 16)}
             ${skel(80, 24, 99)}
           </div>
           ${skel('100%', 8, 99)}
-          <div class="card" style="padding:32px;display:flex;flex-direction:column;gap:16px">
+          <div class="card" style="display:flex;flex-direction:column;gap:16px">
             ${skel(120, 14)}
             ${skel('90%', 24)}
             <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px">
@@ -54,7 +54,7 @@ export async function renderReview(container) {
             </div>
           </div>
         </div>
-        <div style="display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
           ${skel('100%', 120, 12)}
           ${skel('100%', 130, 12)}
         </div>
@@ -77,7 +77,7 @@ async function loadDue() {
 
     if (!_questions.length) {
       body.innerHTML = `
-        <div class="card" style="max-width:540px;margin:0 auto;text-align:center;padding:56px 28px">
+        <div class="card" style="max-width:540px;margin:0 auto;text-align:center;padding:48px 24px">
           <div class="icon-chip teal" style="width:56px;height:56px;margin:0 auto 16px">
             ${icon('check', '', 'width:28px;height:28px')}
           </div>
@@ -85,7 +85,7 @@ async function loadDue() {
           <p style="font-size:0.92rem;color:var(--muted);margin-top:8px;max-width:360px;margin-left:auto;margin-right:auto;line-height:1.6">
             Zero cards currently due for review today. Great job keeping your retention sharp!
           </p>
-          <div style="display:flex;gap:12px;justify-content:center;margin-top:24px">
+          <div style="display:flex;gap:12px;justify-content:center;margin-top:24px;flex-wrap:wrap">
             <button class="btn btn-ghost btn-sm" onclick="window.navigate('dashboard')">
               ${icon('arrow-left', '', 'width:14px;height:14px')}
               <span>Dashboard</span>
@@ -100,10 +100,10 @@ async function loadDue() {
     }
 
     body.innerHTML = `
-      <div class="review-grid-v2" style="display:grid;grid-template-columns:minmax(0, 720px) 300px;gap:24px;align-items:start">
+      <div class="review-grid-v2">
         
         <!-- Main Column (Card & Options) -->
-        <div id="rev-main-col">
+        <div id="rev-main-col" style="min-width:0">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
             <span class="mono-meta"><strong style="color:var(--amber)">${totalDue}</strong> CARDS DUE TODAY</span>
             <span class="pill pill-teal" id="rev-score-pill">0 / ${_questions.length}</span>
@@ -113,7 +113,7 @@ async function loadDue() {
             <div class="progress-fill" id="rev-progress-fill" style="width:${(1 / _questions.length) * 100}%"></div>
           </div>
 
-          <div id="rev-card-area"></div>
+          <div id="rev-card-area" style="min-width:0"></div>
         </div>
 
         <!-- Right Rail Column (Live Stats, Rating Legend, Up Next) -->
@@ -193,8 +193,8 @@ function renderRevQ() {
   const LETTERS = ['A', 'B', 'C', 'D'];
 
   area.innerHTML = `
-    <div class="card" style="padding:32px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <div class="card" style="min-width:0">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <span class="mono-meta">CARD ${_idx + 1} OF ${total}</span>
         <div style="display:flex;gap:4px;align-items:center">
           <span class="kbd">1</span>
@@ -204,22 +204,22 @@ function renderRevQ() {
         </div>
       </div>
 
-      <div style="font-size:1.15rem;font-weight:600;line-height:1.6;color:var(--text);margin-bottom:24px">
+      <div style="font-size:clamp(1rem, 3.5vw, 1.15rem);font-weight:600;line-height:1.55;color:var(--text);margin-bottom:20px;word-break:break-word">
         ${q.question}
       </div>
 
-      <div style="display:grid;gap:10px" id="rev-options-list">
+      <div style="display:grid;gap:10px;min-width:0" id="rev-options-list">
         ${q.options.map((opt, i) => `
           <button class="opt" data-val="${opt.replace(/"/g, '&quot;')}" data-key="${i + 1}">
             <span class="key">${LETTERS[i]}</span>
-            <span style="flex:1">${opt}</span>
+            <span style="flex:1;min-width:0;word-break:break-word;overflow-wrap:break-word">${opt}</span>
           </button>`).join('')}
       </div>
 
-      <div id="rev-feedback" style="display:none;margin-top:20px"></div>
+      <div id="rev-feedback" style="display:none;margin-top:20px;min-width:0"></div>
 
       <div id="hint-wrap" style="margin-top:16px;text-align:center">
-        <button id="hint-btn" class="btn btn-ghost btn-sm" style="color:var(--muted);font-size:0.8rem">
+        <button id="hint-btn" class="btn btn-ghost btn-sm" style="color:var(--muted);font-size:0.8rem;max-width:100%;white-space:normal">
           ${icon('help-circle', '', 'width:13px;height:13px;color:var(--amber)')}
           <span>Reveal Answer (Counts as Hard)</span>
         </button>

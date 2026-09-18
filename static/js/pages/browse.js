@@ -305,7 +305,7 @@ function renderVideoDetail(panel, course) {
 
   panel.innerHTML = `
     <!-- Top Bar Navigation -->
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+    <div class="lecture-top-bar" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;flex-wrap:wrap">
       <button class="btn btn-ghost btn-sm" id="detail-back-btn">
         ${icon('arrow-left', '', 'width:14px;height:14px')}
         <span>Back to Lectures</span>
@@ -359,7 +359,7 @@ function renderVideoDetail(panel, course) {
 
     <!-- Tab 1: Summary -->
     <div id="tab-pane-summary" class="tab-pane" style="display:block">
-      <div class="card" style="line-height:1.8;padding:28px;font-size:0.95rem;color:var(--text)">
+      <div class="card" style="line-height:1.8;padding:24px;font-size:0.95rem;color:var(--text);word-break:break-word">
         ${formatSummaryProse(d.summary)}
       </div>
     </div>
