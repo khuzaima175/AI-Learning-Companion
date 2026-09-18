@@ -1,20 +1,24 @@
 -- ============================================================
--- AI Learning Companion – Supabase Schema
+-- AI Learning Companion – Supabase Schema (Multi-Tenant)
 -- Run this in: Supabase Dashboard → SQL Editor → New Query
 -- ============================================================
 
 -- 1. Courses
 CREATE TABLE IF NOT EXISTS courses (
-    id   BIGSERIAL PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE
+    id        BIGSERIAL PRIMARY KEY,
+    user_id   UUID REFERENCES auth.users (id) ON DELETE CASCADE,
+    name      TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT unique_course_per_user UNIQUE (user_id, name)
 );
 
 -- 2. Videos
 CREATE TABLE IF NOT EXISTS videos (
     id           BIGSERIAL PRIMARY KEY,
+    user_id      UUID REFERENCES auth.users (id) ON DELETE CASCADE,
     course_id    BIGINT REFERENCES courses (id) ON DELETE CASCADE,
-    title        TEXT,
-    video_id     TEXT UNIQUE,
+    title        TEXT NOT NULL,
+    video_id     TEXT,
     summary      TEXT,
     key_concepts TEXT,   -- stored as JSON string
     bullet_points TEXT,  -- stored as JSON string
@@ -26,12 +30,13 @@ CREATE TABLE IF NOT EXISTS videos (
 -- 3. Quiz Questions
 CREATE TABLE IF NOT EXISTS quiz_questions (
     id               BIGSERIAL PRIMARY KEY,
+    user_id          UUID REFERENCES auth.users (id) ON DELETE CASCADE,
     video_id         BIGINT REFERENCES videos (id) ON DELETE CASCADE,
-    question         TEXT,
-    options          TEXT,  -- stored as JSON string
-    answer           TEXT,
+    question         TEXT NOT NULL,
+    options          TEXT NOT NULL,  -- stored as JSON string
+    answer           TEXT NOT NULL,
     srs_level        INTEGER DEFAULT 0,
-    next_review_date DATE,
+    next_review_date DATE DEFAULT CURRENT_DATE,
     difficulty       TEXT DEFAULT 'medium',
     times_answered   INTEGER DEFAULT 0,
     times_correct    INTEGER DEFAULT 0,
@@ -41,6 +46,7 @@ CREATE TABLE IF NOT EXISTS quiz_questions (
 -- 4. Quiz Sessions
 CREATE TABLE IF NOT EXISTS quiz_sessions (
     id                  BIGSERIAL PRIMARY KEY,
+    user_id             UUID REFERENCES auth.users (id) ON DELETE CASCADE,
     session_date        DATE DEFAULT CURRENT_DATE,
     questions_answered  INTEGER DEFAULT 0,
     questions_correct   INTEGER DEFAULT 0,
@@ -49,16 +55,30 @@ CREATE TABLE IF NOT EXISTS quiz_sessions (
 );
 
 -- ============================================================
--- Optional: Indexes for performance
+-- High-Performance Composite Indexes
 -- ============================================================
-CREATE INDEX IF NOT EXISTS idx_videos_course_id       ON videos (course_id);
-CREATE INDEX IF NOT EXISTS idx_quiz_questions_video_id ON quiz_questions (video_id);
-CREATE INDEX IF NOT EXISTS idx_quiz_questions_review   ON quiz_questions (next_review_date);
-CREATE INDEX IF NOT EXISTS idx_quiz_sessions_date      ON quiz_sessions (session_date);
+CREATE INDEX IF NOT EXISTS idx_courses_user           ON courses (user_id);
+CREATE INDEX IF NOT EXISTS idx_videos_user_course     ON videos (user_id, course_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_user_due          ON quiz_questions (user_id, next_review_date);
+CREATE INDEX IF NOT EXISTS idx_quiz_user_video        ON quiz_questions (user_id, video_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_user_date     ON quiz_sessions (user_id, session_date);
 
 -- ============================================================
--- Row Level Security (RLS) – disable for service-role-key usage
--- The backend uses service role key so RLS doesn't block it.
+-- Atomic Session Increment RPC (Fast & Concurrency-Safe)
+-- ============================================================
+CREATE OR REPLACE FUNCTION increment_session(s_id BIGINT, add_correct INT)
+RETURNS VOID AS $$
+BEGIN
+    UPDATE quiz_sessions
+    SET questions_answered = questions_answered + 1,
+        questions_correct  = questions_correct + add_correct
+    WHERE id = s_id;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================================
+-- Row Level Security (RLS)
+-- Backend uses Supabase Service Key, bypassing RLS.
 -- ============================================================
 ALTER TABLE courses        DISABLE ROW LEVEL SECURITY;
 ALTER TABLE videos         DISABLE ROW LEVEL SECURITY;

@@ -12,14 +12,14 @@ export async function renderAddVideo(container) {
     <div class="add-video-grid">
 
       <!-- Main Form Column -->
-      <div style="display:flex;flex-direction:column;gap:20px">
+      <div style="display:flex;flex-direction:column;gap:24px">
         
-        <div class="card" style="padding:28px">
+        <div class="card">
           <!-- YouTube URL Field -->
           <div class="form-group">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
               <label class="form-label" for="av-url" style="margin-bottom:0">YouTube Lecture URL</label>
-              <button id="av-paste-btn" class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:0.75rem">
+              <button id="av-paste-btn" class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:0.78rem">
                 ${icon('copy', '', 'width:12px;height:12px')}
                 <span>Paste Link</span>
               </button>
@@ -27,8 +27,8 @@ export async function renderAddVideo(container) {
             <div style="position:relative;display:flex;align-items:center">
               <input id="av-url" class="form-input input" type="url" 
                      placeholder="https://www.youtube.com/watch?v=..." 
-                     style="padding-left:42px;font-size:0.95rem" />
-              <div style="position:absolute;left:14px;color:var(--faint);pointer-events:none">
+                     style="padding-left:46px;font-size:0.95rem" />
+              <div style="position:absolute;left:16px;color:var(--faint);pointer-events:none;display:flex;align-items:center">
                 ${icon('video', '', 'width:18px;height:18px')}
               </div>
             </div>
@@ -36,14 +36,14 @@ export async function renderAddVideo(container) {
             <!-- Real-time Thumbnail Preview -->
             <div id="av-thumb-preview" class="thumb-preview-card" style="display:none">
               <img id="av-thumb-img" class="thumb-preview-img thumb" alt="Video Preview" />
-              <div style="position:absolute;bottom:10px;left:10px;background:rgba(0,0,0,0.8);border-radius:var(--r-sm);padding:4px 8px;font-family:'JetBrains Mono', monospace;font-size:0.7rem;color:#fff" id="av-vid-id-lbl">
+              <div style="position:absolute;bottom:12px;left:12px;background:rgba(0,0,0,0.85);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,0.15);border-radius:var(--r-sm);padding:5px 10px;font-family:'JetBrains Mono', monospace;font-size:0.72rem;color:#fff" id="av-vid-id-lbl">
                 YouTube ID Detected
               </div>
             </div>
           </div>
 
           <!-- Video Title & Course Row -->
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
             <div class="form-group">
               <label class="form-label" for="av-title">Lecture Title</label>
               <input id="av-title" class="form-input input" type="text" placeholder="e.g. Transformers & Self-Attention" />
@@ -56,16 +56,16 @@ export async function renderAddVideo(container) {
           </div>
 
           <!-- Manual Transcript Accordion -->
-          <div class="card card-xs" style="background:var(--sf2);border:1px solid var(--line);margin-bottom:20px;padding:0;overflow:hidden">
-            <div id="manual-acc-hdr" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;cursor:pointer">
-              <div style="display:flex;align-items:center;gap:8px">
-                ${icon('edit-3', '', 'width:14px;height:14px;color:var(--teal)')}
-                <span style="font-weight:500;font-size:0.82rem;color:var(--muted)">Paste Manual Transcript (Optional)</span>
+          <div class="card card-xs" style="background:var(--sf2);border:1px solid var(--line);margin:6px 0 28px 0;padding:0;overflow:hidden">
+            <div id="manual-acc-hdr" style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;cursor:pointer">
+              <div style="display:flex;align-items:center;gap:10px">
+                ${icon('edit-3', '', 'width:15px;height:15px;color:var(--teal)')}
+                <span style="font-weight:500;font-size:0.85rem;color:var(--muted)">Paste Manual Transcript (Optional)</span>
               </div>
-              <span id="manual-acc-chevron" style="color:var(--faint);transition:transform 0.2s">${icon('chevron-down', '', 'width:14px;height:14px')}</span>
+              <span id="manual-acc-chevron" style="color:var(--faint);transition:transform 0.2s">${icon('chevron-down', '', 'width:15px;height:15px')}</span>
             </div>
-            <div id="manual-acc-body" style="display:none;padding:16px;border-top:1px solid var(--line)">
-              <p style="font-size:0.78rem;color:var(--muted);margin-bottom:8px">Use for videos without automated captions or custom audio recordings.</p>
+            <div id="manual-acc-body" style="display:none;padding:18px;border-top:1px solid var(--line)">
+              <p style="font-size:0.8rem;color:var(--muted);margin-bottom:10px">Use for videos without automated captions or custom audio recordings.</p>
               <textarea id="av-manual" class="form-textarea input" placeholder="Paste transcript text here..."></textarea>
             </div>
           </div>
@@ -99,31 +99,31 @@ export async function renderAddVideo(container) {
       </div>
 
       <!-- Right Rail: Stepper Overview & Recents -->
-      <div style="display:flex;flex-direction:column;gap:18px">
+      <div style="display:flex;flex-direction:column;gap:20px">
 
         <!-- Stepper Breakdown -->
         <div class="card card-sm">
-          <div class="card-title" style="margin-bottom:14px">Processing Pipeline</div>
+          <div class="card-title" style="margin-bottom:18px">Processing Pipeline</div>
           <div class="stepper-rail">
             <div class="stepper-item">
               <div class="stepper-num">1</div>
               <div>
-                <div style="font-weight:600;font-size:0.85rem">Transcript Ingestion</div>
-                <div style="font-size:0.75rem;color:var(--muted)">Extract clean English captions</div>
+                <div style="font-weight:600;font-size:0.88rem">Transcript Ingestion</div>
+                <div style="font-size:0.76rem;color:var(--muted);margin-top:3px;line-height:1.45">Extract clean English captions</div>
               </div>
             </div>
             <div class="stepper-item">
               <div class="stepper-num">2</div>
               <div>
-                <div style="font-weight:600;font-size:0.85rem">Structured Synthesis</div>
-                <div style="font-size:0.75rem;color:var(--muted)">Summary, 16 concepts &amp; 20 takeaways</div>
+                <div style="font-weight:600;font-size:0.88rem">Structured Synthesis</div>
+                <div style="font-size:0.76rem;color:var(--muted);margin-top:3px;line-height:1.45">Summary, 16 concepts &amp; 20 takeaways</div>
               </div>
             </div>
             <div class="stepper-item">
               <div class="stepper-num">3</div>
               <div>
-                <div style="font-weight:600;font-size:0.85rem">Quiz Calibration</div>
-                <div style="font-size:0.75rem;color:var(--muted)">20 active recall practice questions</div>
+                <div style="font-weight:600;font-size:0.88rem">Quiz Calibration</div>
+                <div style="font-size:0.76rem;color:var(--muted);margin-top:3px;line-height:1.45">20 active recall practice questions</div>
               </div>
             </div>
           </div>
@@ -131,10 +131,10 @@ export async function renderAddVideo(container) {
 
         <!-- Recently Added Lectures -->
         <div class="card card-sm" id="av-recents-card">
-          <div class="card-title" style="margin-bottom:12px">Recently Added</div>
+          <div class="card-title" style="margin-bottom:14px">Recently Added</div>
           <div id="av-recents-list" style="display:flex;flex-direction:column;gap:10px">
-            ${skel('100%', 36)}
-            ${skel('100%', 36)}
+            ${skel('100%', 44, 8)}
+            ${skel('100%', 44, 8)}
           </div>
         </div>
 
@@ -156,14 +156,14 @@ export async function renderAddVideo(container) {
       });
       const top3 = allVideos.slice(0, 3);
       if (!top3.length) {
-        recentsList.innerHTML = `<div style="font-size:0.8rem;color:var(--faint)">No lectures processed yet.</div>`;
+        recentsList.innerHTML = `<div style="font-size:0.8rem;color:var(--faint);padding:6px 0">No lectures processed yet.</div>`;
       } else {
         recentsList.innerHTML = top3.map(v => `
-          <div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="window.navigate('browse')">
-            <div class="icon-chip teal" style="width:28px;height:28px">${icon('video', '', 'width:14px;height:14px')}</div>
+          <div class="recent-item-tile" onclick="window.navigate('browse')">
+            <div class="icon-chip teal" style="width:32px;height:32px;flex-shrink:0">${icon('video', '', 'width:15px;height:15px')}</div>
             <div style="flex:1;min-width:0">
-              <div style="font-size:0.82rem;font-weight:600;color:var(--text);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${v.title}</div>
-              <div class="mono-meta" style="font-size:0.65rem">${v.courseName}</div>
+              <div style="font-size:0.84rem;font-weight:600;color:var(--text);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${v.title}</div>
+              <div class="mono-meta" style="font-size:0.65rem;margin-top:2px">${v.courseName}</div>
             </div>
           </div>`).join('');
       }

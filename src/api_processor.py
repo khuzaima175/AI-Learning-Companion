@@ -263,7 +263,7 @@ class ApiProcessor:
         return None, f"Failed to parse JSON. Preview: {clean[:200]}"
 
     def _call_gemini_and_parse_json(self, prompt: str):
-        max_len = 50_000
+        max_len = 500_000
         if len(prompt) > max_len:
             trunc = prompt.rfind(".", 0, max_len)
             prompt = prompt[: trunc if trunc != -1 else max_len] + "\n\n[Content truncated]"

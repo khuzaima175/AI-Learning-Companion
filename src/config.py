@@ -25,11 +25,20 @@ def save_api_key(api_key: str):
     pass
 
 
+_client: genai.Client | None = None
+_cached_key: str | None = None
+
+
 def get_client() -> genai.Client | None:
+    """Returns cached Gemini Client singleton to reuse connection pools and SSL contexts."""
+    global _client, _cached_key
     key = get_api_key()
     if not key:
         return None
-    return genai.Client(api_key=key)
+    if _client is None or _cached_key != key:
+        _client = genai.Client(api_key=key)
+        _cached_key = key
+    return _client
 
 
 def get_model_chain() -> list[str]:

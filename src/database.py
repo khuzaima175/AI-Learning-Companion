@@ -186,8 +186,9 @@ class DatabaseManager:
                 .eq("user_id", user_id)
                 .execute()
             )
-            for v in videos.data:
-                self.sb.table("quiz_questions").delete().eq("video_id", v["id"]).eq("user_id", user_id).execute()
+            vid_ids = [v["id"] for v in (videos.data or [])]
+            if vid_ids:
+                self.sb.table("quiz_questions").delete().in_("video_id", vid_ids).eq("user_id", user_id).execute()
             self.sb.table("videos").delete().eq("course_id", course_id).eq("user_id", user_id).execute()
             self.sb.table("courses").delete().eq("id", course_id).eq("user_id", user_id).execute()
             return True, "Course and all associated data deleted successfully."

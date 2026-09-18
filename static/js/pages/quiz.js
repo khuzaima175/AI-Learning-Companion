@@ -42,10 +42,13 @@ export async function renderQuiz(container) {
       <div style="display:grid;grid-template-columns:1fr 320px;gap:24px;align-items:start">
 
         <!-- Main Config Column -->
-        <div class="card tilt-card rev" style="padding:28px;--i:1" id="quiz-config-card">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
-            <div class="icon-chip teal">${icon('brain-circuit', '', 'width:18px;height:18px')}</div>
-            <h3 style="font-size:1.35rem">Exam Configuration</h3>
+        <div class="card tilt-card rev" style="--i:1" id="quiz-config-card">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px">
+            <div class="icon-chip teal" style="width:40px;height:40px">${icon('brain-circuit', '', 'width:20px;height:20px')}</div>
+            <div>
+              <h3 style="font-size:1.4rem">Exam Configuration</h3>
+              <div class="mono-meta" style="font-size:0.68rem;margin-top:2px">Calibrate active recall drill</div>
+            </div>
           </div>
 
           <!-- Scope Radio Cards -->
@@ -53,24 +56,24 @@ export async function renderQuiz(container) {
             <label class="form-label">Scope</label>
             <div class="rcard-grid">
               <div class="rcard active" data-scope="all">
-                ${icon('library', '', 'width:20px;height:20px;color:var(--teal)')}
-                <span style="font-weight:600;font-size:0.85rem">All Library</span>
+                ${icon('library', '', 'width:22px;height:22px;color:var(--teal)')}
+                <span style="font-weight:600;font-size:0.88rem">All Library</span>
                 <span class="mono-meta" style="font-size:0.65rem">Comprehensive</span>
               </div>
               <div class="rcard" data-scope="course">
-                ${icon('book-open', '', 'width:20px;height:20px;color:var(--teal)')}
-                <span style="font-weight:600;font-size:0.85rem">By Course</span>
+                ${icon('book-open', '', 'width:22px;height:22px;color:var(--teal)')}
+                <span style="font-weight:600;font-size:0.88rem">By Course</span>
                 <span class="mono-meta" style="font-size:0.65rem">Specific Subject</span>
               </div>
               <div class="rcard" data-scope="video">
-                ${icon('clapperboard', '', 'width:20px;height:20px;color:var(--teal)')}
-                <span style="font-weight:600;font-size:0.85rem">By Lecture</span>
+                ${icon('clapperboard', '', 'width:22px;height:22px;color:var(--teal)')}
+                <span style="font-weight:600;font-size:0.88rem">By Lecture</span>
                 <span class="mono-meta" style="font-size:0.65rem">Single Video</span>
               </div>
             </div>
 
             <!-- Scope Selector Target -->
-            <div id="scope-selector-wrap" style="margin-top:12px;display:none">
+            <div id="scope-selector-wrap" style="margin-top:14px;display:none">
               <select id="scope-select" class="form-select">
                 <option value="">Select scope target…</option>
               </select>
@@ -102,24 +105,24 @@ export async function renderQuiz(container) {
           <!-- Difficulty Filter Chips -->
           <div class="form-group">
             <label class="form-label">Difficulty Range</label>
-            <div style="display:flex;gap:12px;flex-wrap:wrap">
-              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem">
-                <input type="checkbox" class="diff-chk" value="easy" checked style="accent-color:var(--teal)" />
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <label class="chk-chip">
+                <input type="checkbox" class="diff-chk" value="easy" checked />
                 <span>Easy</span>
               </label>
-              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem">
-                <input type="checkbox" class="diff-chk" value="medium" checked style="accent-color:var(--teal)" />
+              <label class="chk-chip">
+                <input type="checkbox" class="diff-chk" value="medium" checked />
                 <span>Medium</span>
               </label>
-              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem">
-                <input type="checkbox" class="diff-chk" value="hard" checked style="accent-color:var(--teal)" />
+              <label class="chk-chip">
+                <input type="checkbox" class="diff-chk" value="hard" checked />
                 <span>Hard</span>
               </label>
             </div>
           </div>
 
           <!-- Start Button -->
-          <button class="btn btn-primary btn-full btn-lg" id="quiz-start-btn" style="margin-top:10px">
+          <button class="btn btn-primary btn-full btn-lg" id="quiz-start-btn" style="margin-top:24px">
             <span class="spin" id="q-start-spin" style="display:none"></span>
             <span id="q-start-lbl">Start Practice Exam</span>
           </button>
@@ -223,7 +226,7 @@ async function initConfigData() {
         const acc = s.answered ? Math.round((s.correct / s.answered) * 100) : 0;
         const pillCls = acc >= 80 ? 'pill-green' : acc >= 60 ? 'pill-amber' : 'pill-coral';
         return `
-          <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.8rem">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-radius:var(--r-sm);background:var(--sf1);border:1px solid var(--line)">
             <span class="mono-meta" style="color:var(--text);font-size:0.72rem">${s.date}</span>
             <span class="pill ${pillCls}" style="font-size:0.65rem">${acc}% (${s.correct}/${s.answered})</span>
           </div>`;

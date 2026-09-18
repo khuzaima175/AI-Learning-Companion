@@ -8,7 +8,7 @@ export async function renderManage(container) {
       <p class="page-subtitle">Organize courses, remove obsolete video lectures, and prune associated practice cards.</p>
     </div>
     <div id="manage-body">
-      <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:16px;margin-bottom:24px">
+      <div class="manage-stats-grid" style="margin-bottom:24px">
         ${skel('100%', 80, 12)}
         ${skel('100%', 80, 12)}
         ${skel('100%', 80, 12)}
@@ -58,7 +58,7 @@ function renderList(courses) {
 
   body.innerHTML = `
     <!-- Summary Header Cards -->
-    <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:16px;margin-bottom:24px">
+    <div class="manage-stats-grid" style="margin-bottom:24px">
       <div class="card card-sm" style="text-align:center">
         <div class="serif-num" style="font-size:2.5rem;color:var(--teal)">${courses.length}</div>
         <div class="card-title" style="font-size:0.8rem">Total Courses</div>

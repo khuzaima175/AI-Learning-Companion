@@ -60,10 +60,7 @@ export async function navigate(page) {
     return;
   }
 
-  // Smooth Route Transition (exit fade, render, entry rise)
-  container.classList.add('leaving');
-  await new Promise(r => setTimeout(r, 120));
-
+  // Instant smooth route transition
   container.innerHTML = '';
   container.className = 'page';
 
@@ -199,61 +196,89 @@ export function initRevealAnimations(scope = document) {
       }
       observer.observe(el);
       // Fallback timer in case element is already in viewport
-      setTimeout(() => el.classList.add('in'), 120 + i * 35);
+      setTimeout(() => el.classList.add('in'), 80 + i * 25);
     });
   } else {
     elements.forEach(el => el.classList.add('in'));
   }
 }
 
-// Cursor Spotlight for Cards
+// Optimized Cursor Spotlight for Cards (zero layout-thrashing)
 export function initCardSpotlights(scope = document) {
   scope.querySelectorAll('.card, .quick-action-tile').forEach(card => {
+    let bounds = null;
+    let ticking = false;
+
+    card.addEventListener('mouseenter', () => {
+      bounds = card.getBoundingClientRect();
+    });
+
     card.addEventListener('mousemove', e => {
-      const rect = card.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      card.style.setProperty('--mx', `${x}px`);
-      card.style.setProperty('--my', `${y}px`);
+      if (!bounds) bounds = card.getBoundingClientRect();
+      if (!ticking) {
+        requestAnimationFrame(() => {
+          if (bounds) {
+            const x = e.clientX - bounds.left;
+            const y = e.clientY - bounds.top;
+            card.style.setProperty('--mx', `${x}px`);
+            card.style.setProperty('--my', `${y}px`);
+          }
+          ticking = false;
+        });
+        ticking = true;
+      }
+    });
+
+    card.addEventListener('mouseleave', () => {
+      bounds = null;
     });
   });
 }
 
-// 3D Card Interactive Tilt Physics
+// Optimized 3D Card Interactive Tilt Physics
 export function initCard3DTilt(scope = document) {
   scope.querySelectorAll('.tilt-card').forEach(card => {
-    let bounds;
-    function rotateToMouse(e) {
-      bounds = card.getBoundingClientRect();
-      const mouseX = e.clientX;
-      const mouseY = e.clientY;
-      const leftX = mouseX - bounds.left;
-      const topY = mouseY - bounds.top;
-      const center = {
-        x: leftX - bounds.width / 2,
-        y: topY - bounds.height / 2
-      };
-      const distance = Math.sqrt(center.x ** 2 + center.y ** 2);
-
-      card.style.transform = `
-        perspective(1000px)
-        scale3d(1.015, 1.015, 1.015)
-        rotate3d(
-          ${-center.y / 120},
-          ${center.x / 120},
-          0,
-          ${Math.min(distance / 28, 5)}deg
-        )
-      `;
-    }
+    let bounds = null;
+    let ticking = false;
 
     card.addEventListener('mouseenter', () => {
       bounds = card.getBoundingClientRect();
-      document.addEventListener('mousemove', rotateToMouse);
+    });
+
+    card.addEventListener('mousemove', e => {
+      if (!bounds) bounds = card.getBoundingClientRect();
+      if (!ticking) {
+        requestAnimationFrame(() => {
+          if (bounds) {
+            const mouseX = e.clientX;
+            const mouseY = e.clientY;
+            const leftX = mouseX - bounds.left;
+            const topY = mouseY - bounds.top;
+            const center = {
+              x: leftX - bounds.width / 2,
+              y: topY - bounds.height / 2
+            };
+            const distance = Math.sqrt(center.x ** 2 + center.y ** 2);
+
+            card.style.transform = `
+              perspective(1000px)
+              scale3d(1.015, 1.015, 1.015)
+              rotate3d(
+                ${-center.y / 120},
+                ${center.x / 120},
+                0,
+                ${Math.min(distance / 28, 5)}deg
+              )
+            `;
+          }
+          ticking = false;
+        });
+        ticking = true;
+      }
     });
 
     card.addEventListener('mouseleave', () => {
-      document.removeEventListener('mousemove', rotateToMouse);
+      bounds = null;
       card.style.transform = 'perspective(1000px) scale3d(1, 1, 1) rotate3d(0, 0, 0, 0deg)';
     });
   });

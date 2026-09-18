@@ -1,4 +1,4 @@
-import { API, showToast, DailyGoal, icon, launchConfetti, navigate, skel } from '../app.js';
+import { API, showToast, DailyGoal, icon, launchConfetti, navigate, skel, invalidateDueCount, updateReviewBadge } from '../app.js';
 
 let _questions = [];
 let _idx = 0;
@@ -366,6 +366,9 @@ function renderDone() {
     document.removeEventListener('keydown', _keyListener);
     _keyListener = null;
   }
+
+  invalidateDueCount();
+  updateReviewBadge();
 
   const col = document.getElementById('rev-main-col');
   const pct = Math.round((_correct / _questions.length) * 100);
