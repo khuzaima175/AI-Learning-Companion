@@ -1,0 +1,66 @@
+/* ══════════════════════════════════════════════════════════════════
+   AI Learning Companion — Quiet Professional Dark (v3 Design System)
+   Design Tokens — Layered Surfaces, Hairlines, Disciplined Accents
+   ══════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Surfaces — elevation by lightening, never by glow */
+  --bg-0: #0b0c0e;              /* App background */
+  --bg-1: #121316;              /* Primary panels & cards */
+  --bg-2: #191b1f;              /* Inputs, subtle containers, hover states */
+  --bg-3: #222428;              /* Elevated chips, active tabs, modals */
+
+  /* Hairline Borders */
+  --line-1: #26282c;            /* Hairline borders */
+  --line-2: #34373c;            /* Strong dividers, selected outlines, borders on hover */
+
+  /* Typography Text Hierarchy */
+  --txt-1: #eceef0;             /* Primary headers and values */
+  --txt-2: #a2a7ad;             /* Secondary labels, body text */
+  --txt-3: #6d7278;             /* Meta, captions, placeholders */
+
+  /* Accent — Matured Cyan (Interactive, Primary CTAs & Active Series only) */
+  --acc-300: #6fd6e6;
+  --acc-400: #35c1d6;
+  --acc-500: #12aec2;           /* Primary interactive accent */
+  --acc-600: #0e8fa0;
+  --acc-ink: #05272b;           /* Contrast text on primary button */
+  --acc-tint: rgba(18, 174, 194, 0.12);
+
+  /* Semantic Study Rhythm Signals */
+  --warn-400: #e0a63f;          /* Due count, active streak */
+  --warn-tint: rgba(224, 166, 63, 0.13);
+  --ok-400: #4fb879;            /* Success, Easy recall */
+  --ok-tint: rgba(79, 184, 121, 0.13);
+  --danger-400: #e05c47;        /* Again, fails, destructive actions */
+  --danger-tint: rgba(224, 92, 71, 0.13);
+
+  /* Neutral Black Shadows ONLY (overlays, popovers, modals) */
+  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --sh-2: 0 8px 24px rgba(0, 0, 0, 0.45);
+
+  /* Radius */
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-full: 999px;
+
+  /* Typography Fonts */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Fluid Motion Timings */
+  --t-fast: 120ms ease;
+  --t-med: 200ms cubic-bezier(0.2, 0.6, 0.2, 1);
+  --t-flip: 400ms cubic-bezier(0.2, 0.6, 0.2, 1);
+
+  /* Layout Structure */
+  --side-w: 248px;
+  --rail-w: 64px;
+  --topbar-h: 50px;
+  --sessionbar-h: 52px;
+  --page-max: 1380px;
+  --read-w: 840px;
+  --drawer-w: 380px;
+  --gap: 16px;
+}

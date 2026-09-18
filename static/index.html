@@ -3,268 +3,324 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Learning Companion — Your Smart Study Suite</title>
-  <meta name="description" content="Transform lecture transcripts into summaries, flashcards, spaced repetition drills, and interactive AI quizzes." />
+  <title>AI Learning Companion — Study Workspace</title>
+  <meta name="description" content="AI-powered active recall, spaced repetition, video lecture synthesis, and knowledge mastery." />
 
-  <!-- Preload critical assets -->
-  <link rel="preload" href="/static/css/style.css" as="style" />
-  <link rel="preload" href="/static/js/app.js" as="script" crossorigin />
-
-  <!-- Parallel-load JS modules -->
-  <link rel="modulepreload" href="/static/js/app.js" />
-  <link rel="modulepreload" href="/static/js/pages/dashboard.js" />
-  <link rel="modulepreload" href="/static/js/pages/browse.js" />
-  <link rel="modulepreload" href="/static/js/pages/add_video.js" />
-  <link rel="modulepreload" href="/static/js/pages/flashcards.js" />
-  <link rel="modulepreload" href="/static/js/pages/quiz.js" />
-  <link rel="modulepreload" href="/static/js/pages/review.js" />
-  <link rel="modulepreload" href="/static/js/pages/stats.js" />
-  <link rel="modulepreload" href="/static/js/pages/manage.js" />
-
-  <!-- Google Fonts -->
+  <!-- Preconnect & Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital,wght@0,400;1,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
+  <!-- Stylesheet Bundle -->
   <link rel="stylesheet" href="/static/css/style.css" />
-  
 
-  <!-- Supabase JS -->
+  <!-- Supabase JS Client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
 </head>
 <body>
 
-  <!-- YouTube-style Route Progress Bar -->
-  <div id="routebar"></div>
-
-  <!-- Ambient Floating Background Orbs -->
-  <div class="orb a" aria-hidden="true"></div>
-  <div class="orb b" aria-hidden="true"></div>
-
   <!-- Lucide SVG Symbol Sprite -->
   <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
-    <symbol id="i-layout-dashboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>
-    </symbol>
-    <symbol id="i-video" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/>
-    </symbol>
-    <symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
       <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/>
     </symbol>
-    <symbol id="i-library" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/>
-    </symbol>
-    <symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 12.5-8.58 3.91a2 2 0 0 1-1.66 0L2 12.5"/><path d="m22 17.5-8.58 3.91a2 2 0 0 1-1.66 0L2 17.5"/>
-    </symbol>
-    <symbol id="i-brain-circuit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M12 3v18"/><path d="M12 8h4"/><path d="M16 8v3"/><path d="M12 16h-4"/><path d="M8 16v-3"/>
-    </symbol>
-    <symbol id="i-rotate-cw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>
-    </symbol>
-    <symbol id="i-bar-chart-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>
-    </symbol>
-    <symbol id="i-settings-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/>
-    </symbol>
-    <symbol id="i-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
-    </symbol>
-    <symbol id="i-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
-    </symbol>
-    <symbol id="i-alarm-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3 2 6"/><path d="m22 6-3-3"/><path d="M6.38 18.7 4 21"/><path d="M17.64 18.67 20 21"/>
-    </symbol>
-    <symbol id="i-gauge" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>
-    </symbol>
-    <symbol id="i-book-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-    </symbol>
-    <symbol id="i-clapperboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M20.2 6 3 11l-.9-2.4 17.2-5z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>
-    </symbol>
-    <symbol id="i-help-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>
-    </symbol>
-    <symbol id="i-quote" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/>
-    </symbol>
-    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <polyline points="20 6 9 17 4 12"/>
-    </symbol>
-    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
-    </symbol>
-    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M5 12h14"/><path d="M12 5v14"/>
-    </symbol>
-    <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
-    </symbol>
-    <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>
-    </symbol>
-    <symbol id="i-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="m9 18 6-6-6-6"/>
-    </symbol>
-    <symbol id="i-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="m6 9 6 6 6-6"/>
-    </symbol>
-    <symbol id="i-trash-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>
-    </symbol>
-    <symbol id="i-edit-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
-    </symbol>
-    <symbol id="i-message-square" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-    </symbol>
-    <symbol id="i-external-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" x2="21" y1="14" y2="3"/>
-    </symbol>
-    <symbol id="i-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <symbol id="i-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
       <rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/>
     </symbol>
-    <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+    <symbol id="i-rotate-cw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>
     </symbol>
-    <symbol id="i-log-out" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>
+    <symbol id="i-brain-circuit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M12 3v18"/><path d="M12 8h4"/><path d="M16 8v3"/><path d="M12 16h-4"/><path d="M8 16v-3"/>
     </symbol>
-    <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <symbol id="i-library" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/>
+    </symbol>
+    <symbol id="i-download-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m8 17 4 4 4-4"/>
+    </symbol>
+    <symbol id="i-bar-chart-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>
+    </symbol>
+    <symbol id="i-settings-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/>
+    </symbol>
+    <symbol id="i-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+    </symbol>
+    <symbol id="i-video" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/>
+    </symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 12.5-8.58 3.91a2 2 0 0 1-1.66 0L2 12.5"/><path d="m22 17.5-8.58 3.91a2 2 0 0 1-1.66 0L2 17.5"/>
+    </symbol>
+    <symbol id="i-book-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+    </symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+    </symbol>
+    <symbol id="i-message-square" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+    </symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>
+    </symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
+    </symbol>
+    <symbol id="i-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m9 18 6-6-6-6"/>
+    </symbol>
+    <symbol id="i-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m6 9 6 6 6-6"/>
+    </symbol>
+    <symbol id="i-more-horizontal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
+    </symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="20 6 9 17 4 12"/>
+    </symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+    </symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 12h14"/><path d="M12 5v14"/>
+    </symbol>
+    <symbol id="i-trash-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+    </symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
       <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
     </symbol>
-    <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>
+    <symbol id="i-help-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>
     </symbol>
-    <symbol id="i-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+    <symbol id="i-log-out" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>
     </symbol>
-    <symbol id="i-shield-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>
+    <symbol id="i-panel-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/>
+    </symbol>
+    <symbol id="i-external-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" x2="21" y1="14" y2="3"/>
     </symbol>
   </svg>
 
+  <!-- Global Application Shell -->
   <div id="app">
-    <!-- Sidebar Navigation -->
-    <aside id="sidebar">
-      <div class="sidebar-brand">
-        <div class="brand-icon">
-          <svg class="icn" style="width:22px;height:22px;color:var(--teal)"><use href="#i-sparkles"/></svg>
+
+    <!-- Top Bar (48px) -->
+    <header id="topbar">
+      <div class="topbar-left">
+        <button class="mobile-nav-toggle" id="mobile-menu-btn" aria-label="Toggle menu">
+          <svg style="width:16px;height:16px"><use href="#i-panel-left"/></svg>
+        </button>
+        <div class="topbar-brand" onclick="window.navigate('today')" style="cursor:pointer">
+          <div class="topbar-logo-tile">
+            <svg style="width:15px;height:15px"><use href="#i-sparkles"/></svg>
+          </div>
+          <span class="topbar-brand-title">AI Companion</span>
         </div>
-        <div>
-          <div class="brand-name">AI Companion</div>
-          <div class="brand-tagline">Study Workspace v2</div>
+        <div class="breadcrumbs" id="topbar-breadcrumbs">
+          <span class="breadcrumb-item active">Today</span>
         </div>
       </div>
 
-      <nav class="sidebar-nav">
-        <span class="nav-section-label">Core</span>
-        <a class="nav-item active" data-page="dashboard" id="nav-dashboard" href="#dashboard">
-          <span class="nav-icon"><svg class="icn"><use href="#i-layout-dashboard"/></svg></span>
-          <span class="nav-label">Dashboard</span>
-        </a>
-        <a class="nav-item" data-page="browse" id="nav-browse" href="#browse">
-          <span class="nav-icon"><svg class="icn"><use href="#i-library"/></svg></span>
-          <span class="nav-label">Browse Content</span>
-        </a>
-        <a class="nav-item" data-page="add-video" id="nav-add-video" href="#add-video">
-          <span class="nav-icon"><svg class="icn"><use href="#i-video"/></svg></span>
-          <span class="nav-label">Add Video</span>
-        </a>
-        <a class="nav-item" data-page="flashcards" id="nav-flashcards" href="#flashcards">
-          <span class="nav-icon"><svg class="icn"><use href="#i-layers"/></svg></span>
-          <span class="nav-label">Flashcards</span>
-        </a>
+      <div class="topbar-center">
+        <div class="cmd-search-trigger" id="cmd-search-btn">
+          <div style="display:flex;align-items:center;gap:8px">
+            <svg style="width:14px;height:14px;color:var(--txt-3)"><use href="#i-search"/></svg>
+            <span>Search or jump to...</span>
+          </div>
+          <span class="kbd">⌘K</span>
+        </div>
+      </div>
 
-        <span class="nav-section-label">Practice</span>
-        <a class="nav-item" data-page="quiz" id="nav-quiz" href="#quiz">
-          <span class="nav-icon"><svg class="icn"><use href="#i-brain-circuit"/></svg></span>
-          <span class="nav-label">Practice Quiz</span>
-        </a>
-        <a class="nav-item" data-page="review" id="nav-review" href="#review">
-          <span class="nav-icon"><svg class="icn"><use href="#i-rotate-cw"/></svg></span>
-          <span class="nav-label">Daily Review</span>
-          <span class="nav-badge" id="review-badge" style="display:none"></span>
-        </a>
+      <div class="topbar-right">
+        <button class="btn btn-primary btn-sm" id="top-start-review" onclick="window.navigate('review?src=due')">
+          <span class="status-dot warn"></span>
+          <span>Start Review · <strong class="mono" id="top-due-count">0</strong></span>
+        </button>
 
-        <span class="nav-section-label">Insights</span>
-        <a class="nav-item" data-page="stats" id="nav-stats" href="#stats">
-          <span class="nav-icon"><svg class="icn"><use href="#i-bar-chart-3"/></svg></span>
-          <span class="nav-label">Statistics</span>
-        </a>
-        <a class="nav-item" data-page="manage" id="nav-manage" href="#manage">
-          <span class="nav-icon"><svg class="icn"><use href="#i-settings-2"/></svg></span>
-          <span class="nav-label">Manage Content</span>
-        </a>
-      </nav>
+        <div class="chip chip-warn" id="top-streak-chip" title="Current Review Streak">
+          <svg style="width:13px;height:13px"><use href="#i-flame"/></svg>
+          <span class="mono" id="top-streak-num">1d</span>
+        </div>
 
-      <!-- Sidebar User & Footer -->
-      <div class="sidebar-footer">
-        <div class="user-profile-card">
-          <div class="user-avatar" id="user-avatar-chip">ST</div>
-          <div class="user-meta">
-            <div class="user-email" id="user-email-chip">student@study</div>
-            <div class="user-streak-pill" id="sidebar-streak-pill">
-              <svg class="icn" style="width:12px;height:12px;color:var(--amber)"><use href="#i-flame"/></svg>
-              <span id="sidebar-streak-count">1 day</span>
-            </div>
+        <button class="btn btn-ghost btn-icon btn-sm" id="top-assistant-btn" title="AI Assistant Drawer (Context Aware)">
+          <svg style="width:16px;height:16px"><use href="#i-message-square"/></svg>
+        </button>
+
+        <div style="position:relative">
+          <button class="user-avatar" id="top-user-avatar" title="Account &amp; Settings">ST</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Sidebar Navigation (248px) -->
+    <aside id="sidebar">
+      <div class="sidebar-content">
+        <!-- Group 1: STUDY -->
+        <div class="sidebar-group">
+          <span class="side-label">Study</span>
+          <a class="nav-item" data-route="today" id="nav-today" href="#today">
+            <span class="nav-icon"><svg style="width:16px;height:16px"><use href="#i-calendar"/></svg></span>
+            <span class="nav-label">Today</span>
+          </a>
+          <a class="nav-item" data-route="review" id="nav-review" href="#review?src=due">
+            <span class="nav-icon"><svg style="width:16px;height:16px"><use href="#i-rotate-cw"/></svg></span>
+            <span class="nav-label">Daily Review</span>
+            <span class="quiet-badge" id="side-review-badge" style="display:none">
+              <span class="quiet-dot"></span>
+              <span id="side-due-num">0</span>
+            </span>
+          </a>
+          <a class="nav-item" data-route="practice" id="nav-practice" href="#practice">
+            <span class="nav-icon"><svg style="width:16px;height:16px"><use href="#i-brain-circuit"/></svg></span>
+            <span class="nav-label">Practice Hub</span>
+          </a>
+        </div>
+
+        <!-- Group 2: CONTENT -->
+        <div class="sidebar-group">
+          <span class="side-label">Content</span>
+          <a class="nav-item" data-route="library" id="nav-library" href="#library">
+            <span class="nav-icon"><svg style="width:16px;height:16px"><use href="#i-library"/></svg></span>
+            <span class="nav-label">Library</span>
+          </a>
+          <a class="nav-item" data-route="import" id="nav-import" href="#import">
+            <span class="nav-icon"><svg style="width:16px;height:16px"><use href="#i-download-cloud"/></svg></span>
+            <span class="nav-label">Import Lecture</span>
+          </a>
+          <a class="nav-item" data-route="insights" id="nav-insights" href="#insights">
+            <span class="nav-icon"><svg style="width:16px;height:16px"><use href="#i-bar-chart-3"/></svg></span>
+            <span class="nav-label">Insights</span>
+          </a>
+        </div>
+
+        <!-- Group 3: COURSES (Dynamic Top 6) -->
+        <div class="sidebar-group">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 10px 6px">
+            <span class="side-label" style="padding:0">Courses</span>
+            <a href="#library" class="caption-text" style="font-size:11px;color:var(--txt-3);hover:color:var(--txt-1)">All →</a>
+          </div>
+          <div id="side-courses-list">
+            <!-- Populated dynamically -->
           </div>
         </div>
-        <button class="btn btn-ghost btn-sm" id="logout-btn" style="width:100%;margin-top:10px;justify-content:flex-start">
-          <svg class="icn" style="width:14px;height:14px"><use href="#i-log-out"/></svg>
-          <span>Sign Out</span>
-        </button>
+      </div>
+
+      <!-- Sidebar Footer -->
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <div class="user-avatar" id="side-user-avatar">ST</div>
+          <div style="flex:1;min-width:0">
+            <div class="user-meta-name" id="side-user-name">Student Account</div>
+            <div class="user-meta-streak">
+              <svg style="width:10px;height:10px;color:var(--warn-400)"><use href="#i-flame"/></svg>
+              <span id="side-user-streak">1 day streak</span>
+            </div>
+          </div>
+          <button class="btn btn-ghost btn-icon btn-sm" onclick="window.navigate('settings')" title="Settings">
+            <svg style="width:14px;height:14px"><use href="#i-settings-2"/></svg>
+          </button>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 4px 0">
+          <button class="btn btn-ghost btn-sm" id="sidebar-collapse-btn" title="Toggle Sidebar (⌘\)">
+            <svg style="width:14px;height:14px"><use href="#i-panel-left"/></svg>
+            <span class="btn-logout-label">Collapse</span>
+          </button>
+          <button class="btn btn-ghost btn-sm" id="logout-btn" title="Sign Out">
+            <svg style="width:14px;height:14px"><use href="#i-log-out"/></svg>
+            <span class="btn-logout-label">Sign out</span>
+          </button>
+        </div>
       </div>
     </aside>
 
-    <!-- Mobile Overlay & Toggle -->
-    <div class="sidebar-overlay" id="sidebar-overlay"></div>
-
-    <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Toggle menu" aria-expanded="false">
-      <svg id="menu-icon-ham" class="icn" style="width:20px;height:20px"><use href="#i-layers"/></svg>
-      <svg id="menu-icon-close" class="icn" style="width:18px;height:18px;display:none"><use href="#i-x"/></svg>
-    </button>
+    <!-- Mobile Overlay -->
+    <div class="mobile-overlay" id="mobile-overlay"></div>
 
     <!-- Main Content Area -->
     <main id="main-content">
-      <div id="page-content" class="page"></div>
+      <div id="page-content"></div>
     </main>
   </div>
 
-  <!-- Global Confetti Canvas -->
-  <canvas id="confetti-canvas" style="position:fixed;inset:0;pointer-events:none;z-index:99999;display:none"></canvas>
+  <!-- ── Global Overlays ──────────────────────────────────────────── -->
 
-  <!-- Global Toast Notification -->
-  <div id="toast" class="toast" role="alert" aria-live="polite"></div>
+  <!-- 1. Command Palette Modal (`⌘K`) -->
+  <div class="palette-backdrop" id="cmd-palette-backdrop">
+    <div class="palette-modal">
+      <div class="palette-search-box">
+        <svg style="width:16px;height:16px;color:var(--txt-3)"><use href="#i-search"/></svg>
+        <input class="palette-input" id="cmd-palette-input" placeholder="Type a command or search courses, lectures, cards..." autocomplete="off" />
+        <span class="kbd">ESC</span>
+      </div>
+      <div class="palette-results" id="cmd-palette-results">
+        <!-- Results injected dynamically -->
+      </div>
+    </div>
+  </div>
 
-  <!-- SVG Linear Gradients Definition -->
-  <svg width="0" height="0" style="position:absolute;visibility:hidden">
-    <defs>
-      <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="#38bdf8"/>
-        <stop offset="100%" stop-color="#00f0ff"/>
-      </linearGradient>
-      <linearGradient id="g-amber" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="#fbbf24"/>
-        <stop offset="100%" stop-color="#d97706"/>
-      </linearGradient>
-      <linearGradient id="g-sky" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="#818cf8"/>
-        <stop offset="100%" stop-color="#6366f1"/>
-      </linearGradient>
-      <linearGradient id="goalGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="#38bdf8"/>
-        <stop offset="100%" stop-color="#00f0ff"/>
-      </linearGradient>
-    </defs>
-  </svg>
+  <!-- 2. AI Assistant Drawer (Right 380px) -->
+  <aside id="ai-drawer" aria-label="AI Tutor Assistant">
+    <div class="drawer-header">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="icon-tile accent" style="width:24px;height:24px">
+          <svg style="width:13px;height:13px"><use href="#i-sparkles"/></svg>
+        </div>
+        <span style="font-size:13px;font-weight:600;color:var(--txt-1)">AI Study Tutor</span>
+      </div>
+      <button class="btn btn-ghost btn-icon btn-sm" id="ai-drawer-close" aria-label="Close Drawer">
+        <svg style="width:14px;height:14px"><use href="#i-x"/></svg>
+      </button>
+    </div>
 
+    <div class="drawer-messages" id="ai-drawer-msgs">
+      <div class="drawer-bubble ai">
+        Hello! I'm your AI Companion tutor. Ask me to clarify key concepts, test your recall, or summarize notes for the active lecture.
+      </div>
+    </div>
+
+    <div class="drawer-footer">
+      <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px" id="ai-drawer-chips">
+        <button class="chip chip-neutral" onclick="window.sendTutorPrompt('Explain the core thesis simply')">Core thesis</button>
+        <button class="chip chip-neutral" onclick="window.sendTutorPrompt('Generate a quick drill question')">Quiz me</button>
+      </div>
+      <div style="display:flex;gap:8px">
+        <input class="form-input" id="ai-drawer-input" placeholder="Ask AI tutor anything..." />
+        <button class="btn btn-primary btn-sm" id="ai-drawer-send">Send</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 3. Keyboard Shortcuts Modal (`?`) -->
+  <div class="palette-backdrop" id="shortcuts-backdrop">
+    <div class="palette-modal" style="max-width:480px;padding:20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <span class="card-title">Keyboard Shortcuts</span>
+        <span class="kbd">ESC</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12.5px">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span>Command Palette</span><span class="kbd">⌘K</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span>Toggle Sidebar</span><span class="kbd">⌘\</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span>Flip Flashcard</span><span class="kbd">Space</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span>Rate Card</span><span class="kbd">1–4</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span>Undo Last Review</span><span class="kbd">U</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span>Search in Library</span><span class="kbd">/</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span>Go to Today</span><span class="kbd">G T</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span>Go to Library</span><span class="kbd">G L</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Global Toast Notification -->
+  <div id="toast" class="toast-msg" role="alert" aria-live="polite"></div>
+
+  <!-- Application Entry Point -->
   <script src="/static/js/app.js" type="module"></script>
 </body>
 </html>

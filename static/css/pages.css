@@ -1,0 +1,494 @@
+/* ══════════════════════════════════════════════════════════════════
+   AI Learning Companion — Page-Specific Layouts & Overlays
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Master-Detail Library Layout (`#/library`) ─────────────── */
+.library-split {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.library-courses-pane {
+  background: var(--bg-1);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-lg);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.course-row-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: background var(--t-fast);
+  position: relative;
+}
+
+.course-row-item:hover {
+  background: var(--bg-2);
+}
+
+.course-row-item.active {
+  background: var(--bg-2);
+}
+
+.course-row-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: var(--acc-500);
+  border-radius: var(--r-full);
+}
+
+/* ── 2. Lecture Object Page (`#/lecture/:id`) ──────────────────── */
+.lecture-layout {
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  gap: 16px;
+  align-items: start;
+}
+
+.lecture-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid var(--line-1);
+  margin-bottom: 18px;
+}
+
+.lecture-tab-btn {
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--txt-3);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color var(--t-fast), border-color var(--t-fast);
+  margin-bottom: -1px;
+}
+
+.lecture-tab-btn:hover {
+  color: var(--txt-1);
+}
+
+.lecture-tab-btn.active {
+  color: var(--txt-1);
+  border-bottom-color: var(--acc-500);
+  font-weight: 600;
+}
+
+/* Concept Cards Grid inside Lecture Detail */
+.concept-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.concept-card-item {
+  background: var(--bg-2);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* ── 3. Rich Study Cockpit & Review Scene ──────────────────────── */
+.review-scene-wrap {
+  max-width: 1340px;
+  margin: 0 auto;
+  padding: 28px 24px;
+  width: 100%;
+}
+
+.study-cockpit-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) 340px;
+  gap: 24px;
+  align-items: start;
+  width: 100%;
+}
+
+@media (max-width: 1024px) {
+  .study-cockpit-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.study-telemetry-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.queue-matrix-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  max-height: 90px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.queue-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--bg-3);
+  transition: background var(--t-fast);
+}
+
+.queue-dot.done-ok {
+  background: var(--ok-400);
+}
+
+.queue-dot.done-err {
+  background: var(--danger-400);
+}
+
+.queue-dot.active {
+  background: var(--acc-400);
+  outline: 2px solid var(--acc-300);
+}
+
+.flip-scene {
+  perspective: 1200px;
+  width: 100%;
+  min-height: 380px;
+}
+
+.flip-card {
+  position: relative;
+  width: 100%;
+  min-height: 380px;
+  transform-style: preserve-3d;
+  transition: transform var(--t-flip);
+  cursor: pointer;
+}
+
+.flip-card.flipped {
+  transform: rotateY(180deg);
+}
+
+.card-face {
+  position: absolute;
+  inset: 0;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  background: var(--bg-1);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-lg);
+  padding: 36px 32px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.card-face.back {
+  transform: rotateY(180deg);
+  background: var(--bg-1);
+  border-color: var(--line-2);
+}
+
+.card-definition-box {
+  background: var(--bg-2);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-md);
+  padding: 16px 20px;
+  margin-top: 14px;
+}
+
+/* ── 4. Practice Exam & Review Interactive Option Cards ─────────── */
+.quiz-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.quiz-opt-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border-radius: var(--r-md);
+  background: var(--bg-2);
+  border: 1px solid var(--line-1);
+  cursor: pointer;
+  font-size: 15px;
+  color: var(--txt-1);
+  min-height: 58px;
+  transition: background var(--t-fast), border-color var(--t-fast), transform var(--t-fast);
+  user-select: none;
+}
+
+.quiz-opt-row:hover:not(.disabled) {
+  border-color: var(--line-2);
+  background: var(--bg-3);
+  transform: translateY(-1px);
+}
+
+.quiz-opt-key {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--bg-3);
+  border: 1px solid var(--line-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--txt-2);
+  flex-shrink: 0;
+}
+
+.quiz-opt-row.selected {
+  border-color: var(--acc-500);
+  background: var(--acc-tint);
+}
+
+.quiz-opt-row.correct {
+  border-color: var(--ok-400);
+  background: var(--ok-tint);
+  color: var(--ok-400);
+}
+
+.quiz-opt-row.correct .quiz-opt-key {
+  background: var(--ok-400);
+  border-color: var(--ok-400);
+  color: #03200d;
+}
+
+.quiz-opt-row.wrong {
+  border-color: var(--danger-400);
+  background: var(--danger-tint);
+  color: var(--danger-400);
+}
+
+.quiz-opt-row.wrong .quiz-opt-key {
+  background: var(--danger-400);
+  border-color: var(--danger-400);
+  color: #fff;
+}
+
+/* ── 5. Command Palette Modal (`⌘K`) ───────────────────────────── */
+.palette-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  z-index: 50;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 15vh;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t-fast);
+}
+
+.palette-backdrop.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.palette-modal {
+  width: 100%;
+  max-width: 580px;
+  background: var(--bg-1);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-2);
+  overflow: hidden;
+}
+
+.palette-search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line-1);
+}
+
+.palette-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--txt-1);
+  font-size: 14px;
+  outline: none;
+}
+
+.palette-results {
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.palette-group-label {
+  padding: 6px 10px 4px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--txt-3);
+}
+
+.palette-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  color: var(--txt-2);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+
+.palette-item.selected, .palette-item:hover {
+  background: var(--bg-2);
+  color: var(--txt-1);
+}
+
+/* ── 6. AI Assistant Drawer (Right 380px) ────────────────────────── */
+#ai-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--drawer-w);
+  max-width: 100vw;
+  background: var(--bg-1);
+  border-left: 1px solid var(--line-1);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transform: translateX(100%);
+  transition: transform var(--t-med);
+  box-shadow: var(--sh-2);
+}
+
+#ai-drawer.open {
+  transform: translateX(0);
+}
+
+.drawer-header {
+  height: var(--topbar-h);
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line-1);
+}
+
+.drawer-messages {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.drawer-bubble {
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 88%;
+}
+
+.drawer-bubble.user {
+  margin-left: auto;
+  background: var(--acc-500);
+  color: var(--acc-ink);
+  font-weight: 500;
+}
+
+.drawer-bubble.ai {
+  margin-right: auto;
+  background: var(--bg-2);
+  border: 1px solid var(--line-1);
+  color: var(--txt-1);
+}
+
+.drawer-footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--line-1);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ── 7. Vertical Stepper (Ingestion Console) ────────────────────── */
+.stepper-v {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  position: relative;
+  padding-left: 8px;
+}
+
+.stepper-v::before {
+  content: "";
+  position: absolute;
+  left: 18px;
+  top: 12px;
+  bottom: 12px;
+  width: 1px;
+  background: var(--line-1);
+}
+
+.stepper-v-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  position: relative;
+  z-index: 1;
+}
+
+.stepper-v-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--bg-2);
+  border: 1px solid var(--line-1);
+  color: var(--txt-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.stepper-v-item.active .stepper-v-num {
+  background: var(--acc-500);
+  border-color: var(--acc-500);
+  color: var(--acc-ink);
+  font-weight: 600;
+}
+
+.stepper-v-item.done .stepper-v-num {
+  background: var(--ok-tint);
+  border-color: rgba(79, 184, 121, 0.4);
+  color: var(--ok-400);
+}

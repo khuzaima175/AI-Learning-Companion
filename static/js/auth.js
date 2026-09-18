@@ -62,7 +62,7 @@ export async function signIn(email, password) {
     if (error) throw new Error(error.message);
     _currentSession = data?.session || null;
     _currentUser = data?.user || null;
-    window.location.hash = 'dashboard';
+    window.location.hash = 'today';
     window.location.reload();
     return data;
 }
