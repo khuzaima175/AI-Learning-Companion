@@ -9,19 +9,16 @@ export async function renderFlashcards(container) {
   }
 
   container.innerHTML = `
-    <!-- Header Banner with AI Visual Artwork -->
-    <div class="hero-art-banner rev" style="--i:0">
-      <img src="/static/img/flashcards_deck_art.jpg" alt="3D Flashcard Matrix" class="hero-art-bg" />
-      <div class="hero-art-content">
-        <div class="pill pill-sky" style="margin-bottom:12px;font-size:0.72rem">
-          ${icon('layers', '', 'width:12px;height:12px')}
-          <span>Concept Retention Arena</span>
-        </div>
-        <h1 class="page-title" style="font-size:2.4rem;margin-bottom:8px">3D <em>Flashcards</em></h1>
-        <p class="page-subtitle" style="margin-top:0;font-size:0.92rem;max-width:540px">
-          Interactive concept flip deck with spacebar shortcuts, interval ratings, and tactile 3D perspective.
-        </p>
+    <!-- Header -->
+    <div style="margin-bottom:28px" class="rev" style="--i:0">
+      <div class="pill pill-cyan" style="margin-bottom:10px;font-size:0.72rem">
+        ${icon('layers', '', 'width:12px;height:12px')}
+        <span>Concept Retention Arena</span>
       </div>
+      <h1 class="page-title" style="font-size:2.3rem">3D <em>Flashcards</em></h1>
+      <p class="page-subtitle" style="margin-top:6px;font-size:0.92rem;max-width:540px">
+        Interactive concept flip deck with spacebar shortcuts, interval ratings, and tactile 3D perspective.
+      </p>
     </div>
 
     <!-- Filters Deck Picker -->

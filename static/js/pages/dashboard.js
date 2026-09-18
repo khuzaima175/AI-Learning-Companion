@@ -48,31 +48,30 @@ export async function renderDashboard(container) {
   }).join('');
 
   container.innerHTML = `
-    <!-- Hero Banner with AI Visual Artwork Background -->
-    <div class="hero-art-banner rev" style="--i:0">
-      <img src="/static/img/hero_workspace.jpg" alt="Workspace Aura" class="hero-art-bg" />
-      <div class="hero-art-content">
-        <div class="pill pill-teal" style="margin-bottom:12px;font-size:0.72rem">
+    <!-- Dashboard Header -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:28px;flex-wrap:wrap;gap:16px" class="rev" style="--i:0">
+      <div>
+        <div class="pill pill-cyan" style="margin-bottom:10px;font-size:0.72rem">
           ${icon('sparkles', '', 'width:12px;height:12px')}
           <span>AI Study Companion</span>
         </div>
-        <h1 class="page-title" style="font-size:2.4rem;margin-bottom:8px">Welcome to your <em>Workspace</em></h1>
-        <p class="page-subtitle" style="margin-top:0;font-size:0.92rem;max-width:520px">
+        <h1 class="page-title" style="font-size:2.3rem">Welcome to your <em>Workspace</em></h1>
+        <p class="page-subtitle" style="margin-top:6px;font-size:0.92rem;max-width:540px">
           Continuous spaced repetition, active recall analytics, and lecture synthesis.
         </p>
-        <div style="display:flex;align-items:center;gap:12px;margin-top:20px;flex-wrap:wrap">
-          <button class="btn btn-primary btn-sm" onclick="window.navigate('review')">
-            ${icon('rotate-cw', '', 'width:14px;height:14px')}
-            <span>Start Daily Review</span>
-          </button>
-          <button class="btn btn-ghost btn-sm" onclick="window.navigate('add-video')">
-            ${icon('plus', '', 'width:14px;height:14px')}
-            <span>Import Lecture</span>
-          </button>
-          <div class="pill pill-amber" style="padding:6px 12px;font-size:0.75rem;margin-left:auto">
-            ${icon('calendar', '', 'width:13px;height:13px')}
-            <span>${todayDateStr}</span>
-          </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" onclick="window.navigate('review')">
+          ${icon('rotate-cw', '', 'width:14px;height:14px')}
+          <span>Start Daily Review</span>
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="window.navigate('add-video')">
+          ${icon('plus', '', 'width:14px;height:14px')}
+          <span>Import Lecture</span>
+        </button>
+        <div class="pill pill-amber" style="padding:6px 12px;font-size:0.75rem">
+          ${icon('calendar', '', 'width:13px;height:13px')}
+          <span>${todayDateStr}</span>
         </div>
       </div>
     </div>

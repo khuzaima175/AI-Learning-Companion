@@ -25,19 +25,16 @@ export async function renderQuiz(container) {
   }
 
   container.innerHTML = `
-    <!-- Header Banner with AI Visual Artwork -->
-    <div class="hero-art-banner rev" style="--i:0">
-      <img src="/static/img/quiz_arena_art.jpg" alt="Neural Exam Arena" class="hero-art-bg" />
-      <div class="hero-art-content">
-        <div class="pill pill-amber" style="margin-bottom:12px;font-size:0.72rem">
-          ${icon('brain-circuit', '', 'width:12px;height:12px')}
-          <span>Active Recall Engine</span>
-        </div>
-        <h1 class="page-title" style="font-size:2.4rem;margin-bottom:8px">Practice <em>Exam</em></h1>
-        <p class="page-subtitle" style="margin-top:0;font-size:0.92rem;max-width:540px">
-          Timed active recall drills with real-time feedback, comprehension scoring, and interval adjustments.
-        </p>
+    <!-- Header -->
+    <div style="margin-bottom:28px" class="rev" style="--i:0">
+      <div class="pill pill-amber" style="margin-bottom:10px;font-size:0.72rem">
+        ${icon('brain-circuit', '', 'width:12px;height:12px')}
+        <span>Active Recall Engine</span>
       </div>
+      <h1 class="page-title" style="font-size:2.3rem">Practice <em>Exam</em></h1>
+      <p class="page-subtitle" style="margin-top:6px;font-size:0.92rem;max-width:540px">
+        Timed active recall drills with real-time feedback, comprehension scoring, and interval adjustments.
+      </p>
     </div>
 
     <!-- Quiz Setup Screen -->

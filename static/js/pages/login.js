@@ -47,20 +47,42 @@ export async function renderLogin(container) {
           </button>
         </div>
 
-        <!-- Right: AI Showcase Art Visual -->
-        <div style="position:relative;background:#05070a;border-left:1px solid var(--line);overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:36px 32px">
-          <img src="/static/img/auth_showcase.jpg" alt="Study Sanctuary" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.75" />
-          <div style="position:absolute;inset:0;background:linear-gradient(to top, rgba(7,9,14,0.95) 15%, rgba(7,9,14,0.3) 60%, transparent 100%)"></div>
+        <!-- Right: AI Showcase Cyber Visual Panel -->
+        <div style="position:relative;background:linear-gradient(145deg, #0a0f1d 0%, #06090e 100%);border-left:1px solid var(--line);overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;padding:40px 36px">
+          <!-- Cyber Ambient Mesh Glow -->
+          <div style="position:absolute;top:-40px;right:-40px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle, rgba(0,240,255,0.12) 0%, transparent 70%);pointer-events:none"></div>
+          <div style="position:absolute;bottom:-30px;left:-30px;width:180px;height:180px;border-radius:50%;background:radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%);pointer-events:none"></div>
           
           <div style="position:relative;z-index:2">
-            <div class="pill pill-teal" style="margin-bottom:10px;font-size:0.7rem">
+            <div class="pill pill-cyan" style="margin-bottom:14px;font-size:0.72rem;display:inline-flex">
               ${icon('brain-circuit', '', 'width:12px;height:12px')}
               <span>Next-Gen Recall Engine</span>
             </div>
-            <h3 style="font-size:1.35rem;color:#ffffff;line-height:1.3;margin-bottom:6px">Master any curriculum in half the time.</h3>
-            <p style="font-size:0.82rem;color:var(--muted);line-height:1.5">
+            <h3 style="font-size:1.4rem;color:var(--text-pure);line-height:1.35;margin-bottom:10px;font-weight:700">Master any curriculum in half the time.</h3>
+            <p style="font-size:0.84rem;color:var(--muted);line-height:1.6">
               Automated video summarization, SM-2 flashcard scheduling, and real-time comprehension drills.
             </p>
+          </div>
+
+          <div style="position:relative;z-index:2;display:flex;flex-direction:column;gap:12px;margin-top:24px">
+            <div style="display:flex;align-items:center;gap:10px;font-size:0.8rem;color:var(--text-dim)">
+              <div class="icon-chip cyan" style="width:28px;height:28px;flex-shrink:0">
+                ${icon('zap', '', 'width:14px;height:14px')}
+              </div>
+              <span>Instant AI lecture synthesis</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;font-size:0.8rem;color:var(--text-dim)">
+              <div class="icon-chip indigo" style="width:28px;height:28px;flex-shrink:0">
+                ${icon('layers', '', 'width:14px;height:14px')}
+              </div>
+              <span>Spaced repetition memory retention</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;font-size:0.8rem;color:var(--text-dim)">
+              <div class="icon-chip amber" style="width:28px;height:28px;flex-shrink:0">
+                ${icon('shield-check', '', 'width:14px;height:14px')}
+              </div>
+              <span>Private cloud synchronized storage</span>
+            </div>
           </div>
         </div>
 
