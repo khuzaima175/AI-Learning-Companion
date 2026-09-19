@@ -221,9 +221,9 @@ export async function renderToday(container) {
           </div>`;
       } else {
         continueList.innerHTML = allVideos.slice(0, 3).map(v => `
-          <div class="card card-xs spot" style="display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--bg-2)">
+          <div class="card card-xs spot today-continue-card">
             <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
-              <div class="icon-tile accent" style="width:28px;height:28px">
+              <div class="icon-tile accent" style="width:28px;height:28px;flex-shrink:0">
                 <svg style="width:14px;height:14px"><use href="#i-video"/></svg>
               </div>
               <div style="flex:1;min-width:0">
@@ -231,7 +231,7 @@ export async function renderToday(container) {
                 <div class="caption-text">${v.courseName}</div>
               </div>
             </div>
-            <div style="display:flex;align-items:center;gap:8px">
+            <div class="today-continue-actions" style="display:flex;align-items:center;gap:8px;flex-shrink:0">
               <button class="btn btn-ghost btn-sm" onclick="window.navigate('lecture/${v.id}')">View</button>
               <button class="btn btn-secondary btn-sm" onclick="window.navigate('review?src=deck:${v.id}')">Study Deck</button>
             </div>
@@ -249,9 +249,9 @@ export async function renderToday(container) {
         const displayedCourses = courseList.slice(0, 5);
         const remaining = courseList.length - displayedCourses.length;
         dueCoursesContainer.innerHTML = displayedCourses.map(c => `
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;font-size:12.5px">
-            <span style="color:var(--txt-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px">${c.name}</span>
-            <div style="display:flex;align-items:center;gap:8px">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;font-size:12.5px;gap:8px">
+            <span style="color:var(--txt-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">${c.name}</span>
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
               <span class="mono" style="color:var(--warn-400);font-size:12px">${c.question_count || 0} cards</span>
               <button class="btn btn-ghost btn-sm" style="padding:2px 6px;height:22px;font-size:11px" onclick="window.navigate('review?src=course:${c.id}')">Review</button>
             </div>

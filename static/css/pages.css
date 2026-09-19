@@ -868,5 +868,20 @@
     font-size: 11.5px;
     padding: 0 6px;
   }
+  .today-continue-card {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+  .today-continue-actions {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    width: 100%;
+  }
+  .today-continue-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
 }
 

@@ -13,7 +13,7 @@ export async function renderLogin(container) {
         <!-- Logo & Header -->
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
           <div class="icon-tile accent" style="width:32px;height:32px">
-            <svg style="width:16px;height:16px"><use href="#i-sparkles"/></svg>
+            <svg style="width:16px;height:16px"><use href="#i-brand-logo"/></svg>
           </div>
           <div>
             <div style="font-weight:600;font-size:15px;color:var(--txt-1)">AI Learning Companion</div>
