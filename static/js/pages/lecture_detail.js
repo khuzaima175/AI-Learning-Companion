@@ -4,7 +4,8 @@
    Concept Cards, Autosave Notes & AI Tutor
    ══════════════════════════════════════════════════════════════════ */
 
-import { API, showToast, skel, timeAgo, navigate, setLectureContext, ytId, ytThumb } from '../app.js';
+import { animateContent } from '../motion.js';
+import { API, showToast, skel, timeAgo, navigate, setLectureContext, ytId, ytThumb, escapeHtml } from '../app.js';
 
 let _activeTab = 'summary';
 let _lectureData = null;
@@ -12,6 +13,9 @@ let _lectureQuestions = [];
 let _saveTimer = null;
 
 export async function renderLectureDetail(container, options = {}) {
+  _activeTab = 'summary';
+  _lectureData = null;
+  clearTimeout(_saveTimer);
   const lectureId = options.lectureId;
   if (!lectureId) {
     navigate('library');
@@ -43,7 +47,7 @@ export async function renderLectureDetail(container, options = {}) {
           <span class="chip chip-neutral mono" style="font-size:11px" id="lec-mob-concepts-chip">Cards</span>
           <span class="chip chip-neutral mono" style="font-size:11px" id="lec-mob-questions-chip">Quiz</span>
         </div>
-        <span class="caption-text mono" style="color:var(--ok-400);font-weight:600">75% Mastery</span>
+        <span class="caption-text mono" style="color:var(--ok-400);font-weight:600">Study materials</span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
         <button class="btn btn-primary btn-sm" id="lec-mob-study-btn">
@@ -71,8 +75,8 @@ export async function renderLectureDetail(container, options = {}) {
         
         <!-- Navigation Tabs (Horizontal Scrollable on Mobile) -->
         <div class="lecture-tabs" id="lec-tabs-row">
-          <button class="lecture-tab-btn active" data-tab="summary">Lecture Summary</button>
-          <button class="lecture-tab-btn" data-tab="video">Video &amp; Media</button>
+          <button class="lecture-tab-btn active" data-tab="summary">Summary</button>
+          <button class="lecture-tab-btn" data-tab="video">Video</button>
           <button class="lecture-tab-btn" data-tab="questions">Quiz Questions</button>
           <button class="lecture-tab-btn" data-tab="cards">Flashcards</button>
           <button class="lecture-tab-btn" data-tab="notes">Notes</button>
@@ -91,7 +95,7 @@ export async function renderLectureDetail(container, options = {}) {
         
         <!-- Metrics Card -->
         <div class="card card-sm">
-          <span class="card-title" style="margin-bottom:12px;display:block">Lecture Analytics</span>
+          <span class="card-title" style="margin-bottom:12px;display:block">Your study materials</span>
           <div class="stat-grid-2" style="margin-bottom:12px">
             <div>
               <div class="caption-text">Concepts</div>
@@ -103,11 +107,11 @@ export async function renderLectureDetail(container, options = {}) {
             </div>
           </div>
           <div class="progress-track" style="margin-bottom:8px">
-            <div class="progress-fill" style="width:75%"></div>
+            <div class="progress-fill" style="width:0%" id="lec-coverage-fill"></div>
           </div>
           <div class="caption-text" style="display:flex;justify-content:space-between">
-            <span>Retention Mastery</span>
-            <span class="mono" style="color:var(--txt-1)">75%</span>
+            <span>Study materials</span>
+            <span class="mono" style="color:var(--txt-1)" id="lec-coverage-label">Loading</span>
           </div>
         </div>
 
@@ -181,12 +185,14 @@ async function loadLectureData(lectureId) {
     const railThumb = document.getElementById('lec-rail-thumb');
 
     const rawConcepts = _lectureData.key_concepts || _lectureData.flashcards || [];
-    const conceptsCount = rawConcepts.length || 16;
-    const questionsCount = _lectureQuestions.length || _lectureData.question_count || 20;
+    const conceptsCount = rawConcepts.length;
+    const questionsCount = _lectureQuestions.length || _lectureData.question_count || 0;
 
     if (titleHdr) titleHdr.textContent = _lectureData.title;
     if (courseMeta) courseMeta.textContent = `Course · ${_lectureData.course_name || 'General'}`;
 
+    document.getElementById('lec-coverage-fill').style.width = conceptsCount || questionsCount ? '100%' : '0%';
+    document.getElementById('lec-coverage-label').textContent = conceptsCount || questionsCount ? 'Ready' : 'No cards yet';
     if (conceptsNum) conceptsNum.textContent = conceptsCount;
     if (questionsNum) questionsNum.textContent = questionsCount;
     if (mobConceptsChip) mobConceptsChip.textContent = `${conceptsCount} Cards`;
@@ -216,7 +222,7 @@ async function loadLectureData(lectureId) {
           <svg style="width:13px;height:13px"><use href="#i-rotate-cw"/></svg>
           <span>Review Deck</span>
         </button>
-        <button class="btn btn-ghost btn-sm" onclick="window.navigate('practice')">
+        <button class="btn btn-ghost btn-sm" onclick="window.navigate('practice?scope=video&id=${_lectureData.id}')">
           <svg style="width:13px;height:13px"><use href="#i-brain-circuit"/></svg>
           <span>Quiz</span>
         </button>
@@ -226,10 +232,10 @@ async function loadLectureData(lectureId) {
       `;
 
       document.getElementById('lec-del-btn')?.addEventListener('click', async () => {
-        if (!confirm(`Are you sure you want to delete lecture "${_lectureData.title}" and all its questions/cards?`)) return;
+        if (!confirm(`Are you sure you want to delete lecture "${escapeHtml(_lectureData.title)}" and all its questions/cards?`)) return;
         try {
           await API.del(`/api/videos/${_lectureData.id}`);
-          showToast(`Deleted lecture "${_lectureData.title}"`, 'info');
+          showToast(`Deleted lecture "${escapeHtml(_lectureData.title)}"`, 'info');
           navigate('library');
         } catch (err) {
           showToast(err.message, 'error');
@@ -241,14 +247,14 @@ async function loadLectureData(lectureId) {
       navigate(`review?src=deck:${_lectureData.id}`);
     });
     document.getElementById('lec-quiz-btn')?.addEventListener('click', () => {
-      navigate('practice');
+      navigate(`practice?scope=video&id=${_lectureData.id}`);
     });
 
     document.getElementById('lec-mob-study-btn')?.addEventListener('click', () => {
       navigate(`review?src=deck:${_lectureData.id}`);
     });
     document.getElementById('lec-mob-quiz-btn')?.addEventListener('click', () => {
-      navigate('practice');
+      navigate(`practice?scope=video&id=${_lectureData.id}`);
     });
 
     renderActiveTab();
@@ -260,32 +266,28 @@ async function loadLectureData(lectureId) {
 function renderActiveTab() {
   const content = document.getElementById('lecture-tab-content');
   if (!content || !_lectureData) return;
+  animateContent(content);
 
   const yId = ytId(_lectureData.video_id || _lectureData.url);
   const ytUrl = yId ? `https://www.youtube.com/watch?v=${yId}` : (_lectureData.url || '');
 
   if (_activeTab === 'summary') {
-    const takeaways = (_lectureData.bullet_points && _lectureData.bullet_points.length > 0) ? _lectureData.bullet_points : [
-      'Core architecture uses attention mechanisms to weigh token relevance across input context.',
-      'Allows parallel projection into distinct query, key, and value representation subspaces.',
-      'Positional encodings inject sequence order without requiring recurrent sequential computations.',
-      'Feedforward sub-layers apply non-linear transformations with residual skip connections and normalization.',
-    ];
+    const takeaways = _lectureData.bullet_points || [];
 
     content.innerHTML = `
-      <div style="display:flex;flex-direction:column;gap:18px">
+      <div class="reading-document" style="display:flex;flex-direction:column;gap:25px">
         <div>
-          <span class="card-title" style="margin-bottom:8px;display:block">Lecture Synthesis</span>
-          <p class="body-text" style="font-size:13.5px;line-height:1.6;word-break:break-word">${_lectureData.summary || 'Comprehensive AI-synthesized lecture overview covering core theoretical definitions, mathematical formulations, and engineering takeaways.'}</p>
+          <span class="chapter-tag" style="margin-bottom:8px;display:block">01 / Lecture summary</span>
+          <p class="reading-summary" style="word-break:break-word">${escapeHtml(_lectureData.summary || 'No summary is available for this lecture yet.')}</p>
         </div>
 
         <div>
-          <span class="card-title" style="margin-bottom:10px;display:block">Key Takeaways</span>
+          <span class="card-title" style="margin-bottom:10px;display:block">02 / Key takeaways</span>
           <div style="display:flex;flex-direction:column;gap:8px">
             ${takeaways.map((t, idx) => `
-              <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:var(--r-md);background:var(--bg-2);font-size:13px;color:var(--txt-1)">
+              <div class="takeaway-row">
                 <span class="mono" style="color:var(--acc-400);font-weight:600;font-size:11.5px;padding-top:1px;flex-shrink:0">${idx + 1}.</span>
-                <span style="line-height:1.55;word-break:break-word">${typeof t === 'string' ? t : (t.text || t.point || JSON.stringify(t))}</span>
+                <span style="line-height:1.55;word-break:break-word">${escapeHtml(typeof t === 'string' ? t : (t.text || t.point || JSON.stringify(t)))}</span>
               </div>
             `).join('')}
           </div>
@@ -310,7 +312,7 @@ function renderActiveTab() {
 
         ${yId ? `
           <div style="position:relative;width:100%;aspect-ratio:16/9;background:var(--bg-0);border-radius:var(--r-md);overflow:hidden;border:1px solid var(--line-1)">
-            <iframe src="https://www.youtube-nocookie.com/embed/${yId}" style="position:absolute;inset:0;width:100%;height:100%;border:none" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+            <iframe title="Lecture video" src="https://www.youtube-nocookie.com/embed/${yId}" style="position:absolute;inset:0;width:100%;height:100%;border:none" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
           </div>
         ` : `
           <div class="card empty-state" style="padding:28px 14px">
@@ -323,21 +325,17 @@ function renderActiveTab() {
         `}
 
         <div class="card card-xs" style="background:var(--bg-2)">
-          <div style="font-weight:600;font-size:13px;color:var(--txt-1);margin-bottom:6px">${_lectureData.title}</div>
+          <div style="font-weight:600;font-size:13px;color:var(--txt-1);margin-bottom:6px">${escapeHtml(_lectureData.title)}</div>
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--txt-3)">
             <span>Course: <strong style="color:var(--txt-2)">${_lectureData.course_name || 'General'}</strong></span>
-            <span>Total Questions: <strong class="mono" style="color:var(--txt-2)">${_lectureQuestions.length || _lectureData.question_count || 20}</strong></span>
-            <span>Cards: <strong class="mono" style="color:var(--txt-2)">${(_lectureData.key_concepts || []).length || 16}</strong></span>
+            <span>Total Questions: <strong class="mono" style="color:var(--txt-2)">${_lectureQuestions.length || _lectureData.question_count || 0}</strong></span>
+            <span>Cards: <strong class="mono" style="color:var(--txt-2)">${(_lectureData.key_concepts || []).length}</strong></span>
           </div>
         </div>
       </div>
     `;
   } else if (_activeTab === 'questions') {
-    const questions = _lectureQuestions.length > 0 ? _lectureQuestions : [
-      { id: 1, question: "What fundamental physical limitation prompted the transition from vacuum tubes to solid-state transistors?", options: ["Thermionic degradation and high thermal output", "Excessive electrical capacitance in wires", "Inability to perform binary Boolean logic", "Lack of silicon manufacturing technology"], answer: "Thermionic degradation and high thermal output" },
-      { id: 2, question: "How did IBM System/360 revolutionize computing hardware architecture in 1964?", options: ["It decoupled software instruction architecture from underlying hardware implementation", "It introduced the first GUI operating system", "It replaced silicon with magnetic core storage", "It eliminated the need for assembly compilers"], answer: "It decoupled software instruction architecture from underlying hardware implementation" },
-      { id: 3, question: "What is Moore's Law primarily a metric of?", options: ["The exponential doubling of transistor density per chip area roughly every two years", "Linear growth in CPU clock frequency", "Reduction in software development time", "Quadratic growth in memory bus bandwidth"], answer: "The exponential doubling of transistor density per chip area roughly every two years" },
-    ];
+    const questions = _lectureQuestions;
 
     content.innerHTML = `
       <div style="display:flex;flex-direction:column;gap:14px">
@@ -346,7 +344,7 @@ function renderActiveTab() {
             <span class="card-title">${questions.length} Practice Quiz Questions</span>
             <div class="caption-text">Click any option to test your recall or reveal the correct answer.</div>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="window.navigate('practice')">
+          <button class="btn btn-primary btn-sm" onclick="window.navigate('practice?scope=video&id=${_lectureData.id}')">
             <svg style="width:13px;height:13px"><use href="#i-brain-circuit"/></svg>
             <span>Start Practice Drill</span>
           </button>
@@ -359,7 +357,7 @@ function renderActiveTab() {
                 <span class="mono caption-text" style="color:var(--acc-400);font-weight:600">Question ${idx + 1} of ${questions.length}</span>
                 <span class="chip chip-neutral mono" style="font-size:10.5px">Multiple Choice</span>
               </div>
-              <div class="lec-question-text">${q.question}</div>
+              <div class="lec-question-text">${escapeHtml(q.question)}</div>
               <div class="lec-options-grid">
                 ${(q.options || []).map(opt => `
                   <div class="lec-option-row" data-opt="${opt.replace(/"/g, '&quot;')}" data-ans="${(q.answer || '').replace(/"/g, '&quot;')}">
@@ -396,18 +394,13 @@ function renderActiveTab() {
     });
   } else if (_activeTab === 'cards') {
     const rawConcepts = _lectureData.key_concepts || _lectureData.flashcards || [];
-    const cards = rawConcepts.length > 0 ? rawConcepts.map(c => typeof c === 'string' ? { concept: c, definition: 'Core conceptual principle extracted from lecture synthesis.' } : c) : [
-      { concept: 'Self-Attention', definition: 'Computes attention weights by calculating dot-product similarity between query and key vectors scaled by dimension.' },
-      { concept: 'Residual Connections', definition: 'Skip connections that add the original input vector directly to the sub-layer output to prevent vanishing gradients.' },
-      { concept: 'Layer Normalization', definition: 'Normalizes activations across feature dimensions per token independently of batch size.' },
-      { concept: 'Positional Encoding', definition: 'Sinusoidal or learned vector embeddings added to input representations to capture token positional ordering.' },
-    ];
+    const cards = rawConcepts.map(c => typeof c === 'string' ? { concept: c, definition: '' } : c);
 
     content.innerHTML = `
       <div style="display:flex;flex-direction:column;gap:14px">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
           <div>
-            <span class="card-title">${cards.length} Active Recall Flashcards</span>
+            <span class="card-title">${cards.length} Concept cards</span>
             <div class="caption-text">Key concepts synthesized from lecture notes</div>
           </div>
           <button class="btn btn-primary btn-sm" onclick="window.navigate('review?src=deck:${_lectureData.id}')">
@@ -424,8 +417,8 @@ function renderActiveTab() {
                   <span class="mono caption-text">Card #${i + 1}</span>
                   <span class="chip chip-ok" style="font-size:10.5px">Active</span>
                 </div>
-                <div style="font-weight:600;font-size:14px;color:var(--txt-1);margin-bottom:6px;word-break:break-word">${c.concept || c.front || c.title}</div>
-                <div class="caption-text" style="line-height:1.5;word-break:break-word">${c.definition || c.back || c.description || 'Verified concept.'}</div>
+                <div style="font-weight:600;font-size:14px;color:var(--txt-1);margin-bottom:6px;word-break:break-word">${escapeHtml(c.concept || c.front || c.title)}</div>
+                <div class="caption-text" style="line-height:1.5;word-break:break-word">${escapeHtml(c.definition || c.back || c.description || 'Verified concept.')}</div>
               </div>
             </div>
           `).join('')}
@@ -436,13 +429,15 @@ function renderActiveTab() {
     content.innerHTML = `
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <span class="card-title">Markdown Notes</span>
+          <span class="card-title">Personal notes</span>
           <span class="caption-text mono" id="notes-status-lbl">Saved to cloud</span>
         </div>
-        <textarea class="form-textarea" id="lec-notes-editor" placeholder="Type lecture markdown notes here… (Auto-saves continuously)" style="min-height:280px;font-family:var(--font-mono);font-size:13.5px">${_lectureData.user_notes || _lectureData.notes || ''}</textarea>
+        <textarea class="form-textarea" id="lec-notes-editor" placeholder="Type lecture markdown notes here… (Auto-saves continuously)" style="min-height:280px;font-family:var(--font-mono);font-size:13.5px">${escapeHtml(_lectureData.user_notes || _lectureData.notes || '')}</textarea>
       </div>
     `;
 
+    const notesLecture = _lectureData;
+    const notesLectureId = notesLecture.id;
     const editor = document.getElementById('lec-notes-editor');
     const statusLbl = document.getElementById('notes-status-lbl');
     editor?.addEventListener('input', () => {
@@ -450,8 +445,9 @@ function renderActiveTab() {
       clearTimeout(_saveTimer);
       _saveTimer = setTimeout(async () => {
         try {
-          await API.put(`/api/videos/${_lectureData.id}/notes`, { notes: editor.value });
-          _lectureData.notes = editor.value;
+          await API.post('/api/notes', { video_id: notesLectureId, notes: editor.value });
+          notesLecture.user_notes = editor.value;
+          notesLecture.notes = editor.value;
           if (statusLbl) statusLbl.textContent = 'Saved just now';
         } catch {
           if (statusLbl) statusLbl.textContent = 'Save failed';
@@ -463,12 +459,12 @@ function renderActiveTab() {
       <div style="display:flex;flex-direction:column;gap:12px;height:360px">
         <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:8px" id="embedded-tutor-msgs">
           <div class="drawer-bubble ai">
-            Hi! I'm your tutor for <strong>${_lectureData.title}</strong>. Ask me to explain any difficult concept or quiz your retention.
+            Hi! I'm your tutor for <strong>${escapeHtml(_lectureData.title)}</strong>. Ask me to explain any difficult concept or quiz your retention.
           </div>
         </div>
 
         <div style="display:flex;gap:8px">
-          <input class="form-input" id="embedded-tutor-input" placeholder="Ask a question about this lecture…" />
+          <input class="form-input" id="embedded-tutor-input" aria-label="Ask a question about this lecture" placeholder="Ask a question about this lecture…" />
           <button class="btn btn-primary btn-sm" id="embedded-tutor-send">Ask</button>
         </div>
       </div>
@@ -495,8 +491,8 @@ function renderActiveTab() {
       msgs.scrollTop = msgs.scrollHeight;
 
       try {
-        const res = await API.post('/api/notes/chat', { prompt: q, video_id: _lectureData.id, notes: _lectureData.notes || '' });
-        aiBubble.textContent = res.reply || res.response || 'Concept synthesized.';
+        const res = await API.post('/api/ask', { question: q, video_id: _lectureData.id });
+        aiBubble.textContent = res.answer || 'No answer returned. Try again.';
       } catch {
         aiBubble.textContent = 'Ready for queries. Ensure your Gemini API key is configured in backend settings.';
       }

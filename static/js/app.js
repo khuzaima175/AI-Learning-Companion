@@ -8,12 +8,12 @@ import { renderToday } from './pages/today.js';
 import { renderLibrary } from './pages/library.js';
 import { renderLectureDetail } from './pages/lecture_detail.js';
 import { renderImport } from './pages/import.js';
-import { renderReview } from './pages/review.js';
-import { renderPractice } from './pages/practice.js';
+import { cleanupReview, renderReview } from './pages/review.js';
+import { cleanupPractice, renderPractice } from './pages/practice.js';
 import { renderInsights } from './pages/insights.js';
 import { renderSettings } from './pages/settings.js';
 import { renderLogin } from './pages/login.js';
-import { initMotion, cleanupMotion } from './motion.js';
+import { initMotion, cleanupMotion, reducedMotion } from './motion.js';
 
 let _cachedDue = null;
 let _lastDueFetch = 0;
@@ -58,7 +58,19 @@ export const API = {
 };
 
 // ── 2. Parameterized Router ──────────────────────────────────────
-export async function navigate(rawRoute) {
+let navigationQueue = Promise.resolve();
+let navigationVersion = 0;
+export function navigate(rawRoute) {
+  const version = ++navigationVersion;
+  const route = rawRoute || window.location.hash.slice(1) || 'today';
+  navigationQueue = navigationQueue.catch(() => {}).then(() => {
+    if (version !== navigationVersion) return;
+    return performNavigate(route);
+  });
+  return navigationQueue;
+}
+
+async function performNavigate(rawRoute) {
   let routeStr = (rawRoute || window.location.hash.slice(1) || 'today').trim();
   if (routeStr.startsWith('/')) routeStr = routeStr.slice(1);
   if (routeStr.startsWith('#')) routeStr = routeStr.slice(1);
@@ -72,22 +84,25 @@ export async function navigate(rawRoute) {
   // Legacy route redirections
   if (LEGACY_ROUTES[primary]) {
     const target = LEGACY_ROUTES[primary];
-    return navigate(target);
+    return performNavigate(target);
   }
 
   const user = getUser();
   if (!user && primary !== 'login') {
-    return navigate('login');
+    return performNavigate('login');
   }
 
   // Update URL Hash cleanly
-  window.location.hash = routeStr;
+  if (window.location.hash.slice(1) !== routeStr) history.pushState(null, '', '#' + routeStr);
+  document.body.dataset.route = primary;
 
   // Auto-close mobile drawer on navigation
   const sidebar = document.getElementById('sidebar');
   const overlay = document.getElementById('mobile-overlay');
   if (sidebar) sidebar.classList.remove('mobile-open');
   if (overlay) overlay.classList.remove('active');
+  document.getElementById('mobile-menu-btn')?.setAttribute('aria-expanded', 'false');
+  document.body.classList.remove('nav-open');
 
   // Determine focused mode (Review and active practice drill)
   const isFocused = primary === 'review' || (primary === 'practice' && segments[1] === 'session');
@@ -100,41 +115,54 @@ export async function navigate(rawRoute) {
   const container = document.getElementById('page-content');
   if (!container) return;
 
-  // Cleanup active motion observers and rAF before page transition
+  cleanupReview();
+  cleanupPractice();
   cleanupMotion();
-
-  // Global Page Transition: 120ms fade out, swap content, 160ms fade in
-  container.style.opacity = '0';
-  container.style.transition = 'opacity 120ms ease';
-
-  await new Promise(r => setTimeout(r, 120));
-  container.innerHTML = '';
+  if (primary !== 'lecture') _currentLectureContext = null;
   container.classList.remove('page-enter');
+  container.setAttribute('aria-busy', 'true');
+  window.scrollTo({ top: 0, behavior: 'instant' });
+  const renderView = async render => {
+    let work;
+    const mount = () => {
+      container.innerHTML = '';
+      work = render();
+      initMotion(container);
+      container.classList.add('page-enter');
+    };
+    if (document.startViewTransition && !reducedMotion()) {
+      const transition = document.startViewTransition(mount);
+      transition.ready.catch(() => {});
+      transition.finished.catch(() => {});
+      await transition.updateCallbackDone;
+    } else mount();
+    await work;
+  };
 
   try {
     if (primary === 'login') {
-      await renderLogin(container);
+      await renderView(() => renderLogin(container));
     } else if (primary === 'today') {
-      await renderToday(container);
+      await renderView(() => renderToday(container));
     } else if (primary === 'library') {
       const courseId = segments[1] || null;
-      await renderLibrary(container, { courseId });
+      await renderView(() => renderLibrary(container, { courseId }));
     } else if (primary === 'lecture') {
       const lectureId = segments[1];
-      await renderLectureDetail(container, { lectureId });
+      await renderView(() => renderLectureDetail(container, { lectureId }));
     } else if (primary === 'import') {
-      await renderImport(container);
+      await renderView(() => renderImport(container));
     } else if (primary === 'review') {
       const src = params.get('src') || 'due';
-      await renderReview(container, { src });
+      await renderView(() => renderReview(container, { src }));
     } else if (primary === 'practice') {
-      await renderPractice(container, { subpath: segments[1], id: segments[2] });
+      await renderView(() => renderPractice(container, { subpath: segments[1], id: segments[2], scope: params.get('scope'), scopeId: params.get('id') }));
     } else if (primary === 'insights') {
-      await renderInsights(container);
+      await renderView(() => renderInsights(container));
     } else if (primary === 'settings') {
-      await renderSettings(container);
+      await renderView(() => renderSettings(container));
     } else {
-      await renderToday(container);
+      await renderView(() => renderToday(container));
     }
   } catch (err) {
     console.error(`Route render error on "${routeStr}":`, err);
@@ -144,17 +172,14 @@ export async function navigate(rawRoute) {
           <svg style="width:20px;height:20px"><use href="#i-help-circle"/></svg>
         </div>
         <div class="empty-state-title">Failed to load view</div>
-        <div class="empty-state-desc">${err.message || 'An unexpected rendering error occurred.'}</div>
+        <div class="empty-state-desc">${escapeHtml(err.message || 'An unexpected rendering error occurred.')}</div>
         <button class="btn btn-secondary btn-sm" onclick="window.navigate('today')">
           <span>Return to Today</span>
         </button>
       </div>`;
   } finally {
-    container.style.opacity = '1';
-    container.style.transition = 'opacity 160ms ease';
-    container.classList.add('page-enter');
-    initMotion(container);
-    updateGlobalMetrics();
+    container.setAttribute('aria-busy', 'false');
+    if (primary !== 'login') updateGlobalMetrics();
   }
 }
 
@@ -165,6 +190,9 @@ function updateNav(primary, routeStr) {
   document.querySelectorAll('.nav-item').forEach(el => {
     const routeAttr = el.dataset.route;
     el.classList.toggle('active', routeAttr === primary);
+    if (routeAttr === primary) el.setAttribute('aria-current', 'page');
+    else el.removeAttribute('aria-current');
+    el.title = el.querySelector('.nav-label')?.textContent || primary;
   });
 
   const sidebar = document.getElementById('sidebar');
@@ -191,7 +219,7 @@ function updateBreadcrumbs(primary, segments, params) {
     crumbs.push('<a href="#library" class="breadcrumb-item">Library</a>');
     crumbs.push('<span class="breadcrumb-sep">/</span><span class="breadcrumb-item active">Lecture</span>');
   } else if (primary === 'import') {
-    crumbs.push('<span class="breadcrumb-item active">Import Ingestion</span>');
+    crumbs.push('<span class="breadcrumb-item active">Import lecture</span>');
   } else if (primary === 'review') {
     crumbs.push('<a href="#today" class="breadcrumb-item">Study</a>');
     crumbs.push('<span class="breadcrumb-sep">/</span><span class="breadcrumb-item active">Review Session</span>');
@@ -199,7 +227,7 @@ function updateBreadcrumbs(primary, segments, params) {
     crumbs.push('<a href="#today" class="breadcrumb-item">Study</a>');
     crumbs.push('<span class="breadcrumb-sep">/</span><span class="breadcrumb-item active">Practice Hub</span>');
   } else if (primary === 'insights') {
-    crumbs.push('<span class="breadcrumb-item active">Insights &amp; Analytics</span>');
+    crumbs.push('<span class="breadcrumb-item active">Learning insights</span>');
   } else if (primary === 'settings') {
     crumbs.push('<span class="breadcrumb-item active">Settings</span>');
   }
@@ -243,6 +271,14 @@ export async function updateGlobalMetrics() {
     if (sideDue) sideDue.textContent = due;
     if (sideBadge) sideBadge.style.display = due > 0 ? 'inline-flex' : 'none';
 
+    const goal = DailyGoal.get();
+    const goalValue = document.getElementById('side-goal-value');
+    const goalFill = document.getElementById('side-goal-fill');
+    const goalNote = document.getElementById('side-goal-note');
+    if (goalValue) goalValue.textContent = `${goal.progress} / ${goal.target}`;
+    if (goalFill) goalFill.style.width = `${Math.min(100,goal.progress/goal.target*100)}%`;
+    if (goalNote) goalNote.textContent = goal.progress >= goal.target ? 'Target complete' : `${goal.target-goal.progress} cards remaining`;
+
     // Update Streak
     const streak = Streak.get();
     const topStreak = document.getElementById('top-streak-num');
@@ -270,7 +306,7 @@ async function loadSidebarCourses() {
     }
 
     container.innerHTML = top6.map(c => `
-      <a class="side-course-item" href="#library" onclick="window.navigate('library/${c.id}')">
+      <a class="side-course-item" href="#library/${c.id}">
         <span class="side-course-name">${c.name}</span>
         <span class="side-course-count">${c.question_count || 0}</span>
       </a>
@@ -295,16 +331,18 @@ function initCommandPalette() {
   const ACTIONS = [
     { title: 'Start Due Review', meta: 'Study queue', route: 'review?src=due', icon: 'rotate-cw' },
     { title: 'Practice Hub & Exam', meta: 'Active drill', route: 'practice', icon: 'brain-circuit' },
-    { title: 'Import Video Lecture', meta: 'Ingestion console', route: 'import', icon: 'download-cloud' },
+    { title: 'Import Video Lecture', meta: 'Create study materials', route: 'import', icon: 'download-cloud' },
     { title: 'Browse Course Library', meta: 'All lectures & cards', route: 'library', icon: 'library' },
     { title: 'Learning Insights & Telemetry', meta: 'Analytics', route: 'insights', icon: 'bar-chart-3' },
     { title: 'Account Settings', meta: 'Preferences', route: 'settings', icon: 'settings-2' },
   ];
 
+  let paletteReturnFocus = null;
   let activeIndex = 0;
   let currentItems = [];
 
   function openPalette() {
+    paletteReturnFocus = document.activeElement;
     backdrop.classList.add('active');
     input.value = '';
     renderResults('');
@@ -313,6 +351,7 @@ function initCommandPalette() {
 
   function closePalette() {
     backdrop.classList.remove('active');
+    paletteReturnFocus?.focus();
   }
 
   async function renderResults(query = '') {
@@ -427,6 +466,9 @@ function initCommandPalette() {
       executeItem(currentItems[activeIndex]);
     } else if (e.key === 'Escape') {
       closePalette();
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      input.focus();
     }
   });
 
@@ -468,6 +510,7 @@ function initAiDrawer() {
 
   async function handleSend(text) {
     const query = (text || input.value || '').trim();
+    if (!_currentLectureContext?.id) { showToast('Open a lecture first so your tutor has its context.', 'info'); return; }
     if (!query) return;
 
     input.value = '';
@@ -484,13 +527,8 @@ function initAiDrawer() {
     msgs.scrollTop = msgs.scrollHeight;
 
     try {
-      const payload = {
-        prompt: query,
-        video_id: _currentLectureContext?.id || null,
-        notes: _currentLectureContext?.notes || '',
-      };
-      const res = await API.post('/api/notes/chat', payload);
-      aiMsg.textContent = res.reply || res.response || 'Answer calibrated.';
+      const res = await API.post('/api/ask', { question: query, video_id: _currentLectureContext.id });
+      aiMsg.textContent = res.answer || 'No answer returned. Try asking again.';
     } catch {
       aiMsg.textContent = 'Here to assist. Connect your Gemini API key in configuration for full multi-turn synthesis.';
     }
@@ -531,9 +569,14 @@ function initGlobalKeyboard() {
 
     // ESC closes active overlays
     if (e.key === 'Escape') {
-      document.getElementById('cmd-palette-backdrop')?.classList.remove('active');
+      window.closeCommandPalette?.();
       document.getElementById('shortcuts-backdrop')?.classList.remove('active');
       document.getElementById('ai-drawer')?.classList.remove('open');
+      document.getElementById('sidebar')?.classList.remove('mobile-open');
+      document.getElementById('mobile-overlay')?.classList.remove('active');
+      document.body.classList.remove('nav-open');
+      document.getElementById('mobile-menu-btn')?.setAttribute('aria-expanded', 'false');
+      if (document.body.classList.contains('mode-focused')) navigate('today');
       return;
     }
 
@@ -573,6 +616,7 @@ function toggleSidebarCollapse() {
   const sidebar = document.getElementById('sidebar');
   if (!sidebar) return;
   const isCollapsed = sidebar.classList.toggle('sidebar-collapsed');
+  document.body.classList.toggle('sidebar-collapsed', isCollapsed);
   localStorage.setItem('alc_sidebar_collapsed', isCollapsed);
 }
 
@@ -584,12 +628,14 @@ export function skel(w, h, r = 8, extra = '') {
   return `<div class="skel" style="width:${wStr};height:${hStr};border-radius:${rStr};${extra}"></div>`;
 }
 
+let toastTimer;
 export function showToast(message, type = 'info') {
   const t = document.getElementById('toast');
   if (!t) return;
   t.textContent = message;
   t.className = `toast-msg show ${type}`;
-  setTimeout(() => { t.className = 'toast-msg'; }, 3200);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = 'toast-msg'; }, 4200);
 }
 
 export function icon(id, extraClass = '', extraStyle = '') {
@@ -599,6 +645,7 @@ export function icon(id, extraClass = '', extraStyle = '') {
 export function ytId(url) {
   if (!url || typeof url !== 'string') return null;
   const str = url.trim();
+  if (str.startsWith('manual_')) return null;
   if (/^[a-zA-Z0-9_-]{11}$/.test(str)) return str;
   const m = str.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
   return m ? m[1] : null;
@@ -619,6 +666,11 @@ export function timeAgo(dateStr) {
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
 }
+
+export function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+function localDate() { return new Date().toLocaleDateString('en-CA'); }
 
 // LocalStorage Migration
 function migrateLocalStorage() {
@@ -643,16 +695,16 @@ export const Streak = {
     try {
       const data = JSON.parse(localStorage.getItem(this.KEY) || '{}');
       return {
-        count: data.count || 1,
-        lastDate: data.lastDate || new Date().toISOString().split('T')[0],
-        history: data.history || [new Date().toISOString().split('T')[0]],
+        count: data.count || 0,
+        lastDate: data.lastDate || '',
+        history: data.history || [],
       };
     } catch {
-      return { count: 1, lastDate: new Date().toISOString().split('T')[0], history: [] };
+      return { count: 0, lastDate: '', history: [] };
     }
   },
   recordActivity() {
-    const today = new Date().toISOString().split('T')[0];
+    const today = localDate();
     const s = this.get();
     if (s.lastDate === today) return s;
 
@@ -661,7 +713,7 @@ export const Streak = {
     const diffDays = Math.round((curr - last) / (1000 * 60 * 60 * 24));
 
     if (diffDays === 1) s.count += 1;
-    else if (diffDays > 1) s.count = 1;
+    else s.count = 1;
 
     s.lastDate = today;
     if (!s.history.includes(today)) s.history.push(today);
@@ -675,15 +727,21 @@ export const DailyGoal = {
   KEY: 'alc_daily_goal_v3',
   get() {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = localDate();
       const data = JSON.parse(localStorage.getItem(this.KEY) || '{}');
       if (data.date !== today) {
         return { target: data.target || 20, progress: 0, date: today };
       }
       return data;
     } catch {
-      return { target: 20, progress: 0, date: new Date().toISOString().split('T')[0] };
+      return { target: 20, progress: 0, date: localDate() };
     }
+  },
+  save(type, target) {
+    const goal = this.get();
+    goal.target = target;
+    localStorage.setItem(this.KEY, JSON.stringify(goal));
+    return goal;
   },
   addProgress(n = 1) {
     const g = this.get();
@@ -702,6 +760,7 @@ function bootApp() {
   // Restore collapsed sidebar preference
   if (localStorage.getItem('alc_sidebar_collapsed') === 'true') {
     document.getElementById('sidebar')?.classList.add('sidebar-collapsed');
+    document.body.classList.add('sidebar-collapsed');
   }
 
   // Sidebar collapse button listener
@@ -715,11 +774,15 @@ function bootApp() {
   mobileBtn?.addEventListener('click', () => {
     const isOpen = sidebar.classList.toggle('mobile-open');
     overlay.classList.toggle('active', isOpen);
+    mobileBtn.setAttribute('aria-expanded', String(isOpen));
+    document.body.classList.toggle('nav-open', isOpen);
   });
 
   overlay?.addEventListener('click', () => {
     sidebar.classList.remove('mobile-open');
     overlay.classList.remove('active');
+    mobileBtn.setAttribute('aria-expanded', 'false');
+    document.body.classList.remove('nav-open');
   });
 
   // Logout listener

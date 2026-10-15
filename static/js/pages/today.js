@@ -1,351 +1,68 @@
-/* ══════════════════════════════════════════════════════════════════
-   AI Learning Companion — Today Command Center (`#/today`)
-   High-Density Study Dashboard: Queue Hero, Mastery, Forecast & Weak Spots
-   ══════════════════════════════════════════════════════════════════ */
-
-import { API, Streak, DailyGoal, getDueCount, skel, timeAgo, navigate, showToast } from '../app.js';
+import { API, Streak, DailyGoal, skel, navigate, showToast, escapeHtml } from '../app.js';
 
 export async function renderToday(container) {
   const streak = Streak.get();
   const goal = DailyGoal.get();
-  const todayDateStr = new Date().toLocaleDateString('en-US', {
-    weekday: 'long', month: 'short', day: 'numeric'
-  });
-
-  // Calculate 7-day heat cells for streak
-  const dayNames = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-  const today = new Date();
-  const dayOfWeek = (today.getDay() + 6) % 7;
-
-  const heatCellsHtml = dayNames.map((name, i) => {
-    const diff = i - dayOfWeek;
-    const targetDate = new Date(today);
-    targetDate.setDate(today.getDate() + diff);
-    const dateStr = targetDate.toLocaleDateString('en-CA');
-    const isStudied = streak.history?.includes(dateStr) || (diff === 0 && streak.count > 0);
-    const isToday = diff === 0;
-    const lvlClass = isStudied ? 'lvl-3' : '';
-    const todayClass = isToday ? 'today' : '';
-    return `<div class="heat-cell ${lvlClass} ${todayClass}" title="${name}: ${isStudied ? 'Studied' : 'Rest'}"></div>`;
+  const date = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const progress = Math.min(100, Math.round(goal.progress / goal.target * 100));
+  const heatCells = Array.from({ length: 7 }, (_, i) => {
+    const day = new Date();
+    day.setDate(day.getDate() - (6 - i));
+    const studied = streak.history.includes(day.toLocaleDateString('en-CA'));
+    return `<div class="heat-cell ${studied ? 'lvl-3' : ''} ${i === 6 ? 'today' : ''}" title="${day.toLocaleDateString()}: ${studied ? 'Studied' : 'No activity'}"></div>`;
   }).join('');
-
+  const metric = (icon, label, id, value = 0) => `
+    <div class="card overview-card"><div class="icon-tile"><svg><use href="#i-${icon}"/></svg></div>
+      <div><span class="caption-text">${label}</span><strong class="overview-value" id="${id}" data-count="${value}">${value}</strong></div>
+    </div>`;
   container.innerHTML = `
-    <!-- Header -->
-    <div class="page-head">
-      <div>
-        <h1 class="page-head-title">Today</h1>
-        <div class="page-head-desc">${todayDateStr} · Active spaced repetition and review queue</div>
-      </div>
-      <div class="page-head-actions">
-        <button class="btn btn-primary btn-sm" onclick="window.navigate('review?src=due')">
-          <span class="status-dot warn"></span>
-          <span>Start Review Session</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Queue Hero Card (Full Width) -->
-    <div class="card spot" style="margin-bottom:16px;background:var(--bg-1)">
-      <div class="hero-grid">
-        <div>
-          <div style="display:flex;align-items:baseline;gap:10px">
-            <span class="mono count-val" style="font-size:36px;font-weight:600;color:var(--txt-1);line-height:1" id="today-due-hero" data-count="0">0</span>
-            <span style="font-size:14px;color:var(--txt-2);font-weight:500">cards due for review</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap">
-            <span class="chip chip-neutral">New <strong class="mono count-val" id="hero-new-count" data-count="0" style="min-width:1.5ch">0</strong></span>
-            <span class="chip chip-warn">Learning <strong class="mono count-val" id="hero-learning-count" data-count="0" style="min-width:1.5ch">0</strong></span>
-            <span class="chip chip-ok">Review <strong class="mono count-val" id="hero-review-count" data-count="0" style="min-width:1.5ch">0</strong></span>
-          </div>
-        </div>
-
-        <div style="display:flex;flex-direction:column;gap:10px">
-          <div style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px">
-            <span style="color:var(--txt-3)">Daily Target Progress</span>
-            <span class="mono" style="color:var(--txt-1)"><strong id="today-prog-val" class="count-val" data-count="${goal.progress}">${goal.progress}</strong> / ${goal.target} cards</span>
-          </div>
-          <div class="progress-track" style="height:6px">
-            <div class="progress-fill" id="today-hero-prog-fill" style="width:${Math.min(100, Math.round((goal.progress / goal.target) * 100))}%"></div>
-          </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
-            <div style="display:flex;align-items:center;gap:6px">
-              <div class="heat-strip">${heatCellsHtml}</div>
-              <span class="caption-text mono" style="margin-left:4px">${streak.count}d streak</span>
-            </div>
-            <span class="caption-text">Review 1 card tomorrow to maintain</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Row B (2fr / 1fr): Continue Learning | Due by Course -->
-    <div class="grid-2fr-1fr" style="margin-bottom:16px" data-stagger>
-      
-      <!-- Continue Learning List -->
-      <div class="card spot" style="display:flex;flex-direction:column;gap:14px">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <span class="card-title">Continue Learning</span>
-          <a href="#library" class="caption-text" style="color:var(--acc-400)">All Courses →</a>
-        </div>
-        <div id="today-continue-list" style="display:flex;flex-direction:column;gap:10px">
-          ${skel('100%', 52)}
-          ${skel('100%', 52)}
-        </div>
-      </div>
-
-      <!-- Due by Course List -->
-      <div class="card spot" style="display:flex;flex-direction:column;gap:14px">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <span class="card-title">Due by Course</span>
-          <span class="caption-text">Active queue</span>
-        </div>
-        <div id="today-due-courses" style="display:flex;flex-direction:column;gap:8px">
-          ${skel('100%', 32)}
-          ${skel('100%', 32)}
-        </div>
-      </div>
-
-    </div>
-
-    <!-- Row C (2fr / 1fr): Recent Sessions Table | 7-Day Forecast & Weak Spots -->
-    <div class="grid-2fr-1fr" data-stagger>
-      
-      <!-- Recent Practice & Review Sessions Table -->
-      <div class="card spot" style="display:flex;flex-direction:column;gap:14px;padding:0;overflow:hidden">
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 18px 0">
-          <span class="card-title">Recent Exam &amp; Review Sessions</span>
-          <button class="btn btn-ghost btn-sm" onclick="window.navigate('practice')">New Quiz →</button>
-        </div>
-        <div class="tbl-wrap" style="border:none;border-radius:0;background:transparent">
-          <table class="tbl">
-            <thead>
-              <tr>
-                <th class="tbl-header-label">Date</th>
-                <th class="tbl-header-label">Session Scope</th>
-                <th class="tbl-header-label num-col">Accuracy</th>
-                <th class="tbl-header-label num-col">Volume</th>
-              </tr>
-            </thead>
-            <tbody id="today-sessions-tbody">
-              <tr><td colspan="4" style="text-align:center;color:var(--txt-3);padding:24px">${skel('100%', 20)}</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Right Column: Forecast + Weak Spots + Quick Ingestion -->
-      <div style="display:flex;flex-direction:column;gap:16px">
-        
-        <!-- 7-Day Workload Forecast -->
-        <div class="card card-sm spot">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-            <span class="card-title">7-Day Forecast</span>
-            <span class="caption-text mono" id="forecast-total-lbl">Upcoming reviews</span>
-          </div>
-          <div class="chart-bars-wrap" id="today-forecast-bars" style="height:76px;padding-top:6px;gap:8px">
-            ${['M','T','W','T','F','S','S'].map((day) => `
-              <div class="chart-col">
-                <div class="chart-bar-fill" style="height:20%;background:var(--bg-3);border-radius:2px" title="${day}: Scheduled"></div>
-                <span class="chart-axis-lbl">${day}</span>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-
-        <!-- Weak Spots Drilling -->
-        <div class="card card-sm spot">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-            <span class="card-title">Weak Spots</span>
-            <span class="caption-text" style="color:var(--danger-400)">Retention &lt; 60%</span>
-          </div>
-          <div id="today-weak-spots" style="display:flex;flex-direction:column;gap:8px">
-            ${skel('100%', 28)}
-          </div>
-        </div>
-
-        <!-- Quick Capture URL -->
-        <div class="card card-sm spot">
-          <span class="card-title" style="margin-bottom:8px;display:block">Quick Lecture Ingest</span>
-          <div style="display:flex;gap:8px">
-            <input class="form-input" id="quick-capture-url" placeholder="Paste YouTube lecture URL…" style="font-size:12px;height:30px" />
-            <button class="btn btn-secondary btn-sm" id="quick-capture-btn">Import</button>
-          </div>
-        </div>
-
-      </div>
-
-    </div>
-  `;
-
-  // Populate data from API
-  try {
-    const [dueData, courses, stats] = await Promise.allSettled([
-      API.get('/api/review/due?limit=25'),
-      API.get('/api/courses'),
-      API.get('/api/stats'),
-    ]);
-
-    // 1. Due hero counts
-    const val = dueData.value;
-    const dueCount = dueData.status === 'fulfilled' ? (val?.due_count ?? (Array.isArray(val) ? val.length : (val?.questions?.length ?? 0))) : 0;
-    const heroDue = document.getElementById('today-due-hero');
-    if (heroDue) {
-      heroDue.dataset.count = dueCount;
-      heroDue.textContent = dueCount;
-    }
-
-    const newCount = Math.round(dueCount * 0.15);
-    const learningCount = Math.round(dueCount * 0.35);
-    const reviewCount = Math.max(0, dueCount - newCount - learningCount);
-
-    const elNew = document.getElementById('hero-new-count');
-    const elLearning = document.getElementById('hero-learning-count');
-    const elReview = document.getElementById('hero-review-count');
-    if (elNew) { elNew.dataset.count = newCount; elNew.textContent = newCount; }
-    if (elLearning) { elLearning.dataset.count = learningCount; elLearning.textContent = learningCount; }
-    if (elReview) { elReview.dataset.count = reviewCount; elReview.textContent = reviewCount; }
-
-    // 2. Continue learning lectures
-    const courseList = courses.status === 'fulfilled' ? courses.value : [];
-    const continueList = document.getElementById('today-continue-list');
-    if (continueList) {
-      const allVideos = [];
-      courseList.forEach(c => {
-        (c.videos || []).forEach(v => allVideos.push({ ...v, courseId: c.id, courseName: c.name }));
-      });
-
-      if (!allVideos.length) {
-        continueList.innerHTML = `
-          <div style="padding:20px;text-align:center;font-size:13px;color:var(--txt-3);background:var(--bg-2);border-radius:var(--r-md)">
-            No video lectures added yet. <a href="#import" style="color:var(--acc-400);margin-left:4px">Import your first lecture →</a>
-          </div>`;
-      } else {
-        continueList.innerHTML = allVideos.slice(0, 3).map(v => `
-          <div class="card card-xs spot today-continue-card">
-            <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
-              <div class="icon-tile accent" style="width:28px;height:28px;flex-shrink:0">
-                <svg style="width:14px;height:14px"><use href="#i-video"/></svg>
-              </div>
-              <div style="flex:1;min-width:0">
-                <div style="font-weight:600;font-size:13px;color:var(--txt-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.title}</div>
-                <div class="caption-text">${v.courseName}</div>
-              </div>
-            </div>
-            <div class="today-continue-actions" style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-              <button class="btn btn-ghost btn-sm" onclick="window.navigate('lecture/${v.id}')">View</button>
-              <button class="btn btn-secondary btn-sm" onclick="window.navigate('review?src=deck:${v.id}')">Study Deck</button>
-            </div>
-          </div>
-        `).join('');
-      }
-    }
-
-    // 3. Due by course list (capped at 5 with overflow link)
-    const dueCoursesContainer = document.getElementById('today-due-courses');
-    if (dueCoursesContainer) {
-      if (!courseList.length) {
-        dueCoursesContainer.innerHTML = `<div class="caption-text" style="padding:8px">No active courses</div>`;
-      } else {
-        const displayedCourses = courseList.slice(0, 5);
-        const remaining = courseList.length - displayedCourses.length;
-        dueCoursesContainer.innerHTML = displayedCourses.map(c => `
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;font-size:12.5px;gap:8px">
-            <span style="color:var(--txt-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">${c.name}</span>
-            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-              <span class="mono" style="color:var(--warn-400);font-size:12px">${c.question_count || 0} cards</span>
-              <button class="btn btn-ghost btn-sm" style="padding:2px 6px;height:22px;font-size:11px" onclick="window.navigate('review?src=course:${c.id}')">Review</button>
-            </div>
-          </div>
-        `).join('') + (remaining > 0 ? `
-          <div style="margin-top:6px;text-align:right">
-            <a href="#library" class="caption-text" style="color:var(--acc-400);font-size:11.5px">+${remaining} more in Library →</a>
-          </div>
-        ` : '');
-      }
-    }
-
-    // 4. Recent practice sessions table (compact ≤140px empty state)
-    const tbody = document.getElementById('today-sessions-tbody');
-    if (tbody && stats.status === 'fulfilled') {
-      const sessions = (stats.value?.recent_sessions || []).filter(s => (s.answered || 0) > 0);
-      if (!sessions.length) {
-        tbody.innerHTML = `
-          <tr>
-            <td colspan="4" style="text-align:center;padding:24px 14px">
-              <div class="caption-text" style="margin-bottom:8px">No recent drill sessions recorded.</div>
-              <button class="btn btn-secondary btn-sm" onclick="window.navigate('practice')">Take a Quick Quiz →</button>
-            </td>
-          </tr>`;
-      } else {
-        tbody.innerHTML = sessions.slice(0, 5).map(s => {
-          const acc = s.answered ? Math.round((s.correct / s.answered) * 100) : 0;
-          const chipCls = acc >= 80 ? 'chip-ok' : acc >= 60 ? 'chip-warn' : 'chip-danger';
-          return `
-            <tr>
-              <td class="mono" style="font-size:12px;color:var(--txt-1)">${s.date}</td>
-              <td style="color:var(--txt-2)">Practice Drill</td>
-              <td class="num-col"><span class="chip ${chipCls}">${acc}%</span></td>
-              <td class="num-col mono" style="color:var(--txt-3)">${s.correct} / ${s.answered}</td>
-            </tr>`;
-        }).join('');
-      }
-    }
-
-    // 5. 7-Day Forecast Dynamic Heights & Tooltips
-    const forecastBars = document.getElementById('today-forecast-bars');
-    if (forecastBars) {
-      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      const baseVal = dueCount > 0 ? Math.max(4, Math.round(dueCount / 7)) : 0;
-      const forecastValues = [
-        Math.round(baseVal * 1.2),
-        Math.round(baseVal * 0.9),
-        Math.round(baseVal * 1.4),
-        Math.round(baseVal * 0.8),
-        Math.round(baseVal * 1.1),
-        Math.round(baseVal * 0.6),
-        Math.round(baseVal * 1.3),
-      ];
-      const maxVal = Math.max(...forecastValues, 10);
-
-      forecastBars.innerHTML = forecastValues.map((val, idx) => {
-        const heightPct = Math.max(8, Math.round((val / maxVal) * 100));
-        return `
-          <div class="chart-col" style="flex:1;display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end">
-            <div class="chart-bar-fill" style="width:100%;max-width:14px;height:${heightPct}%;background:${val > 0 ? 'var(--acc-500)' : 'var(--bg-3)'};border-radius:2px;transition:height var(--dur-chart) var(--ease-out)" title="${days[idx]}: ${val} reviews scheduled"></div>
-            <span class="chart-axis-lbl" style="font-size:10.5px;margin-top:4px">${days[idx][0]}</span>
-          </div>
-        `;
-      }).join('');
-    }
-
-    // 6. Weak spots list
-    const weakContainer = document.getElementById('today-weak-spots');
-    if (weakContainer) {
-      weakContainer.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:space-between;font-size:12.5px;padding:4px 0">
-          <span style="color:var(--txt-2)">Attention &amp; Transformers</span>
-          <button class="btn btn-ghost btn-sm" style="color:var(--danger-400);padding:2px 6px;height:22px" onclick="window.navigate('review?src=due')">Drill</button>
-        </div>
-        <div style="display:flex;align-items:center;justify-content:space-between;font-size:12.5px;padding:4px 0">
-          <span style="color:var(--txt-2)">Backpropagation Calculus</span>
-          <button class="btn btn-ghost btn-sm" style="color:var(--danger-400);padding:2px 6px;height:22px" onclick="window.navigate('review?src=due')">Drill</button>
-        </div>`;
-    }
-
-    // 7. Quick capture URL action
-    const quickInput = document.getElementById('quick-capture-url');
-    const quickBtn = document.getElementById('quick-capture-btn');
-    quickBtn?.addEventListener('click', () => {
-      const url = (quickInput?.value || '').trim();
-      if (!url) {
-        showToast('Paste a valid YouTube link', 'warn');
-        return;
-      }
-      sessionStorage.setItem('alc_prefill_url', url);
-      navigate('import');
-    });
-
-  } catch (err) {
-    console.warn('Today page data load warning:', err);
+    <div class="page-head"><div><div class="chapter-tag"><span>01</span>Study desk</div><h1 class="page-head-title">Today’s session.</h1><p class="page-head-desc">${date}</p></div><div class="page-head-actions"><a class="btn btn-secondary" href="#import"><svg width="14" height="14"><use href="#i-plus"/></svg>Import lecture</a></div></div>
+    <section class="desk-hero" aria-label="Today's study plan" data-stagger>
+      <div class="review-brief"><div class="chapter-tag"><span>Recall</span>Spaced repetition queue</div><div class="due-line"><strong id="today-due-hero" data-count="0">0</strong><h2>cards ready<br>for review.</h2></div><p id="today-plan-text">Review the concepts scheduled for today, then move on to your next lecture.</p><div class="welcome-actions"><a class="btn btn-primary" href="#review?src=due">Start review <svg width="14" height="14"><use href="#i-arrow-right"/></svg></a><a class="text-link" href="#practice">Practice quiz ↗</a></div></div>
+      <div class="next-card-preview"><span class="paper-corner" aria-hidden="true"></span><div class="preview-meta"><span>Next in your queue</span><svg width="16" height="16"><use href="#i-layers"/></svg></div><p id="today-next-question" class="preview-question">Loading your next review question…</p><div class="preview-bottom"><span class="caption-text" id="today-next-caption">Read the question. Try recalling the answer before you start.</span><a class="text-link" href="#review?src=due" id="today-preview-link">Open card ↗</a></div></div>
+    </section>
+    <div class="overview-grid" data-stagger>${metric('library','Courses','today-course-count')}${metric('video','Lectures','today-lecture-count')}${metric('layers','Practice questions','today-card-count')}${metric('flame','Day streak','today-streak-count',streak.count)}</div>
+    <div class="today-columns"><div class="today-left">
+      <section class="workspace-section"><div class="section-heading"><span class="card-title"><span class="section-index">02</span>Recently added lectures</span><a class="text-link" href="#library">Library ↗</a></div><div id="today-continue-list">${skel('100%',64)}<div style="margin-top:15px">${skel('100%',64)}</div></div></section>
+      <section class="workspace-section"><div class="section-heading"><span class="card-title"><span class="section-index">03</span>Session history</span><a class="text-link" href="#insights">Insights ↗</a></div><div class="tbl-wrap" style="border:0"><table class="tbl"><thead><tr><th>Date</th><th>Session</th><th class="num-col">Accuracy</th><th class="num-col">Cards</th></tr></thead><tbody id="today-sessions-tbody"><tr><td colspan="4">${skel('100%',25)}</td></tr></tbody></table></div></section>
+    </div><div class="today-right">
+      <section class="card daily-goal"><div class="section-heading" style="margin:0"><span class="card-title">Daily target</span><span class="chip chip-accent">${progress}%</span></div><div class="daily-goal-value"><span data-count="${goal.progress}">${goal.progress}</span> <small>/ ${goal.target} cards</small></div><div class="progress-track" role="progressbar" aria-label="Daily study goal" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><div class="progress-fill" style="width:${progress}%"></div></div><div style="display:flex;justify-content:space-between;align-items:center"><div class="heat-strip">${heatCells}</div><span class="caption-text">Last 7 days</span></div><div class="goal-note">${goal.progress >= goal.target ? 'Daily target complete.' : `${goal.target-goal.progress} more cards to finish today’s target.`} <a href="#settings" class="text-link" style="margin-left:6px">Edit ↗</a></div></section>
+      <section class="workspace-section"><div class="section-heading"><span class="card-title">Course index</span><span class="caption-text">Questions</span></div><div id="today-due-courses">${skel('100%',35)}</div></section>
+      <section class="quick-import"><span class="card-title">Add to your library</span><p class="caption-text" style="margin:7px 0 13px">YouTube lecture or a pasted transcript.</p><div style="display:flex;gap:8px"><input class="form-input" id="quick-capture-url" type="url" aria-label="YouTube lecture URL" placeholder="Paste a YouTube URL"><button class="btn btn-secondary" id="quick-capture-btn">Import</button></div></section>
+    </div></div>`;
+  const quickImport = () => {
+    const url = document.getElementById('quick-capture-url').value.trim();
+    if (!url) { showToast('Paste a YouTube lecture link to get started.', 'warn'); return; }
+    sessionStorage.setItem('alc_prefill_url',url);
+    navigate('import');
+  };
+  document.getElementById('quick-capture-btn').addEventListener('click',quickImport);
+  document.getElementById('quick-capture-url').addEventListener('keydown', e => { if (e.key === 'Enter') quickImport(); });
+  const [due, courses, stats] = await Promise.allSettled([API.get('/api/review/due?limit=1'),API.get('/api/courses'),API.get('/api/stats')]);
+  const list = courses.status === 'fulfilled' ? courses.value : [];
+  const videos = list.flatMap(c => (c.videos || []).map(v => ({...v,courseName:c.name})));
+  const count = due.status === 'fulfilled' ? due.value.due_count ?? due.value.questions?.length ?? 0 : 0;
+  for (const [id,value] of [['today-due-hero',count],['today-course-count',list.length],['today-lecture-count',videos.length],['today-card-count',list.reduce((n,c) => n + (c.question_count || 0),0)]]) {
+    const el = document.getElementById(id);
+    el.dataset.count = value;
+    el.textContent = value;
   }
+  document.getElementById('today-plan-text').textContent = count ? `${count} cards are scheduled for today. Start with your next question, or choose a course below.` : 'No cards are due today. Choose a lecture from your library or take a practice quiz.';
+  const next = due.status === 'fulfilled' ? (due.value.questions || (Array.isArray(due.value) ? due.value : []))[0] : null;
+  document.getElementById('today-next-question').textContent = next?.question || (videos.length ? 'Your review queue is clear.' : 'Your first lecture starts the collection.');
+  if (!next) {
+    document.getElementById('today-next-caption').textContent = videos.length ? 'Use a practice quiz to revisit questions from your library.' : 'Import a video or transcript to generate notes and review cards.';
+    const link = document.getElementById('today-preview-link');
+    link.href = videos.length ? '#practice' : '#import';
+    link.textContent = videos.length ? 'Practice ↗' : 'Import ↗';
+  }
+  document.getElementById('today-continue-list').innerHTML = videos.length ? videos.slice(0,3).map((v,i) => `
+    <div class="lecture-line"><a class="lecture-number" href="#lecture/${v.id}" aria-label="Open ${escapeHtml(v.title)}">${String(i+1).padStart(2,'0')}</a><div class="lecture-info"><a href="#lecture/${v.id}">${escapeHtml(v.title)}</a><div class="caption-text">${escapeHtml(v.courseName)} · ${v.question_count || 0} questions</div></div><a class="btn btn-secondary btn-sm" href="#review?src=deck:${v.id}">Study ↗</a></div>`).join('') : `<div class="empty-workspace"><h3>No lectures yet</h3><p>Add a YouTube lecture or paste your own transcript. Notes, concepts, and practice questions will be collected here.</p><a class="btn btn-primary btn-sm" href="#import">Import your first lecture →</a></div>`;
+  document.getElementById('today-due-courses').innerHTML = list.length ? list.slice(0,4).map(c => `<a href="#library/${c.id}" class="course-index-link"><span>${escapeHtml(c.name)}</span><span class="mono">${c.question_count || 0} ↗</span></a>`).join('') : '<p class="caption-text">Choose a subject during your first import to create a course.</p>';
+  const sessions = stats.status === 'fulfilled' ? (stats.value.recent_sessions || []).filter(s => s.answered > 0) : [];
+  document.getElementById('today-sessions-tbody').innerHTML = sessions.length ? sessions.slice(0,5).map(s => {
+    const accuracy = Math.round(s.correct / s.answered * 100);
+    return `<tr><td class="mono">${escapeHtml(s.date)}</td><td>Practice &amp; review</td><td class="num-col"><span class="chip ${accuracy >= 80 ? 'chip-ok' : 'chip-warn'}">${accuracy}%</span></td><td class="num-col mono">${s.answered}</td></tr>`;
+  }).join('') : '<tr><td colspan="4" style="padding:32px;text-align:center"><p class="caption-text" style="margin-bottom:14px">No completed sessions yet. Try a short practice quiz.</p><a href="#practice" class="btn btn-secondary btn-sm">Start practice →</a></td></tr>';
+  if ([due,courses,stats].some(r => r.status === 'rejected')) showToast('Some study data could not load. Try refreshing this view.', 'warn');
 }

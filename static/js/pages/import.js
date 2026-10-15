@@ -3,124 +3,26 @@
    High-Density 2-Column Ingestion Pipeline with Live Stepper & History
    ══════════════════════════════════════════════════════════════════ */
 
-import { API, showToast, ytId, ytThumb, navigate, skel, invalidateCoursesCache } from '../app.js';
+import { API, showToast, ytId, ytThumb, navigate, skel, invalidateCoursesCache, escapeHtml } from '../app.js';
 
 export async function renderImport(container) {
+  let source = 'youtube';
   const prefillUrl = sessionStorage.getItem('alc_prefill_url') || '';
   sessionStorage.removeItem('alc_prefill_url');
 
   container.innerHTML = `
-    <!-- Header -->
-    <div class="page-head">
-      <div>
-        <h1 class="page-head-title">Import Video Lecture</h1>
-        <div class="page-head-desc">Ingest YouTube lectures or manual transcripts for AI synthesis, concept extraction, and active recall drills.</div>
-      </div>
-    </div>
-
-    <!-- 2-Column Ingestion Console Grid -->
-    <div class="grid-2fr-1fr">
-      
-      <!-- Left Column: Ingestion Form -->
-      <div class="card" style="display:flex;flex-direction:column;gap:16px">
-        
-        <!-- Source Selector -->
-        <div class="segmented" id="import-source-seg">
-          <button class="segmented-btn active" data-src="youtube">YouTube URL</button>
-          <button class="segmented-btn" data-src="manual">Manual Transcript</button>
-        </div>
-
-        <!-- YouTube URL Section -->
-        <div id="import-yt-section" class="form-group">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <label class="form-label" for="av-url">Lecture Video URL</label>
-            <button class="btn btn-ghost btn-sm" id="av-paste-btn" style="padding:2px 6px;height:22px">
-              <svg style="width:12px;height:12px"><use href="#i-copy"/></svg>
-              <span>Paste</span>
-            </button>
-          </div>
-          <input class="form-input" id="av-url" type="url" placeholder="https://www.youtube.com/watch?v=..." value="${prefillUrl}" />
-          
-          <!-- Thumbnail Detection Preview -->
-          <div id="av-thumb-preview" class="card card-xs" style="display:none;align-items:center;gap:12px;background:var(--bg-2);margin-top:8px">
-            <img id="av-thumb-img" style="width:80px;height:45px;border-radius:var(--r-sm);object-fit:cover" alt="Thumb" />
-            <div style="flex:1;min-width:0">
-              <div class="caption-text mono" id="av-vid-id-lbl" style="color:var(--txt-1)">YouTube ID Detected</div>
-              <div class="caption-text">Valid video stream identified for caption extraction.</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Manual Transcript Section (Hidden by default) -->
-        <div id="import-manual-section" class="form-group" style="display:none">
-          <label class="form-label" for="av-manual">Paste Raw Transcript Text</label>
-          <textarea class="form-textarea" id="av-manual" placeholder="Paste custom transcript or lecture speech-to-text here…" style="min-height:140px"></textarea>
-        </div>
-
-        <!-- Title and Course Inputs -->
-        <div class="form-grid-2">
-          <div class="form-group">
-            <label class="form-label" for="av-title">Lecture Title</label>
-            <input class="form-input" id="av-title" placeholder="e.g., Attention &amp; Transformer Architecture" />
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="av-course">Course / Subject</label>
-            <input class="form-input" id="av-course" list="existing-courses-dl" placeholder="e.g., Deep Learning Systems" />
-            <datalist id="existing-courses-dl"></datalist>
-          </div>
-        </div>
-
-        <!-- Submit Button -->
-        <button class="btn btn-primary btn-full btn-lg" id="av-submit-btn" style="margin-top:6px">
-          <span>Process Lecture with AI</span>
-        </button>
-
-      </div>
-
-      <!-- Right Column: Live Pipeline Stepper & Ingestion History -->
-      <div style="display:flex;flex-direction:column;gap:16px">
-        
-        <!-- Processing Pipeline Stepper -->
-        <div class="card card-sm">
-          <span class="card-title" style="margin-bottom:12px;display:block">Ingestion Pipeline</span>
-          <div class="stepper-v">
-            <div class="stepper-v-item" id="step-1">
-              <div class="stepper-v-num">1</div>
-              <div>
-                <div style="font-weight:600;font-size:13px;color:var(--txt-1)">Transcript Ingestion</div>
-                <div class="caption-text">Fetch captions &amp; clean noise</div>
-              </div>
-            </div>
-            <div class="stepper-v-item" id="step-2">
-              <div class="stepper-v-num">2</div>
-              <div>
-                <div style="font-weight:600;font-size:13px;color:var(--txt-1)">Structured Synthesis</div>
-                <div class="caption-text">Summary &amp; 16 key concepts</div>
-              </div>
-            </div>
-            <div class="stepper-v-item" id="step-3">
-              <div class="stepper-v-num">3</div>
-              <div>
-                <div style="font-weight:600;font-size:13px;color:var(--txt-1)">Quiz Calibration</div>
-                <div class="caption-text">20 active recall practice items</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Recent Ingestions List -->
-        <div class="card card-sm">
-          <span class="card-title" style="margin-bottom:10px;display:block">Recent Ingestions</span>
-          <div id="av-recents-list" style="display:flex;flex-direction:column;gap:8px">
-            ${skel('100%', 32)}
-            ${skel('100%', 32)}
-          </div>
-        </div>
-
-      </div>
-
-    </div>
-  `;
+    <div class="page-head"><div><div class="chapter-tag"><span>02</span>Library / import</div><h1 class="page-head-title">Import a lecture.</h1><p class="page-head-desc">Add a source and a subject. We’ll organize the study materials.</p></div><a href="#library" class="text-link">Back to library ↗</a></div>
+    <div class="import-layout"><div class="card import-form" style="display:flex;flex-direction:column">
+      <div class="form-section-title"><span class="mono">01</span>Choose your source</div>
+      <div class="segmented source-tabs" id="import-source-seg"><button class="segmented-btn active" data-src="youtube">YouTube video</button><button class="segmented-btn" data-src="manual">Paste transcript</button></div>
+      <div id="import-yt-section" class="form-group"><div style="display:flex;justify-content:space-between;align-items:center"><label class="form-label" for="av-url">Video URL</label><button class="btn btn-ghost btn-sm" id="av-paste-btn"><svg width="12" height="12"><use href="#i-copy"/></svg>Paste</button></div><input class="form-input" id="av-url" type="url" placeholder="https://www.youtube.com/watch?v=…" value="${escapeHtml(prefillUrl)}"><div id="av-thumb-preview" style="display:none;align-items:center;gap:12px;margin-top:9px"><img id="av-thumb-img" style="width:88px;height:50px;border-radius:4px;object-fit:cover" alt="Lecture video thumbnail"><div><div class="caption-text mono" id="av-vid-id-lbl"></div><div class="caption-text">Video source selected</div></div></div></div>
+      <div id="import-manual-section" class="form-group" style="display:none"><div style="display:flex;justify-content:space-between"><label class="form-label" for="av-manual">Transcript text</label><span class="caption-text mono" id="av-word-count">0 words</span></div><textarea class="form-textarea" id="av-manual" placeholder="Paste the lecture transcript here…" style="min-height:180px"></textarea><details class="transcript-help"><summary>Where to find a transcript</summary><p>On YouTube, open the video description and select “Show transcript.” Copy the spoken text and paste it here. You can also use lecture notes or a transcript from another recording.</p></details></div>
+      <div class="source-status" id="av-source-status" role="status"><span class="status-dot"></span><span>Choose a video or paste a transcript</span></div>
+      <div class="import-divider"></div><div class="form-section-title"><span class="mono">02</span>Organize the lecture</div>
+      <div class="form-grid-2"><div class="form-group"><label class="form-label" for="av-title">Lecture title</label><input class="form-input" id="av-title" placeholder="e.g. Introduction to neural networks"></div><div class="form-group"><label class="form-label" for="av-course">Course / subject</label><input class="form-input" id="av-course" list="existing-courses-dl" placeholder="Choose or create a subject"><datalist id="existing-courses-dl"></datalist></div></div>
+      <button class="btn btn-primary btn-full btn-lg" id="av-submit-btn">Create study materials <svg width="15" height="15"><use href="#i-arrow-right"/></svg></button><p class="import-hint">Processing can take a minute. Your source is used to create notes, concepts, and questions in the selected course.</p>
+    </div><aside class="import-aside"><section class="import-deliverables"><div class="chapter-tag">Lecture / study edition</div><h2>One source.<br>Three ways to study.</h2><div class="deliverable-line stepper-v-item" id="step-1"><span class="mono stepper-v-num">01</span><div><strong>Lecture notes</strong><p>A structured summary and the main takeaways, ready to read.</p></div></div><div class="deliverable-line stepper-v-item" id="step-2"><span class="mono stepper-v-num">02</span><div><strong>Concept cards</strong><p>The definitions and ideas to revisit through active recall.</p></div></div><div class="deliverable-line stepper-v-item" id="step-3"><span class="mono stepper-v-num">03</span><div><strong>Practice questions</strong><p>Test your understanding with questions drawn from the lecture.</p></div></div></section><div class="import-hint"><strong style="color:var(--txt-2);display:block;margin-bottom:5px">Before you import</strong>Use a clear lecture title and a consistent subject name. A full transcript gives the AI more context than a few short excerpts.</div></aside></div>
+    <section class="workspace-section import-recents"><div class="section-heading"><span class="card-title">Recent imports</span><a class="text-link" href="#library">All lectures ↗</a></div><div id="av-recents-list" class="import-recents-grid">${skel('100%',45)}${skel('100%',45)}</div></section>`;
 
   // Source Switcher (YouTube / Manual)
   const ytSec = document.getElementById('import-yt-section');
@@ -129,9 +31,11 @@ export async function renderImport(container) {
     btn.addEventListener('click', () => {
       container.querySelectorAll('#import-source-seg .segmented-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      const isYt = btn.dataset.src === 'youtube';
+      source = btn.dataset.src;
+      const isYt = source === 'youtube';
       if (ytSec) ytSec.style.display = isYt ? 'flex' : 'none';
       if (manSec) manSec.style.display = isYt ? 'none' : 'flex';
+      updateSourceStatus();
     });
   });
 
@@ -143,6 +47,7 @@ export async function renderImport(container) {
       if (text && urlInput) {
         urlInput.value = text;
         checkUrl();
+        updateSourceStatus();
       }
     } catch { /**/ }
   });
@@ -165,14 +70,25 @@ export async function renderImport(container) {
     }
   }
 
-  urlInput?.addEventListener('input', checkUrl);
+  function updateSourceStatus() {
+    const el = document.getElementById('av-source-status');
+    const raw = source === 'youtube' ? urlInput.value.trim() : document.getElementById('av-manual').value.trim();
+    const words = raw ? raw.split(/\s+/).length : 0;
+    document.getElementById('av-word-count').textContent = `${words} words`;
+    const valid = source === 'youtube' ? !!ytId(raw) : words > 0;
+    el.className = `source-status ${raw ? valid ? 'valid' : 'invalid' : ''}`;
+    el.querySelector('span:last-child').textContent = !raw ? 'Choose a video or paste a transcript' : valid ? source === 'youtube' ? 'YouTube source ready' : `${words} words ready to process` : 'Use a complete YouTube video URL';
+  }
+  urlInput?.addEventListener('input', () => { checkUrl(); updateSourceStatus(); });
+  document.getElementById('av-manual').addEventListener('input',updateSourceStatus);
   if (prefillUrl) checkUrl();
+  updateSourceStatus();
 
   // Load Existing Courses and Recents
   try {
     const courses = await API.get('/api/courses');
     const dl = document.getElementById('existing-courses-dl');
-    if (dl) dl.innerHTML = courses.map(c => `<option value="${c.name}">`).join('');
+    if (dl) dl.innerHTML = courses.map(c => `<option value="${escapeHtml(c.name)}">`).join('');
 
     const recentsList = document.getElementById('av-recents-list');
     if (recentsList) {
@@ -183,28 +99,21 @@ export async function renderImport(container) {
       if (!allVideos.length) {
         recentsList.innerHTML = `<div class="caption-text">No lectures imported yet.</div>`;
       } else {
-        recentsList.innerHTML = allVideos.slice(0, 4).map(v => `
-          <a class="card card-xs" href="#lecture/${v.id}" onclick="window.navigate('lecture/${v.id}');return false;" style="display:flex;align-items:center;justify-content:space-between;background:var(--bg-2);padding:8px 10px">
-            <div style="flex:1;min-width:0">
-              <div style="font-weight:600;font-size:12.5px;color:var(--txt-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.title}</div>
-              <div class="caption-text">${v.courseName}</div>
-            </div>
-            <span class="chip chip-ok" style="font-size:10px">Ready</span>
-          </a>
-        `).join('');
+        recentsList.innerHTML = allVideos.slice(0,4).map((v,i) => `<a class="import-recent-row" href="#lecture/${v.id}"><span class="lecture-number">${String(i+1).padStart(2,'0')}</span><div><strong>${escapeHtml(v.title)}</strong><div class="caption-text">${escapeHtml(v.courseName)}</div></div><svg width="14" height="14" style="color:var(--txt-3)"><use href="#i-arrow-right"/></svg></a>`).join('');
       }
     }
   } catch { /**/ }
 
   // Submit Handler
   document.getElementById('av-submit-btn')?.addEventListener('click', async () => {
-    const url = (document.getElementById('av-url')?.value || '').trim();
-    const manual = (document.getElementById('av-manual')?.value || '').trim();
+    const url = source === 'youtube' ? (document.getElementById('av-url')?.value || '').trim() : '';
+    const manual = source === 'manual' ? (document.getElementById('av-manual')?.value || '').trim() : '';
     const title = (document.getElementById('av-title')?.value || '').trim();
     const course = (document.getElementById('av-course')?.value || '').trim();
 
     if (!title) { showToast('Enter a lecture title', 'warn'); return; }
     if (!course) { showToast('Enter a course name', 'warn'); return; }
+    if (source === 'youtube' && !ytId(url)) { showToast('Enter a valid YouTube lecture link.', 'warn'); return; }
     if (!url && !manual) { showToast('Provide a YouTube link or transcript', 'warn'); return; }
 
     const submitBtn = document.getElementById('av-submit-btn');
@@ -213,14 +122,14 @@ export async function renderImport(container) {
       submitBtn.innerHTML = `<span>Synthesizing with Gemini AI…</span>`;
     }
 
-    // Step animation feedback
-    const s1 = document.getElementById('step-1');
-    const s2 = document.getElementById('step-2');
-    const s3 = document.getElementById('step-3');
-
-    s1?.classList.add('active');
-    setTimeout(() => { s1?.classList.add('done'); s2?.classList.add('active'); }, 1800);
-    setTimeout(() => { s2?.classList.add('done'); s3?.classList.add('active'); }, 3600);
+    const steps = [1,2,3].map(n => document.getElementById(`step-${n}`));
+    steps.forEach(el => el?.classList.remove('active','done'));
+    steps[0]?.classList.add('active');
+    const status = document.createElement('div');
+    status.className = 'processing-status';
+    status.setAttribute('role','status');
+    status.innerHTML = '<span class="processing-spinner" aria-hidden="true"></span><span>Extracting notes and building your study materials. This can take a minute.</span>';
+    submitBtn.parentElement.appendChild(status);
 
     try {
       const res = await API.post('/api/add-video', {
@@ -230,15 +139,18 @@ export async function renderImport(container) {
         manual_transcript: manual,
       });
 
-      s3?.classList.add('done');
-      showToast(`"${res.title}" successfully ingested!`, 'success');
+      steps.forEach(el => { el?.classList.remove('active'); el?.classList.add('done'); });
+      status.remove();
+      showToast(`"${res.title}" is ready to study!`, 'success');
       invalidateCoursesCache();
-      navigate(`lecture/${res.id || ''}`);
+      if (submitBtn.isConnected) navigate(`lecture/${res.video_id || res.id}`);
     } catch (err) {
+      status.remove();
+      steps.forEach(el => el?.classList.remove('active','done'));
       showToast(err.message, 'error');
       if (submitBtn) {
         submitBtn.disabled = false;
-        submitBtn.innerHTML = `<span>Process Lecture with AI</span>`;
+        submitBtn.innerHTML = `<span>Create study materials</span>`;
       }
     }
   });

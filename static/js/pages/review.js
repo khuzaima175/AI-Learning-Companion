@@ -15,8 +15,17 @@ let _sessionResults = []; // stores boolean array for dot matrix
 let _startTime = Date.now();
 let _timerInterval = null;
 let _keyListener = null;
+let _grading = false;
+let reviewVersion = 0;
+export function cleanupReview() {
+  reviewVersion++;
+  clearInterval(_timerInterval);
+  if (_keyListener) document.removeEventListener('keydown',_keyListener);
+  _timerInterval = _keyListener = null;
+}
 
 export async function renderReview(container, options = {}) {
+  _grading = false;
   const src = options.src || 'due';
   _items = [];
   _currentIndex = 0;
@@ -119,19 +128,12 @@ async function loadReviewSource(src) {
       }));
     } else if (src.startsWith('course:')) {
       const cid = src.split(':')[1];
-      const course = await API.get(`/api/courses/${cid}`);
-      _sourceLabel = course.name || 'Course Deck';
+      const courses = await API.get('/api/courses');
+      const course = courses.find(c => String(c.id) === cid);
+      _sourceLabel = course?.name || 'Course deck';
       if (srcTitle) srcTitle.textContent = _sourceLabel;
-      const cards = [];
-      (course.videos || []).forEach(v => {
-        (v.flashcards || v.key_concepts || []).forEach(c => cards.push({
-          id: c.id,
-          concept: c.concept || c.front || c.title || (typeof c === 'string' ? c : 'Concept'),
-          definition: c.definition || c.back || c.description || '',
-          lecture_title: v.title,
-        }));
-      });
-      _items = cards;
+      const cards = await API.get(`/api/courses/${cid}/flashcards`);
+      _items = cards.map(c => ({ concept: c.concept || c.title || c.front, definition: c.definition || c.description || c.back || '', lecture_title: c.source }));
     }
 
     if (!_items.length) {
@@ -146,6 +148,7 @@ async function loadReviewSource(src) {
 }
 
 function renderEmptyState() {
+  clearInterval(_timerInterval);
   const area = document.getElementById('review-main-area');
   if (!area) return;
 
@@ -273,7 +276,7 @@ function renderCurrentCard() {
           <!-- Rating Controls (Appears once answered / flipped) -->
           <div id="review-controls-area" style="display:none;flex-direction:column;gap:14px;margin-top:24px;border-top:1px solid var(--line-1);padding-top:20px">
             <div style="display:flex;justify-content:space-between;align-items:center">
-              <span class="caption-text" style="font-weight:600;color:var(--txt-1);font-size:13px">Rate Recall Difficulty for Interval Scheduling:</span>
+              <span class="caption-text" style="font-weight:600;color:var(--txt-1);font-size:13px">How well did you remember?</span>
               <span class="caption-text mono" style="font-size:12px">Keys: 1, 2, 3, 4</span>
             </div>
 
@@ -315,7 +318,7 @@ function renderCurrentCard() {
         
         <!-- Live Session Stats -->
         <div class="card card-sm">
-          <span class="card-title" style="margin-bottom:14px;display:block">Session Live Telemetry</span>
+          <span class="card-title" style="margin-bottom:14px;display:block">Your session</span>
           
           <div class="stat-grid-2" style="margin-bottom:16px">
             <div style="background:var(--bg-2);padding:12px;border-radius:var(--r-sm)">
@@ -402,6 +405,7 @@ function renderCurrentCard() {
 
   // Bind 3D Flip (for Concept Decks)
   const flipTarget = document.getElementById('card-flip-target');
+  if (flipTarget) { flipTarget.tabIndex = 0; flipTarget.setAttribute('role','button'); flipTarget.setAttribute('aria-label','Flip flashcard'); }
   flipTarget?.addEventListener('click', toggleFlip);
 
   // Bind Anki Rating Buttons
@@ -466,6 +470,10 @@ function toggleFlip() {
 }
 
 async function gradeCard(rating) {
+  if (_grading || !_isFlipped || _currentIndex >= _items.length) return;
+  _grading = true;
+  const version = reviewVersion;
+  document.querySelectorAll('.anki-btn,#review-next-btn').forEach(el => el.disabled = true);
   const card = _items[_currentIndex];
   _historyStack.push({ index: _currentIndex, card, rating, sessionResults: [..._sessionResults] });
 
@@ -492,7 +500,9 @@ async function gradeCard(rating) {
     } catch { /**/ }
   }
 
+  if (version !== reviewVersion) return;
   _currentIndex++;
+  _grading = false;
   renderCurrentCard();
 }
 
@@ -502,10 +512,11 @@ function undoLastGrade() {
   _currentIndex = last.index;
   _sessionResults = last.sessionResults || [];
   renderCurrentCard();
-  showToast('Reverted previous card', 'info');
+  showToast('Previous card shown again.', 'info');
 }
 
 function renderEndScreen() {
+  clearInterval(_timerInterval);
   const area = document.getElementById('review-main-area');
   if (!area) return;
 
@@ -523,7 +534,7 @@ function renderEndScreen() {
       </div>
 
       <h2 style="font-size:24px;font-weight:600;color:var(--txt-1);margin-bottom:8px">Session Complete!</h2>
-      <p class="body-text" style="margin-bottom:32px;font-size:14.5px">All items in this review queue have been calibrated with spaced repetition intervals.</p>
+      <p class="body-text" style="margin-bottom:32px;font-size:14.5px">You made time to learn. Your next review will be ready when you need it.</p>
 
       <div class="stat-grid-3" style="margin-bottom:32px">
         <div class="card card-xs" style="background:var(--bg-2);padding:16px">
@@ -555,7 +566,7 @@ function renderEndScreen() {
 function bindKeyboard() {
   _keyListener = (e) => {
     const isTyping = ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName);
-    if (isTyping) return;
+    if (isTyping || _grading || document.querySelector('.palette-backdrop.active')) return;
 
     const card = _items[_currentIndex];
     const hasOptions = card && Array.isArray(card.options) && card.options.length > 0;

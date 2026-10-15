@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════════
-   AI Learning Companion — Practice Hub & Drill Engine (`#/practice`)
+   AI Learning Companion — Practice & Drill Engine (`#/practice`)
    High-Density Exam Suite: Scope Config, Active Drill, Telemetry & Full History
    ══════════════════════════════════════════════════════════════════ */
 
@@ -15,6 +15,13 @@ let _timerHandle = null;
 let _results = [];
 let _timerSeconds = 30;
 let _timeLeft = 30;
+let _keyHandler = null;
+let _answered = false;
+export function cleanupPractice() {
+  clearInterval(_timerHandle);
+  if (_keyHandler) window.removeEventListener('keydown',_keyHandler);
+  _timerHandle = _keyHandler = null;
+}
 
 let _cfg = {
   scope: 'all',
@@ -25,37 +32,39 @@ let _cfg = {
 };
 
 export async function renderPractice(container, options = {}) {
+  cleanupPractice();
   const subpath = options.subpath;
+  if (subpath !== 'session') _cfg = {scope:['course','video'].includes(options.scope) ? options.scope : 'all',scopeId:options.scopeId || null,count:10,timer:30,diff:['easy','medium','hard']};
 
   if (subpath === 'session') {
     renderActiveSession(container);
     return;
   }
 
-  // Render Practice Hub
+  // Render Practice
   container.innerHTML = `
     <!-- Header -->
     <div class="page-head">
       <div>
-        <h1 class="page-head-title">Practice Hub</h1>
-        <div class="page-head-desc">Timed active recall exam drills with real-time feedback, comprehension telemetry, and review queue calibration.</div>
+        <div class="chapter-tag"><span>03</span>Active recall</div><h1 class="page-head-title">Practice.</h1>
+        <div class="page-head-desc">Choose a scope, set the pace, and test your understanding.</div>
       </div>
     </div>
 
     <!-- 2-Column Top Hub Layout -->
-    <div class="grid-2fr-1fr" style="margin-bottom:18px" data-stagger>
+    <div class="practice-layout" data-stagger>
       
       <!-- Left Column: Exam Configuration -->
-      <div class="card spot" style="display:flex;flex-direction:column;gap:18px">
-        <span class="card-title">Configure Practice Session</span>
+      <div class="card spot practice-config" style="display:flex;flex-direction:column;gap:18px">
+        <span class="card-title">Session setup</span>
 
         <!-- Scope Radio Cards -->
         <div class="form-group">
-          <label class="form-label">Drill Scope</label>
+          <label class="form-label">What would you like to practice?</label>
           <div class="radio-card-grid">
             <div class="radio-card active" data-scope="all">
               <div class="radio-card-title">All Library</div>
-              <div class="radio-card-desc">Comprehensive suite</div>
+              <div class="radio-card-desc">A little of everything</div>
             </div>
             <div class="radio-card" data-scope="course">
               <div class="radio-card-title">By Course</div>
@@ -95,9 +104,38 @@ export async function renderPractice(container, options = {}) {
           </div>
         </div>
 
+        <!-- Submit Button -->
+        <button class="btn btn-primary btn-full btn-lg" id="quiz-start-btn" style="margin-top:4px">
+          <span>Start session</span>
+        </button>
+      </div>
+
+      <!-- Right Column: Telemetry & AI Generator -->
+      <div class="practice-aside" style="display:flex;flex-direction:column;gap:0">
+        
+        <!-- Telemetry Card 1: Your recent accuracy -->
+        <div class="card card-sm spot">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <span class="card-title">Your recent accuracy</span>
+            <span class="chip chip-ok mono" id="trend-delta-chip">Recent sessions</span>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:10px">
+            <span class="stat-value" id="trend-avg-val" data-count="0" data-count-suffix="%">0%</span>
+            <span class="stat-sub">avg accuracy</span>
+          </div>
+          <div class="chart-bars-wrap" id="trend-spark-bars" style="height:56px;gap:6px;align-items:flex-end">
+<span class="caption-text">Complete a practice session to see your trend.</span>
+          </div>
+        </div>
+
+        <div class="card card-sm spot"><div class="section-heading"><span class="card-title">Question bank</span><span class="chip chip-accent mono" id="bank-total-lbl">0 Qs</span></div><p class="body-text" style="margin-bottom:14px">Questions drawn from your imported lectures.</p><p class="study-tip">Use the lecture selector below to add more questions to a specific subject.</p></div>
+
+        <!-- AI Generator Card -->
+        <div class="card card-sm spot">
+          <span class="card-title" style="margin-bottom:15px;display:block">Add practice questions</span>
         <!-- Difficulty Selection -->
-        <div class="form-group">
-          <label class="form-label">Difficulty Filter</label>
+        <div class="form-group difficulty-block">
+          <label class="form-label">Question difficulty</label>
           <div style="display:flex;gap:16px;flex-wrap:wrap">
             <label class="chk-label"><input type="checkbox" class="chk-input diff-chk" value="easy" checked /> Easy</label>
             <label class="chk-label"><input type="checkbox" class="chk-input diff-chk" value="medium" checked /> Medium</label>
@@ -105,75 +143,7 @@ export async function renderPractice(container, options = {}) {
           </div>
         </div>
 
-        <!-- Submit Button -->
-        <button class="btn btn-primary btn-full btn-lg" id="quiz-start-btn" style="margin-top:4px">
-          <span>Start Practice Drill</span>
-        </button>
-      </div>
 
-      <!-- Right Column: Telemetry & AI Generator -->
-      <div style="display:flex;flex-direction:column;gap:14px">
-        
-        <!-- Telemetry Card 1: Performance Trend -->
-        <div class="card card-sm spot">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-            <span class="card-title">Performance Trend</span>
-            <span class="chip chip-ok mono" id="trend-delta-chip">+4% vs avg</span>
-          </div>
-          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:10px">
-            <span class="stat-value" id="trend-avg-val" data-count="82" data-count-suffix="%">82%</span>
-            <span class="stat-sub">avg accuracy</span>
-          </div>
-          <div class="chart-bars-wrap" id="trend-spark-bars" style="height:56px;gap:6px;align-items:flex-end">
-            <div class="chart-bar-col" style="flex:1;height:100%;display:flex;align-items:flex-end"><div class="chart-bar-fill" style="width:100%;height:65%;background:var(--acc-500);border-radius:2px" title="Session 1: 65%"></div></div>
-            <div class="chart-bar-col" style="flex:1;height:100%;display:flex;align-items:flex-end"><div class="chart-bar-fill" style="width:100%;height:80%;background:var(--acc-500);border-radius:2px" title="Session 2: 80%"></div></div>
-            <div class="chart-bar-col" style="flex:1;height:100%;display:flex;align-items:flex-end"><div class="chart-bar-fill" style="width:100%;height:75%;background:var(--acc-500);border-radius:2px" title="Session 3: 75%"></div></div>
-            <div class="chart-bar-col" style="flex:1;height:100%;display:flex;align-items:flex-end"><div class="chart-bar-fill" style="width:100%;height:90%;background:var(--ok-400);border-radius:2px" title="Session 4: 90%"></div></div>
-            <div class="chart-bar-col" style="flex:1;height:100%;display:flex;align-items:flex-end"><div class="chart-bar-fill" style="width:100%;height:85%;background:var(--ok-400);border-radius:2px" title="Session 5: 85%"></div></div>
-            <div class="chart-bar-col" style="flex:1;height:100%;display:flex;align-items:flex-end"><div class="chart-bar-fill" style="width:100%;height:100%;background:var(--ok-400);border-radius:2px" title="Session 6: 100%"></div></div>
-          </div>
-        </div>
-
-        <!-- Telemetry Card 2: Question Bank & Difficulty Mix -->
-        <div class="card card-sm spot">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-            <span class="card-title">Difficulty Mix</span>
-            <span class="mono caption-text" id="bank-total-lbl">120 Qs</span>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:8px">
-            <div>
-              <div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:3px">
-                <span style="color:var(--txt-2)">Easy</span>
-                <span class="mono" style="color:var(--ok-400)">45%</span>
-              </div>
-              <div class="progress-track" style="height:5px">
-                <div class="progress-fill" style="width:45%;background:var(--ok-400)"></div>
-              </div>
-            </div>
-            <div>
-              <div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:3px">
-                <span style="color:var(--txt-2)">Medium</span>
-                <span class="mono" style="color:var(--warn-400)">35%</span>
-              </div>
-              <div class="progress-track" style="height:5px">
-                <div class="progress-fill" style="width:35%;background:var(--warn-400)"></div>
-              </div>
-            </div>
-            <div>
-              <div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:3px">
-                <span style="color:var(--txt-2)">Hard</span>
-                <span class="mono" style="color:var(--danger-400)">20%</span>
-              </div>
-              <div class="progress-track" style="height:5px">
-                <div class="progress-fill" style="width:20%;background:var(--danger-400)"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- AI Generator Card -->
-        <div class="card card-sm spot">
-          <span class="card-title" style="margin-bottom:8px;display:block">AI Question Generator</span>
           <div style="display:flex;flex-direction:column;gap:8px">
             <select id="gen-video-sel" class="form-select" style="font-size:12px;height:28px">
               <option value="">Select target lecture…</option>
@@ -194,11 +164,11 @@ export async function renderPractice(container, options = {}) {
     </div>
 
     <!-- Bottom Full-Width Session History & Drill Telemetry Table -->
-    <div class="card spot" style="padding:20px">
+    <div class="card spot practice-history" style="padding:20px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
         <div>
-          <span class="card-title">Recent Practice Drills</span>
-          <div class="caption-text" style="margin-top:2px">Detailed record of exam attempts, accuracy scores, and performance calibration</div>
+          <span class="card-title">Recent sessions</span>
+          <div class="caption-text" style="margin-top:2px">Results from your recorded practice sessions.</div>
         </div>
         <button class="btn btn-ghost btn-sm" onclick="window.navigate('insights')">
           <span>View Insights &amp; Analytics</span>
@@ -211,7 +181,7 @@ export async function renderPractice(container, options = {}) {
           <thead>
             <tr>
               <th class="tbl-header-label">Date &amp; Time</th>
-              <th class="tbl-header-label">Drill Scope</th>
+              <th class="tbl-header-label">Scope</th>
               <th class="tbl-header-label num-col">Score</th>
               <th class="tbl-header-label num-col">Accuracy</th>
               <th class="tbl-header-label">Performance Rating</th>
@@ -262,13 +232,14 @@ export async function renderPractice(container, options = {}) {
       showToast('Select a lecture first', 'warn');
       return;
     }
+    if (!container.querySelector('.diff-chk:checked')) { showToast('Choose at least one difficulty for AI generation.', 'warn'); return; }
     const genBtn = document.getElementById('gen-btn');
     if (genBtn) {
       genBtn.disabled = true;
       genBtn.textContent = 'Generating…';
     }
     try {
-      await API.post('/api/quiz/generate', { video_id: parseInt(videoId, 10), count });
+      await API.post('/api/quiz/generate', { video_id: parseInt(videoId, 10), num_questions: count, difficulties: [...container.querySelectorAll('.diff-chk:checked')].map(c => c.value) });
       showToast('New questions successfully generated!', 'success');
       initHubData();
     } catch (err) {
@@ -284,7 +255,7 @@ export async function renderPractice(container, options = {}) {
   // Start Drill Button
   document.getElementById('quiz-start-btn')?.addEventListener('click', async () => {
     const btn = document.getElementById('quiz-start-btn');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<span>Calibrating Questions…</span>'; }
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span>Preparing your questions…</span>'; }
 
     try {
       const scopeParam = _cfg.scope || 'all';
@@ -308,7 +279,7 @@ export async function renderPractice(container, options = {}) {
 
       if (!_questions.length) {
         showToast('No questions found in this scope. Ingest a lecture first.', 'warn');
-        if (btn) { btn.disabled = false; btn.innerHTML = '<span>Start Practice Drill</span>'; }
+        if (btn) { btn.disabled = false; btn.innerHTML = '<span>Start session</span>'; }
         return;
       }
 
@@ -326,12 +297,14 @@ export async function renderPractice(container, options = {}) {
       renderActiveSession(container);
     } catch (err) {
       showToast(err.message, 'error');
-      if (btn) { btn.disabled = false; btn.innerHTML = '<span>Start Practice Drill</span>'; }
+      if (btn) { btn.disabled = false; btn.innerHTML = '<span>Start session</span>'; }
     }
   });
 
   // Load Data
   await initHubData();
+  container.querySelectorAll('.radio-card').forEach(card => card.classList.toggle('active',card.dataset.scope === _cfg.scope));
+  updateScopeTargetUI();
 }
 
 async function initHubData() {
@@ -343,12 +316,18 @@ async function initHubData() {
 
     _courses = courses.status === 'fulfilled' ? courses.value : [];
     populateGeneratorSelect();
+    const recent = stats.status === 'fulfilled' ? (stats.value.recent_sessions || []).filter(s => s.answered > 0) : [];
+    const trend = document.getElementById('trend-avg-val');
+    const average = recent.length ? Math.round(recent.reduce((n,s) => n + s.correct / s.answered * 100,0) / recent.length) : 0;
+    if (trend) { trend.dataset.count = average; trend.textContent = `${average}%`; }
+    const bars = document.getElementById('trend-spark-bars');
+    if (bars && recent.length) bars.innerHTML = recent.slice(0,6).reverse().map(s => `<div style="flex:1;height:100%;display:flex;align-items:flex-end"><div class="chart-bar-fill" style="width:100%;height:${Math.round(s.correct/s.answered*100)}%;border-radius:5px" title="${s.date}: ${Math.round(s.correct/s.answered*100)}% correct"></div></div>`).join('');
 
     // Populate total questions badge
     let totalQuestions = 0;
     _courses.forEach(c => totalQuestions += (c.question_count || 0));
     const bankLbl = document.getElementById('bank-total-lbl');
-    if (bankLbl) bankLbl.textContent = `${totalQuestions || 120} Qs`;
+    if (bankLbl) bankLbl.textContent = `${totalQuestions} Qs`;
 
     const tbody = document.getElementById('quiz-full-history-tbody');
     if (tbody && stats.status === 'fulfilled') {
@@ -404,6 +383,7 @@ function updateScopeTargetUI() {
   } else if (_cfg.scope === 'course') {
     wrap.style.display = 'block';
     sel.innerHTML = _courses.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    if (_cfg.scopeId && [...sel.options].some(o => o.value === String(_cfg.scopeId))) sel.value = String(_cfg.scopeId);
     _cfg.scopeId = sel.value;
   } else if (_cfg.scope === 'video') {
     wrap.style.display = 'block';
@@ -412,10 +392,12 @@ function updateScopeTargetUI() {
       (c.videos || []).forEach(v => opts.push(`<option value="${v.id}">${v.title}</option>`));
     });
     sel.innerHTML = opts.join('') || '<option>No lectures</option>';
+    if (_cfg.scopeId && [...sel.options].some(o => o.value === String(_cfg.scopeId))) sel.value = String(_cfg.scopeId);
     _cfg.scopeId = sel.value;
   }
 
   sel.onchange = () => {
+    if (_cfg.scopeId && [...sel.options].some(o => o.value === String(_cfg.scopeId))) sel.value = String(_cfg.scopeId);
     _cfg.scopeId = sel.value;
   };
 }
@@ -432,6 +414,8 @@ function populateGeneratorSelect() {
 
 // ── Active Drill Session Mode ────────────────────────────────────
 function renderActiveSession(container) {
+  cleanupPractice();
+  _answered = false;
   document.body.classList.add('mode-focused');
 
   if (_activeIdx >= _questions.length) {
@@ -443,12 +427,7 @@ function renderActiveSession(container) {
   _selectedOption = null;
   _timeLeft = _timerSeconds;
 
-  const optionsList = Array.isArray(q.options) && q.options.length > 0 ? q.options : [
-    'Computes scaled dot-product attention across key-value pairs',
-    'Applies recurrent sequential state updates across tokens',
-    'Convolves spatial features using fixed sliding kernels',
-    'Normalizes batch activations across sample instances',
-  ];
+  const optionsList = q.options || [];
 
   const questionTitle = q.question || q.concept || 'Select the correct conceptual definition below:';
 
@@ -476,7 +455,7 @@ function renderActiveSession(container) {
           <div class="icon-tile accent" style="width:24px;height:24px">
             <svg style="width:13px;height:13px"><use href="#i-brain-circuit"/></svg>
           </div>
-          <span style="font-size:13.5px;font-weight:600;color:var(--txt-1)" id="session-src-title">Practice Drill</span>
+          <span style="font-size:13.5px;font-weight:600;color:var(--txt-1)" id="session-src-title">Practice session</span>
         </div>
       </div>
 
@@ -619,7 +598,7 @@ function renderActiveSession(container) {
 
   // Keyboard shortcut listener for active drill (1-4, Enter)
   const keyHandler = (e) => {
-    if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+    if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName) || document.querySelector('.palette-backdrop.active')) return;
     if (['1', '2', '3', '4'].includes(e.key)) {
       const idx = parseInt(e.key, 10) - 1;
       const targetRow = container.querySelector(`.quiz-opt-row[data-idx="${idx}"]`);
@@ -631,15 +610,16 @@ function renderActiveSession(container) {
       if (submitBtn && !submitBtn.disabled) submitBtn.click();
     }
   };
-  window.addEventListener('keydown', keyHandler, { once: true });
+  _keyHandler = keyHandler;
+  window.addEventListener('keydown', _keyHandler);
 
   // Submit Answer
-  document.getElementById('drill-submit-btn')?.addEventListener('click', () => {
-    submitAnswer(_selectedOption);
-  });
+  document.getElementById('drill-submit-btn').onclick = () => submitAnswer(_selectedOption);
 }
 
 function submitAnswer(chosenIdx) {
+  if (_answered || _activeIdx >= _questions.length) return;
+  _answered = true;
   if (_timerHandle) clearInterval(_timerHandle);
 
   const q = _questions[_activeIdx];
@@ -699,6 +679,7 @@ function submitAnswer(chosenIdx) {
 
 // ── Results Review View ──────────────────────────────────────────
 function renderResultsView(container) {
+  cleanupPractice();
   document.body.classList.remove('mode-focused');
   const pct = _questions.length > 0 ? Math.round((_score / _questions.length) * 100) : 0;
 
@@ -706,7 +687,7 @@ function renderResultsView(container) {
     <div class="page-head">
       <div>
         <h1 class="page-head-title">Session Results</h1>
-        <div class="page-head-desc">Practice drill performance breakdown and telemetry.</div>
+        <div class="page-head-desc">Your answers and results from this session.</div>
       </div>
       <div class="page-head-actions">
         <button class="btn btn-secondary btn-sm" onclick="window.navigate('practice')">New Practice</button>

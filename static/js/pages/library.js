@@ -3,7 +3,7 @@
    High-Density Course Browser with Inline Kebabs & Bulk Management
    ══════════════════════════════════════════════════════════════════ */
 
-import { API, showToast, skel, timeAgo, navigate, invalidateCoursesCache } from '../app.js';
+import { API, showToast, skel, timeAgo, navigate, invalidateCoursesCache, escapeHtml } from '../app.js';
 
 let _courses = [];
 let _selectedCourseId = null;
@@ -13,13 +13,14 @@ let _filterTerm = '';
 export async function renderLibrary(container, options = {}) {
   _selectedCourseId = options.courseId ? parseInt(options.courseId, 10) : null;
   _selectedLectureIds.clear();
+  _filterTerm = '';
 
   container.innerHTML = `
     <!-- Page Header -->
     <div class="page-head">
       <div>
-        <h1 class="page-head-title">Knowledge Library</h1>
-        <div class="page-head-desc">Master course archive, structured lecture materials, and practice decks.</div>
+        <div class="chapter-tag"><span>02</span>Course collection</div><h1 class="page-head-title">Library.</h1>
+        <div class="page-head-desc">Courses, source lectures, and the materials you’ve collected.</div>
       </div>
       <div class="page-head-actions">
         <button class="btn btn-secondary btn-sm" id="lib-new-course-btn">
@@ -33,12 +34,14 @@ export async function renderLibrary(container, options = {}) {
       </div>
     </div>
 
+    <div class="library-summary" id="lib-summary"><span>Loading your collection…</span></div>
+
     <!-- Mobile Course Pills Selector Bar (Visible on <768px) -->
     <div class="lib-mobile-course-bar">
       <div class="lib-mobile-pills-scroll" id="lib-mobile-courses-pills">
         ${_courses.map(c => `
           <button class="lib-mobile-pill ${c.id === _selectedCourseId ? 'active' : ''}" data-cid="${c.id}">
-            ${c.name} (${c.video_count || 0})
+            ${escapeHtml(c.name)} (${c.video_count || 0})
           </button>
         `).join('')}
       </div>
@@ -81,7 +84,7 @@ export async function renderLibrary(container, options = {}) {
       document.getElementById('lib-search-input')?.focus();
     }
   };
-  document.addEventListener('keydown', searchListener);
+  container.addEventListener('keydown', searchListener);
 
   await loadCoursesData();
 }
@@ -89,14 +92,16 @@ export async function renderLibrary(container, options = {}) {
 async function loadCoursesData() {
   try {
     _courses = await API.get('/api/courses');
-    renderCoursesPanes();
-
+    const summary = document.getElementById('lib-summary');
+    if (summary) summary.innerHTML = `<span><strong>${_courses.length}</strong> courses</span><span><strong>${_courses.reduce((n,c)=>n+(c.videos?.length || c.video_count || 0),0)}</strong> lectures</span><span><strong>${_courses.reduce((n,c)=>n+(c.question_count || 0),0)}</strong> practice questions</span>`;
     if (_courses.length) {
       if (!_selectedCourseId || !_courses.find(c => c.id === _selectedCourseId)) {
         _selectedCourseId = _courses[0].id;
       }
+      renderCoursesPanes();
       renderSelectedCourseWorkspace();
     } else {
+      renderCoursesPanes();
       document.getElementById('lib-main-pane').innerHTML = `
         <div class="card empty-state">
           <div class="icon-tile accent" style="width:44px;height:44px">
@@ -110,6 +115,8 @@ async function loadCoursesData() {
         </div>`;
     }
   } catch (err) {
+    const pane = document.getElementById('lib-main-pane');
+    if (pane) pane.innerHTML = `<div class="empty-workspace" role="alert"><h3>Couldn’t load your courses</h3><p>${escapeHtml(err.message)}</p><button class="btn btn-secondary btn-sm" onclick="window.navigate('library')">Try again →</button></div>`;
     showToast(err.message, 'error');
   }
 }
@@ -124,7 +131,7 @@ function renderCoursesPanes() {
   if (mobilePills) {
     mobilePills.innerHTML = _courses.map(c => `
       <button class="lib-mobile-pill ${c.id === _selectedCourseId ? 'active' : ''}" data-cid="${c.id}">
-        <span>${c.name}</span>
+        <span>${escapeHtml(c.name)}</span>
         <span class="mono" style="opacity:0.75;margin-left:4px">${c.video_count || 0}</span>
       </button>
     `).join('');
@@ -149,7 +156,7 @@ function renderCoursesPanes() {
   list.innerHTML = _courses.map(c => `
     <div class="course-row-item ${c.id === _selectedCourseId ? 'active' : ''}" data-cid="${c.id}">
       <div style="flex:1;min-width:0">
-        <div style="font-weight:600;font-size:13px;color:var(--txt-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name}</div>
+        <div style="font-weight:600;font-size:13px;color:var(--txt-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(c.name)}</div>
         <div class="caption-text mono" style="margin-top:2px">${c.video_count || 0} lectures · ${c.question_count || 0} cards</div>
       </div>
     </div>
@@ -177,14 +184,14 @@ function renderSelectedCourseWorkspace() {
 
   pane.innerHTML = `
     <!-- Course Header Card -->
-    <div class="card spot" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px">
-      <div>
+    <div class="card spot course-cover" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px">
+      <div><span class="course-stamp">COURSE / ${String(_courses.findIndex(c=>c.id===course.id)+1).padStart(2,'0')}</span>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <h2 style="font-size:18px;font-weight:600;color:var(--txt-1)">${course.name}</h2>
+          <h2 style="font-size:18px;font-weight:600;color:var(--txt-1)">${escapeHtml(course.name)}</h2>
           <span class="chip chip-neutral mono">${allVideos.length} lectures</span>
         </div>
         <div class="caption-text" style="margin-top:4px">
-          Total Cards: <strong class="mono" style="color:var(--txt-1)">${course.question_count || 0}</strong> · Spaced repetition active
+          Practice questions: <strong class="mono" style="color:var(--txt-1)">${course.question_count || 0}</strong> · Spaced repetition active
         </div>
       </div>
 
@@ -193,7 +200,7 @@ function renderSelectedCourseWorkspace() {
           <svg style="width:13px;height:13px"><use href="#i-rotate-cw"/></svg>
           <span>Review Course</span>
         </button>
-        <button class="btn btn-ghost btn-sm" onclick="window.navigate('practice')">
+        <button class="btn btn-ghost btn-sm" onclick="window.navigate('practice?scope=course&id=${course.id}')">
           <svg style="width:13px;height:13px"><use href="#i-brain-circuit"/></svg>
           <span>Quiz Course</span>
         </button>
@@ -206,7 +213,7 @@ function renderSelectedCourseWorkspace() {
     <!-- Toolbar: Search & Bulk Bar -->
     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
       <div class="lib-search-box">
-        <input class="form-input" id="lib-search-input" placeholder="Search lectures in course ( / )" value="${_filterTerm}" style="height:32px;padding-left:30px;font-size:12.5px" />
+        <input class="form-input" id="lib-search-input" placeholder="Search lectures in course ( / )" value="${escapeHtml(_filterTerm)}" style="height:32px;padding-left:30px;font-size:12.5px" />
         <svg style="position:absolute;left:10px;top:9px;width:14px;height:14px;color:var(--txt-3);pointer-events:none"><use href="#i-search"/></svg>
       </div>
 
@@ -228,11 +235,11 @@ function renderSelectedCourseWorkspace() {
             <div style="flex:1;min-width:0">
               <a href="#lecture/${v.id}" onclick="window.navigate('lecture/${v.id}');return false;" class="lib-lecture-card-title">
                 <svg style="width:14px;height:14px;color:var(--acc-400);flex-shrink:0"><use href="#i-video"/></svg>
-                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.title}</span>
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(v.title)}</span>
               </a>
               <div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap">
-                <span class="chip chip-neutral mono" style="font-size:10.5px">${v.concept_count || 16} cards</span>
-                <span class="chip chip-neutral mono" style="font-size:10.5px">${v.question_count || 20} Qs</span>
+                <span class="chip chip-neutral mono" style="font-size:10.5px">${v.concept_count ?? 0} cards</span>
+                <span class="chip chip-neutral mono" style="font-size:10.5px">${v.question_count ?? 0} Qs</span>
                 <span class="chip chip-ok" style="font-size:10px">Ready</span>
               </div>
             </div>
@@ -240,7 +247,7 @@ function renderSelectedCourseWorkspace() {
               <button class="btn btn-secondary btn-sm" onclick="window.navigate('lecture/${v.id}')" style="padding:0 8px;height:28px">
                 <span>View</span>
               </button>
-              <button class="btn btn-ghost btn-icon btn-sm row-del-btn" data-vid="${v.id}" data-vtitle="${v.title}" title="Delete Video" style="color:var(--danger-400)">
+              <button class="btn btn-ghost btn-icon btn-sm row-del-btn" data-vid="${v.id}" data-vtitle="${escapeHtml(v.title)}" title="Delete Video" style="color:var(--danger-400)">
                 <svg style="width:13px;height:13px"><use href="#i-trash-2"/></svg>
               </button>
             </div>
@@ -275,11 +282,11 @@ function renderSelectedCourseWorkspace() {
               <td>
                 <a href="#lecture/${v.id}" onclick="window.navigate('lecture/${v.id}');return false;" style="display:flex;align-items:center;gap:8px;font-weight:500;color:var(--txt-1)">
                   <svg style="width:14px;height:14px;color:var(--acc-400);flex-shrink:0"><use href="#i-video"/></svg>
-                  <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:340px">${v.title}</span>
+                  <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:340px">${escapeHtml(v.title)}</span>
                 </a>
               </td>
-              <td class="num-col mono">${v.concept_count || 16}</td>
-              <td class="num-col mono">${v.question_count || 20}</td>
+              <td class="num-col mono">${v.concept_count ?? 0}</td>
+              <td class="num-col mono">${v.question_count ?? 0}</td>
               <td>
                 <span class="chip chip-ok" style="font-size:11px">
                   <span class="status-dot ok"></span>
@@ -291,7 +298,7 @@ function renderSelectedCourseWorkspace() {
                   <button class="btn btn-ghost btn-icon btn-sm" onclick="window.navigate('lecture/${v.id}')" title="Open Lecture">
                     <svg style="width:13px;height:13px"><use href="#i-external-link"/></svg>
                   </button>
-                  <button class="btn btn-ghost btn-icon btn-sm row-del-btn" data-vid="${v.id}" data-vtitle="${v.title}" title="Delete Video" style="color:var(--danger-400)">
+                  <button class="btn btn-ghost btn-icon btn-sm row-del-btn" data-vid="${v.id}" data-vtitle="${escapeHtml(v.title)}" title="Delete Video" style="color:var(--danger-400)">
                     <svg style="width:13px;height:13px"><use href="#i-trash-2"/></svg>
                   </button>
                 </div>
@@ -307,7 +314,11 @@ function renderSelectedCourseWorkspace() {
   const searchInput = document.getElementById('lib-search-input');
   searchInput?.addEventListener('input', e => {
     _filterTerm = e.target.value;
+    const cursor = e.target.selectionStart;
     renderSelectedCourseWorkspace();
+    const nextInput = document.getElementById('lib-search-input');
+    nextInput?.focus();
+    nextInput?.setSelectionRange(cursor,cursor);
   });
 
   // Delete Course
