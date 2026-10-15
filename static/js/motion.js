@@ -108,7 +108,7 @@ function prepare(root) {
   });
   root.querySelectorAll('.progress-fill,.chart-bar-fill,[data-chart-bar]').forEach(animateBar);
   root.querySelectorAll('.radio-card,.course-row-item,.quiz-opt-row,.lec-option-row').forEach(el => {
-    if (el.dataset.keyboardReady) return;
+    if (el.matches('button,a,input') || el.dataset.keyboardReady) return;
     el.dataset.keyboardReady = 'true';
     el.tabIndex = 0;
     el.setAttribute('role', 'button');

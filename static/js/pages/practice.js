@@ -3,8 +3,16 @@
    High-Density Exam Suite: Scope Config, Active Drill, Telemetry & Full History
    ══════════════════════════════════════════════════════════════════ */
 
-import { API, showToast, DailyGoal, Streak, navigate, skel } from '../app.js';
+import { API, showToast, DailyGoal, Streak, navigate, skel, invalidateDueCount } from '../app.js';
 
+import { html, correctIndex, timeLabel, sessionHeader, choices, sessionPanel, feedback, completeMarkup } from '../session-ui.js';
+
+let _practiceVersion = 0;
+let _activeContainer = null;
+let _sessionStarted = 0;
+let _deadline = 0;
+let _savePending = false;
+let _pendingAnswer = null;
 let _courses = [];
 let _questions = [];
 let _activeIdx = 0;
@@ -18,6 +26,8 @@ let _timeLeft = 30;
 let _keyHandler = null;
 let _answered = false;
 export function cleanupPractice() {
+  _practiceVersion++;
+  _activeContainer = null;
   clearInterval(_timerHandle);
   if (_keyHandler) window.removeEventListener('keydown',_keyHandler);
   _timerHandle = _keyHandler = null;
@@ -34,6 +44,8 @@ let _cfg = {
 export async function renderPractice(container, options = {}) {
   cleanupPractice();
   const subpath = options.subpath;
+  if (subpath !== 'session') { _questions = []; _results = []; _sessionStarted = 0; }
+  if (subpath === 'session' && !_questions.length) { navigate('practice'); return; }
   if (subpath !== 'session') _cfg = {scope:['course','video'].includes(options.scope) ? options.scope : 'all',scopeId:options.scopeId || null,count:10,timer:30,diff:['easy','medium','hard']};
 
   if (subpath === 'session') {
@@ -260,36 +272,19 @@ export async function renderPractice(container, options = {}) {
     try {
       const scopeParam = _cfg.scope || 'all';
       const scopeIdParam = _cfg.scopeId ? parseInt(_cfg.scopeId, 10) : 0;
-      let rawData = null;
-
-      try {
-        rawData = await API.get(`/api/quiz/questions?scope=${scopeParam}&scope_id=${scopeIdParam}&limit=${_cfg.count}`);
-      } catch {
-        rawData = await API.get('/api/review/due?limit=30');
-      }
-
-      const list = Array.isArray(rawData) ? rawData : (rawData?.questions || []);
-      _questions = list.slice(0, _cfg.count);
-
+      const rawData = await API.get(`/api/quiz/questions?scope=${scopeParam}&scope_id=${scopeIdParam}&limit=${_cfg.count}`);
+      const list = Array.isArray(rawData) ? rawData : rawData?.questions || [];
+      _questions = list.filter(q => q.id && (q.question || q.concept) && Array.isArray(q.options) && q.options.length > 1 && correctIndex(q) >= 0).slice(0,_cfg.count);
       if (!_questions.length) {
-        const fallback = await API.get('/api/review/due?limit=30').catch(() => ({ questions: [] }));
-        const fallbackList = Array.isArray(fallback) ? fallback : (fallback?.questions || []);
-        _questions = fallbackList.slice(0, _cfg.count);
-      }
-
-      if (!_questions.length) {
-        showToast('No questions found in this scope. Ingest a lecture first.', 'warn');
-        if (btn) { btn.disabled = false; btn.innerHTML = '<span>Start session</span>'; }
+        showToast('No usable multiple-choice questions in this scope. Generate questions for a lecture first.','warn');
+        btn.disabled = false;
+        btn.textContent = 'Start session';
         return;
       }
-
-      try {
-        const sess = await API.post('/api/quiz/start-session');
-        _sessionId = sess?.session_id || 0;
-      } catch {
-        _sessionId = 0;
-      }
-
+      const saved = await API.post('/api/quiz/start-session');
+      if (!saved.session_id) throw new Error('A recorded practice session could not be started. Please try again.');
+      _sessionId = saved.session_id;
+      _sessionStarted = Date.now();
       _activeIdx = 0;
       _score = 0;
       _results = [];
@@ -397,7 +392,6 @@ function updateScopeTargetUI() {
   }
 
   sel.onchange = () => {
-    if (_cfg.scopeId && [...sel.options].some(o => o.value === String(_cfg.scopeId))) sel.value = String(_cfg.scopeId);
     _cfg.scopeId = sel.value;
   };
 }
@@ -412,316 +406,141 @@ function populateGeneratorSelect() {
   sel.innerHTML = opts.join('') || '<option value="">No lectures available</option>';
 }
 
-// ── Active Drill Session Mode ────────────────────────────────────
+// Active session controller; the setup view above shares the same question bank.
+function scopeLabel() {
+  if (_cfg.scope === 'course') return _courses.find(c => String(c.id) === String(_cfg.scopeId))?.name || 'Selected course';
+  if (_cfg.scope === 'video') return _courses.flatMap(c => c.videos || []).find(v => String(v.id) === String(_cfg.scopeId))?.title || 'Selected lecture';
+  return 'All library';
+}
+
+function stopQuestion() {
+  clearInterval(_timerHandle);
+  if (_keyHandler) window.removeEventListener('keydown',_keyHandler);
+  _timerHandle = _keyHandler = null;
+}
+
 function renderActiveSession(container) {
-  cleanupPractice();
+  stopQuestion();
+  const version = ++_practiceVersion;
+  _activeContainer = container;
   _answered = false;
+  _savePending = false;
+  _pendingAnswer = null;
   document.body.classList.add('mode-focused');
-
-  if (_activeIdx >= _questions.length) {
-    renderResultsView(container);
-    return;
-  }
-
+  document.body.dataset.sessionKind = 'practice';
+  if (!_questions.length) { navigate('practice'); return; }
+  if (_activeIdx >= _questions.length) { renderResultsView(container); return; }
+  history.replaceState(null,'','#practice/session');
+  if (!_sessionStarted) _sessionStarted = Date.now();
   const q = _questions[_activeIdx];
   _selectedOption = null;
   _timeLeft = _timerSeconds;
-
-  const optionsList = q.options || [];
-
-  const questionTitle = q.question || q.concept || 'Select the correct conceptual definition below:';
-
-  // Build Queue Dot Matrix HTML
-  const dotMatrixHtml = _questions.map((_, i) => {
-    let stateCls = '';
-    if (i < _activeIdx) {
-      stateCls = _results[i]?.isCorrect ? 'done-ok' : 'done-err';
-    } else if (i === _activeIdx) {
-      stateCls = 'active';
-    }
-    return `<div class="queue-dot ${stateCls}" title="Question #${i + 1}"></div>`;
-  }).join('');
-
-  container.innerHTML = `
-    <!-- Session Bar -->
-    <div id="focused-session-bar">
-      <div class="session-bar-left">
-        <button class="btn btn-ghost btn-sm" id="session-abort-btn">
-          <svg style="width:14px;height:14px"><use href="#i-x"/></svg>
-          <span class="session-exit-label">Exit Drill (<span class="kbd" style="font-size:10px">Esc</span>)</span>
-        </button>
-        <span class="caption-text session-sep" style="color:var(--txt-3)">|</span>
-        <div class="session-src-wrap">
-          <div class="icon-tile accent" style="width:24px;height:24px">
-            <svg style="width:13px;height:13px"><use href="#i-brain-circuit"/></svg>
-          </div>
-          <span style="font-size:13.5px;font-weight:600;color:var(--txt-1)" id="session-src-title">Practice session</span>
-        </div>
-      </div>
-
-      <div class="session-bar-center">
-        <div class="progress-track" style="height:6px">
-          <div class="progress-fill" style="width:${Math.round(((_activeIdx + 1) / _questions.length) * 100)}%"></div>
-        </div>
-        <span class="caption-text mono" id="session-prog-lbl" style="white-space:nowrap;font-weight:500">${_activeIdx + 1} / ${_questions.length}</span>
-      </div>
-
-      <div class="session-bar-right">
-        ${_timerSeconds > 0 ? `<div class="chip chip-warn mono" id="drill-timer-chip" style="font-size:13px">${_timeLeft}s</div>` : ''}
-      </div>
-    </div>
-
-    <!-- Main 2-Column Drill Workspace -->
-    <div class="review-scene-wrap">
-      <div class="study-cockpit-grid">
-        
-        <!-- Left: Question & Options Card -->
-        <div class="card" style="padding:34px 32px;min-height:420px;display:flex;flex-direction:column;justify-content:space-between">
-          
-          <div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-              <div style="display:flex;align-items:center;gap:8px">
-                <span class="chip chip-neutral mono" style="font-size:11.5px">Exam Drill</span>
-                <span class="chip chip-accent mono" style="font-size:11.5px">Question ${_activeIdx + 1} of ${_questions.length}</span>
-              </div>
-              <span class="caption-text mono" style="font-size:12.5px">Current Score: <strong style="color:var(--acc-400)">${_score}</strong></span>
-            </div>
-
-            <h2 style="font-size:22px;font-weight:600;color:var(--txt-1);line-height:1.45;margin-bottom:28px">
-              ${questionTitle}
-            </h2>
-
-            <div class="quiz-options-list" id="drill-options-wrap" style="margin:0 0 18px 0">
-              ${optionsList.map((opt, i) => `
-                <div class="quiz-opt-row" data-idx="${i}" data-val="${encodeURIComponent(opt)}">
-                  <span class="quiz-opt-key">${i + 1}</span>
-                  <span style="line-height:1.45;flex:1">${opt}</span>
-                </div>
-              `).join('')}
-            </div>
-
-            <!-- Submit / Next Controls -->
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px">
-              <span class="caption-text" style="font-size:13px">Keys <span class="kbd">1–4</span> select · <span class="kbd">Enter</span> confirms</span>
-              <button class="btn btn-primary btn-sm" id="drill-submit-btn" disabled>
-                <span>Confirm Answer</span>
-              </button>
-            </div>
-
-            <!-- Explanation Feedback Box -->
-            <div id="drill-feedback-box" class="card card-xs" style="display:none;margin-top:20px;background:var(--bg-2);padding:16px 18px">
-              <div style="font-weight:600;font-size:13.5px;margin-bottom:6px" id="drill-feedback-status">Explanation</div>
-              <div class="caption-text body-text" id="drill-feedback-text" style="line-height:1.55;color:var(--txt-1);font-size:13.5px"></div>
-            </div>
-          </div>
-
-        </div>
-
-        <!-- Right: Live Session Rail -->
-        <div class="study-telemetry-rail">
-          <div class="card card-sm">
-            <span class="card-title" style="margin-bottom:14px;display:block">Drill Performance</span>
-            <div class="stat-grid-2" style="margin-bottom:16px">
-              <div style="background:var(--bg-2);padding:12px;border-radius:var(--r-sm)">
-                <div class="caption-text">Score</div>
-                <div class="mono" style="font-size:22px;font-weight:600;color:var(--acc-400)">${_score}</div>
-              </div>
-              <div style="background:var(--bg-2);padding:12px;border-radius:var(--r-sm)">
-                <div class="caption-text">Accuracy</div>
-                <div class="mono" style="font-size:22px;font-weight:600;color:${_activeIdx > 0 && Math.round((_score / _activeIdx) * 100) >= 70 ? 'var(--ok-400)' : 'var(--warn-400)'}">${_activeIdx > 0 ? Math.round((_score / _activeIdx) * 100) : 100}%</div>
-              </div>
-            </div>
-
-            <div style="display:flex;flex-direction:column;gap:9px;font-size:13px">
-              <div style="display:flex;justify-content:space-between"><span style="color:var(--txt-3)">Scope Target</span><span class="mono" style="color:var(--txt-1)">${_cfg.scope}</span></div>
-              <div style="display:flex;justify-content:space-between"><span style="color:var(--txt-3)">Remaining</span><span class="mono" style="color:var(--txt-1)">${_questions.length - _activeIdx} Qs</span></div>
-            </div>
-          </div>
-
-          <!-- Question Progress Dot Matrix -->
-          <div class="card card-sm">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-              <span class="card-title">Question Map</span>
-              <span class="caption-text mono">${_activeIdx + 1} of ${_questions.length}</span>
-            </div>
-            <div class="queue-matrix-dots">
-              ${dotMatrixHtml}
-            </div>
-          </div>
-
-          <div class="card card-sm">
-            <span class="card-title" style="margin-bottom:12px;display:block">Keyboard Controls</span>
-            <div style="display:flex;flex-direction:column;gap:8px;font-size:12.5px">
-              <div style="display:flex;justify-content:space-between"><span>Choose Option</span><span class="kbd">1–4</span></div>
-              <div style="display:flex;justify-content:space-between"><span>Confirm / Next</span><span class="kbd">Enter</span></div>
-              <div style="display:flex;justify-content:space-between"><span>Exit Drill</span><span class="kbd">Esc</span></div>
-            </div>
-          </div>
-        </div>
-
-      </div>
-    </div>
-  `;
-
-  // Timer Tick
+  _deadline = Date.now() + _timerSeconds*1000;
+  container.innerHTML = sessionHeader({title:'Practice quiz',completed:_results.length,total:_questions.length,exitId:'session-abort-btn',timer:_timerSeconds ? `${_timeLeft}s` : 'Untimed',timerId:'drill-timer-chip'}) + `
+    <main class="session-workspace"><div class="session-heading"><div><span class="session-kicker">Practice / ${html(_timerSeconds ? 'Timed quiz' : 'Untimed quiz')}</span><h1>Test your understanding.</h1><p>Select an answer, confirm your choice, and review the feedback.</p></div><span class="session-position">${String(_activeIdx+1).padStart(2,'0')} / ${String(_questions.length).padStart(2,'0')}</span></div><div class="session-layout"><div class="session-stage"><section class="session-question"><div class="session-question-main"><div class="session-question-meta"><span class="session-question-kind"><svg width="14" height="14"><use href="#i-brain-circuit"/></svg>Multiple choice <span class="mono">· ${String(_activeIdx+1).padStart(2,'0')}</span></span><span class="session-question-source">${html(scopeLabel())}</span></div><h2 class="session-question-title" id="drill-question-title">${html(q.question || q.concept)}</h2>${choices(q,{id:'drill-options-wrap'})}<div id="drill-feedback-slot"></div></div><div class="session-question-actions"><span class="session-action-note" id="drill-action-note">Choose an answer. Keys <kbd>1–${q.options.length}</kbd> select; <kbd>Enter</kbd> confirms.</span><button class="btn btn-primary session-primary-action" id="drill-submit-btn" disabled>Check answer →</button></div><div class="session-save-state" id="drill-save-state" role="status"></div></section><div class="session-under-note"><span>${html(scopeLabel())}</span><span>${_timerSeconds ? `${_timerSeconds} seconds per question` : 'No countdown · take your time'}</span></div></div>${sessionPanel({items:_questions,index:_activeIdx,results:_results,kind:'practice',source:scopeLabel()})}</div></main>`;
+  container.onclick = e => {
+    const button = e.target.closest('button');
+    if (!button || version !== _practiceVersion) return;
+    if (button.id === 'session-abort-btn') navigate('practice');
+    else if (button.matches('.session-choice')) selectQuizAnswer(Number(button.dataset.idx));
+    else if (button.id === 'drill-submit-btn') {
+      if (_savePending) return;
+      if (_answered) { _activeIdx++; renderActiveSession(container); }
+      else submitAnswer(_selectedOption);
+    } else if (button.id === 'drill-retry-save') saveQuizAnswer(version);
+  };
   if (_timerSeconds > 0) {
-    if (_timerHandle) clearInterval(_timerHandle);
     _timerHandle = setInterval(() => {
-      _timeLeft--;
-      const chip = document.getElementById('drill-timer-chip');
-      if (chip) chip.textContent = `${_timeLeft}s`;
-      if (_timeLeft <= 0) {
-        clearInterval(_timerHandle);
-        submitAnswer(-1); // Timed out
-      }
-    }, 1000);
+      if (version !== _practiceVersion || _answered) { clearInterval(_timerHandle); return; }
+      _timeLeft = Math.max(0,Math.ceil((_deadline-Date.now())/1000));
+      const chip = container.querySelector('#drill-timer-chip');
+      if (chip) { chip.textContent = `${_timeLeft}s`; chip.classList.toggle('is-urgent',_timeLeft <= 5); }
+      if (_timeLeft === 0) submitAnswer(-1);
+    },200);
   }
-
-  // Abort listener
-  document.getElementById('session-abort-btn')?.addEventListener('click', () => {
-    if (_timerHandle) clearInterval(_timerHandle);
-    document.body.classList.remove('mode-focused');
-    navigate('practice');
-  });
-
-  // Option selection
-  const rows = container.querySelectorAll('.quiz-opt-row');
-  rows.forEach(row => {
-    row.addEventListener('click', () => {
-      rows.forEach(r => r.classList.remove('selected'));
-      row.classList.add('selected');
-      _selectedOption = parseInt(row.dataset.idx, 10);
-      const submitBtn = document.getElementById('drill-submit-btn');
-      if (submitBtn) submitBtn.disabled = false;
-    });
-  });
-
-  // Keyboard shortcut listener for active drill (1-4, Enter)
-  const keyHandler = (e) => {
-    if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName) || document.querySelector('.palette-backdrop.active')) return;
-    if (['1', '2', '3', '4'].includes(e.key)) {
-      const idx = parseInt(e.key, 10) - 1;
-      const targetRow = container.querySelector(`.quiz-opt-row[data-idx="${idx}"]`);
-      if (targetRow && !targetRow.classList.contains('disabled')) {
-        targetRow.click();
-      }
-    } else if (e.key === 'Enter') {
-      const submitBtn = document.getElementById('drill-submit-btn');
-      if (submitBtn && !submitBtn.disabled) submitBtn.click();
+  _keyHandler = e => {
+    if (version !== _practiceVersion || e.repeat || e.ctrlKey || e.metaKey || e.altKey || e.target.closest('input,textarea,select,[contenteditable="true"],dialog') || document.querySelector('.palette-backdrop.active')) return;
+    if (/^[1-9]$/.test(e.key)) { e.preventDefault(); selectQuizAnswer(Number(e.key)-1); }
+    else if (e.key === 'Enter') {
+      if (e.target.closest('button') && !e.target.closest('.session-choice,#drill-submit-btn')) return;
+      e.preventDefault();
+      const button = container.querySelector('#drill-submit-btn');
+      if (button && !button.disabled) button.click();
     }
   };
-  _keyHandler = keyHandler;
-  window.addEventListener('keydown', _keyHandler);
+  window.addEventListener('keydown',_keyHandler);
+}
 
-  // Submit Answer
-  document.getElementById('drill-submit-btn').onclick = () => submitAnswer(_selectedOption);
+function selectQuizAnswer(index) {
+  if (_answered || !_activeContainer || !_questions[_activeIdx]?.options?.[index]) return;
+  _selectedOption = index;
+  _activeContainer.querySelectorAll('.session-choice').forEach((row,i) => {
+    row.classList.toggle('selected',i === index);
+    row.setAttribute('aria-pressed',String(i === index));
+    row.querySelector('.session-choice-mark').textContent = i === index ? '•' : '';
+  });
+  _activeContainer.querySelector('#drill-submit-btn').disabled = false;
+  _activeContainer.querySelector('#drill-action-note').textContent = `Answer ${String.fromCharCode(65+index)} selected. Confirm when you’re ready.`;
 }
 
 function submitAnswer(chosenIdx) {
-  if (_answered || _activeIdx >= _questions.length) return;
+  if (_answered || !_activeContainer || chosenIdx === null || _activeIdx >= _questions.length) return;
   _answered = true;
-  if (_timerHandle) clearInterval(_timerHandle);
-
+  clearInterval(_timerHandle);
   const q = _questions[_activeIdx];
-  const correctVal = (q.answer || '').trim();
-  const optionsList = Array.isArray(q.options) && q.options.length > 0 ? q.options : [];
-  
-  let correctIdx = q.correct_idx ?? 0;
-  if (optionsList.length > 0 && correctVal) {
-    const found = optionsList.findIndex(opt => opt.trim().toLowerCase() === correctVal.toLowerCase());
-    if (found !== -1) correctIdx = found;
-  }
-
+  const correctIdx = correctIndex(q);
   const isCorrect = chosenIdx === correctIdx;
+  _pendingAnswer = {question:q,chosenIdx,correctIdx,isCorrect,chosen:q.options[chosenIdx] || (chosenIdx === -1 ? 'Time expired' : ''),answer:q.options[correctIdx]};
+  _activeContainer.querySelector('#drill-options-wrap').outerHTML = choices(q,{selected:chosenIdx,revealed:true,id:'drill-options-wrap'});
+  _activeContainer.querySelector('#drill-feedback-slot').innerHTML = feedback({id:'drill-feedback-box',title:chosenIdx === -1 ? 'Time’s up. Here’s the answer.' : isCorrect ? 'That’s correct.' : 'Here’s the correct answer.',answer:q.options[correctIdx],explanation:q.explanation,correct:isCorrect});
+  _activeContainer.querySelector('#drill-action-note').textContent = 'Read the feedback before continuing to the next question.';
+  saveQuizAnswer(_practiceVersion);
+}
 
-  if (isCorrect) _score++;
-  _results.push({ question: q, chosenIdx, correctIdx, isCorrect });
-
-  DailyGoal.addProgress(1);
-  Streak.recordActivity();
-
-  if (q.id) {
-    API.post('/api/quiz/answer', {
-      session_id: _sessionId || 0,
-      question_id: q.id,
-      is_correct: isCorrect,
-      performance: isCorrect ? 'good' : 'hard',
-    }).catch(() => {});
-  }
-
-  const rows = document.querySelectorAll('.quiz-opt-row');
-  rows.forEach((row, i) => {
-    row.classList.add('disabled');
-    if (i === correctIdx) row.classList.add('correct');
-    else if (i === chosenIdx && !isCorrect) row.classList.add('wrong');
-  });
-
-  const feedBox = document.getElementById('drill-feedback-box');
-  const feedStatus = document.getElementById('drill-feedback-status');
-  const feedText = document.getElementById('drill-feedback-text');
-  if (feedBox && feedStatus && feedText) {
-    feedStatus.textContent = isCorrect ? '✓ Correct Recall' : '✗ Incorrect Concept';
-    feedStatus.style.color = isCorrect ? 'var(--ok-400)' : 'var(--danger-400)';
-    feedText.textContent = q.explanation || q.answer || 'Answer aligned with core definition.';
-    feedBox.style.display = 'block';
-  }
-
-  const submitBtn = document.getElementById('drill-submit-btn');
-  if (submitBtn) {
-    submitBtn.disabled = false;
-    submitBtn.innerHTML = `<span>Next Question →</span>`;
-    submitBtn.onclick = () => {
-      _activeIdx++;
-      renderActiveSession(document.getElementById('page-content'));
-    };
+async function saveQuizAnswer(version) {
+  if (_savePending || !_pendingAnswer || !_activeContainer) return;
+  const container = _activeContainer;
+  const result = _pendingAnswer;
+  const button = container.querySelector('#drill-submit-btn');
+  const status = container.querySelector('#drill-save-state');
+  _savePending = true;
+  button.disabled = true;
+  button.textContent = 'Saving answer…';
+  status.className = 'session-save-state';
+  status.textContent = 'Recording this answer in your session.';
+  try {
+    await API.post('/api/quiz/answer',{session_id:_sessionId,question_id:result.question.id,is_correct:result.isCorrect,performance:result.isCorrect ? 'good' : 'hard'});
+    invalidateDueCount();
+    if (version !== _practiceVersion) return;
+    if (result.isCorrect) _score++;
+    _results.push(result);
+    try { DailyGoal.addProgress(1); } catch { /* Cloud save succeeded; a full local store must not resubmit it. */ }
+    _savePending = false;
+    _pendingAnswer = null;
+    button.disabled = false;
+    button.textContent = _activeIdx+1 >= _questions.length ? 'See results →' : 'Next question →';
+    status.textContent = 'Answer saved.';
+    container.querySelector('.session-inspector').outerHTML = sessionPanel({items:_questions,index:_activeIdx,results:_results,kind:'practice',source:scopeLabel()});
+    const fill = container.querySelector('#session-prog-fill');
+    fill.style.width = `${Math.round(_results.length/_questions.length*100)}%`;
+    fill.parentElement.setAttribute('aria-valuenow',String(_results.length));
+    container.querySelector('#session-prog-lbl').textContent = `${_results.length} / ${_questions.length}`;
+  } catch {
+    if (version !== _practiceVersion) return;
+    _savePending = false;
+    button.disabled = true;
+    button.textContent = 'Save required';
+    status.className = 'session-save-state is-error';
+    status.innerHTML = '<span>This answer could not be saved. Your choice is still here.</span><button id="drill-retry-save">Retry save</button>';
   }
 }
 
-// ── Results Review View ──────────────────────────────────────────
 function renderResultsView(container) {
+  const seconds = Math.floor((Date.now()-_sessionStarted)/1000);
   cleanupPractice();
-  document.body.classList.remove('mode-focused');
-  const pct = _questions.length > 0 ? Math.round((_score / _questions.length) * 100) : 0;
-
-  container.innerHTML = `
-    <div class="page-head">
-      <div>
-        <h1 class="page-head-title">Session Results</h1>
-        <div class="page-head-desc">Your answers and results from this session.</div>
-      </div>
-      <div class="page-head-actions">
-        <button class="btn btn-secondary btn-sm" onclick="window.navigate('practice')">New Practice</button>
-        <button class="btn btn-primary btn-sm" onclick="window.navigate('today')">Done</button>
-      </div>
-    </div>
-
-    <!-- Summary KPI Card -->
-    <div class="card spot" style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;padding:24px">
-      <div>
-        <div class="caption-text">Comprehension Score</div>
-        <div class="mono" style="font-size:32px;font-weight:600;color:${pct >= 70 ? 'var(--ok-400)' : 'var(--warn-400)'}">${pct}%</div>
-        <div class="caption-text mono" style="margin-top:2px">${_score} of ${_questions.length} correct</div>
-      </div>
-      <div style="display:flex;gap:10px">
-        <button class="btn btn-secondary btn-sm" onclick="window.navigate('review?src=due')">Push to Due Queue</button>
-      </div>
-    </div>
-
-    <!-- Question-by-Question Accordion -->
-    <div class="card spot" style="display:flex;flex-direction:column;gap:10px">
-      <span class="card-title">Question Breakdown</span>
-      <div style="display:flex;flex-direction:column;gap:8px">
-        ${_results.map((r, i) => `
-          <div class="card card-xs" style="background:var(--bg-2);padding:12px 14px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-              <span class="mono caption-text">#${i + 1}</span>
-              <span class="chip ${r.isCorrect ? 'chip-ok' : 'chip-danger'}" style="font-size:10.5px">${r.isCorrect ? 'Correct' : 'Missed'}</span>
-            </div>
-            <div style="font-weight:600;font-size:13.5px;color:var(--txt-1);margin-bottom:4px">${r.question.question || r.question.concept}</div>
-            <div class="caption-text" style="line-height:1.4">${r.question.explanation || r.question.answer || 'Reviewed concept.'}</div>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-  `;
+  document.body.classList.add('mode-focused');
+  document.body.dataset.sessionKind = 'practice';
+  history.replaceState(null,'','#practice');
+  container.innerHTML = sessionHeader({title:'Practice complete',completed:_results.length,total:_questions.length,exitId:'session-abort-btn',timer:timeLabel(seconds)}) + completeMarkup({title:'Session Results',total:_questions.length,correct:_score,seconds,rows:_results,mode:'practice'});
+  container.onclick = e => { if (e.target.closest('#session-abort-btn')) navigate('practice'); };
 }

@@ -569,6 +569,8 @@ function initGlobalKeyboard() {
 
     // ESC closes active overlays
     if (e.key === 'Escape') {
+      if (document.querySelector('dialog[open]')) return;
+      const hadOverlay = !!document.querySelector('.palette-backdrop.active,#ai-drawer.open,#sidebar.mobile-open');
       window.closeCommandPalette?.();
       document.getElementById('shortcuts-backdrop')?.classList.remove('active');
       document.getElementById('ai-drawer')?.classList.remove('open');
@@ -576,7 +578,7 @@ function initGlobalKeyboard() {
       document.getElementById('mobile-overlay')?.classList.remove('active');
       document.body.classList.remove('nav-open');
       document.getElementById('mobile-menu-btn')?.setAttribute('aria-expanded', 'false');
-      if (document.body.classList.contains('mode-focused')) navigate('today');
+      if (!hadOverlay && document.body.classList.contains('mode-focused')) navigate(document.body.dataset.sessionKind === 'practice' ? 'practice' : 'today');
       return;
     }
 
