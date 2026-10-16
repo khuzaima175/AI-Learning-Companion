@@ -5,11 +5,12 @@
 
 import { API, showToast, DailyGoal, Streak, navigate, skel, invalidateDueCount } from '../app.js';
 
-import { html, correctIndex, timeLabel, sessionHeader, choices, sessionPanel, feedback, completeMarkup } from '../session-ui.js';
+import { html, correctIndex, autoRate, paceBar, timeLabel, sessionHeader, choices, sessionPanel, feedback, completeMarkup } from '../session-ui.js';
 
 let _practiceVersion = 0;
 let _activeContainer = null;
 let _sessionStarted = 0;
+let _questionStarted = 0;
 let _deadline = 0;
 let _savePending = false;
 let _pendingAnswer = null;
@@ -435,9 +436,10 @@ function renderActiveSession(container) {
   const q = _questions[_activeIdx];
   _selectedOption = null;
   _timeLeft = _timerSeconds;
+  _questionStarted = performance.now();
   _deadline = Date.now() + _timerSeconds*1000;
   container.innerHTML = sessionHeader({title:'Practice quiz',completed:_results.length,total:_questions.length,exitId:'session-abort-btn',timer:_timerSeconds ? `${_timeLeft}s` : 'Untimed',timerId:'drill-timer-chip'}) + `
-    <main class="session-workspace"><div class="session-heading"><div><span class="session-kicker">Practice / ${html(_timerSeconds ? 'Timed quiz' : 'Untimed quiz')}</span><h1>Test your understanding.</h1><p>Select an answer, confirm your choice, and review the feedback.</p></div><span class="session-position">${String(_activeIdx+1).padStart(2,'0')} / ${String(_questions.length).padStart(2,'0')}</span></div><div class="session-layout"><div class="session-stage"><section class="session-question"><div class="session-question-main"><div class="session-question-meta"><span class="session-question-kind"><svg width="14" height="14"><use href="#i-brain-circuit"/></svg>Multiple choice <span class="mono">· ${String(_activeIdx+1).padStart(2,'0')}</span></span><span class="session-question-source">${html(scopeLabel())}</span></div><h2 class="session-question-title" id="drill-question-title">${html(q.question || q.concept)}</h2>${choices(q,{id:'drill-options-wrap'})}<div id="drill-feedback-slot"></div></div><div class="session-question-actions"><span class="session-action-note" id="drill-action-note">Choose an answer. Keys <kbd>1–${q.options.length}</kbd> select; <kbd>Enter</kbd> confirms.</span><button class="btn btn-primary session-primary-action" id="drill-submit-btn" disabled>Check answer →</button></div><div class="session-save-state" id="drill-save-state" role="status"></div></section><div class="session-under-note"><span>${html(scopeLabel())}</span><span>${_timerSeconds ? `${_timerSeconds} seconds per question` : 'No countdown · take your time'}</span></div></div>${sessionPanel({items:_questions,index:_activeIdx,results:_results,kind:'practice',source:scopeLabel()})}</div></main>`;
+    <main class="session-workspace"><div class="session-heading"><div><span class="session-kicker">Practice / ${html(_timerSeconds ? 'Timed quiz' : 'Untimed quiz')}</span><h1>Test your understanding.</h1><p>Answer quickly for Easy (&lt;15s) or Medium (15–20s) placement; slower or missed answers place as Hard.</p></div><span class="session-position">${String(_activeIdx+1).padStart(2,'0')} / ${String(_questions.length).padStart(2,'0')}</span></div><div class="session-layout"><div class="session-stage"><section class="session-question"><div class="session-question-main"><div class="session-question-meta"><span class="session-question-kind"><svg width="14" height="14"><use href="#i-brain-circuit"/></svg>Multiple choice <span class="mono">· ${String(_activeIdx+1).padStart(2,'0')}</span></span><span class="session-question-source">${html(scopeLabel())}</span></div>${paceBar({id:'drill-pace-fill'})}<h2 class="session-question-title" id="drill-question-title">${html(q.question || q.concept)}</h2>${choices(q,{id:'drill-options-wrap'})}<div id="drill-feedback-slot"></div></div><div class="session-question-actions"><span class="session-action-note" id="drill-action-note">Click an option or press <kbd>1–${q.options.length}</kbd> to answer immediately.</span><button class="btn btn-secondary session-primary-action" id="drill-submit-btn">Reveal answer (Hard)</button></div><div class="session-save-state" id="drill-save-state" role="status"></div></section><div class="session-under-note"><span>${html(scopeLabel())}</span><span>${_timerSeconds ? `${_timerSeconds} seconds per question` : 'No countdown · auto-rated by speed'}</span></div></div>${sessionPanel({items:_questions,index:_activeIdx,results:_results,kind:'practice',source:scopeLabel()})}</div></main>`;
   container.onclick = e => {
     const button = e.target.closest('button');
     if (!button || version !== _practiceVersion) return;
@@ -446,23 +448,37 @@ function renderActiveSession(container) {
     else if (button.id === 'drill-submit-btn') {
       if (_savePending) return;
       if (_answered) { _activeIdx++; renderActiveSession(container); }
-      else submitAnswer(_selectedOption);
+      else submitAnswer(_selectedOption !== null ? _selectedOption : -2);
     } else if (button.id === 'drill-retry-save') saveQuizAnswer(version);
   };
-  if (_timerSeconds > 0) {
-    _timerHandle = setInterval(() => {
-      if (version !== _practiceVersion || _answered) { clearInterval(_timerHandle); return; }
+  _timerHandle = setInterval(() => {
+    if (version !== _practiceVersion || _answered) { clearInterval(_timerHandle); return; }
+    const elapsedSec = (performance.now() - _questionStarted) / 1000;
+    const paceFill = container.querySelector('#drill-pace-fill');
+    const paceLbl = container.querySelector('#drill-pace-fill-lbl');
+    if (paceFill) {
+      const pct = Math.max(0, 100 - (elapsedSec / 25) * 100);
+      paceFill.style.setProperty('--pct', pct.toFixed(1));
+          paceFill.className = `pace-ring ${elapsedSec < 15 ? 'is-easy' : elapsedSec <= 20 ? 'is-medium' : 'is-hard'}`;
+    }
+    if (paceLbl) {
+      const tier = elapsedSec < 15 ? 'Easy' : elapsedSec <= 20 ? 'Medium' : 'Hard';
+      paceLbl.textContent = tier;
+          const sec = paceFill && document.getElementById(paceFill.id + '-sec'); if (sec) sec.textContent = elapsedSec.toFixed(1);
+    }
+    if (_timerSeconds > 0) {
       _timeLeft = Math.max(0,Math.ceil((_deadline-Date.now())/1000));
       const chip = container.querySelector('#drill-timer-chip');
       if (chip) { chip.textContent = `${_timeLeft}s`; chip.classList.toggle('is-urgent',_timeLeft <= 5); }
       if (_timeLeft === 0) submitAnswer(-1);
-    },200);
-  }
+    }
+  }, 100);
   _keyHandler = e => {
     if (version !== _practiceVersion || e.repeat || e.ctrlKey || e.metaKey || e.altKey || e.target.closest('input,textarea,select,[contenteditable="true"],dialog') || document.querySelector('.palette-backdrop.active')) return;
     if (/^[1-9]$/.test(e.key)) { e.preventDefault(); selectQuizAnswer(Number(e.key)-1); }
-    else if (e.key === 'Enter') {
+    else if (e.key === 'Enter' || e.code === 'Space') {
       if (e.target.closest('button') && !e.target.closest('.session-choice,#drill-submit-btn')) return;
+      if (!_answered && e.code === 'Space') return;
       e.preventDefault();
       const button = container.querySelector('#drill-submit-btn');
       if (button && !button.disabled) button.click();
@@ -474,26 +490,35 @@ function renderActiveSession(container) {
 function selectQuizAnswer(index) {
   if (_answered || !_activeContainer || !_questions[_activeIdx]?.options?.[index]) return;
   _selectedOption = index;
-  _activeContainer.querySelectorAll('.session-choice').forEach((row,i) => {
-    row.classList.toggle('selected',i === index);
-    row.setAttribute('aria-pressed',String(i === index));
-    row.querySelector('.session-choice-mark').textContent = i === index ? '•' : '';
-  });
-  _activeContainer.querySelector('#drill-submit-btn').disabled = false;
-  _activeContainer.querySelector('#drill-action-note').textContent = `Answer ${String.fromCharCode(65+index)} selected. Confirm when you’re ready.`;
+  submitAnswer(index);
 }
 
 function submitAnswer(chosenIdx) {
   if (_answered || !_activeContainer || chosenIdx === null || _activeIdx >= _questions.length) return;
   _answered = true;
   clearInterval(_timerHandle);
+  const elapsedMs = Math.max(0, performance.now() - _questionStarted);
   const q = _questions[_activeIdx];
   const correctIdx = correctIndex(q);
-  const isCorrect = chosenIdx === correctIdx;
-  _pendingAnswer = {question:q,chosenIdx,correctIdx,isCorrect,chosen:q.options[chosenIdx] || (chosenIdx === -1 ? 'Time expired' : ''),answer:q.options[correctIdx]};
-  _activeContainer.querySelector('#drill-options-wrap').outerHTML = choices(q,{selected:chosenIdx,revealed:true,id:'drill-options-wrap'});
-  _activeContainer.querySelector('#drill-feedback-slot').innerHTML = feedback({id:'drill-feedback-box',title:chosenIdx === -1 ? 'Time’s up. Here’s the answer.' : isCorrect ? 'That’s correct.' : 'Here’s the correct answer.',answer:q.options[correctIdx],explanation:q.explanation,correct:isCorrect});
-  _activeContainer.querySelector('#drill-action-note').textContent = 'Read the feedback before continuing to the next question.';
+  const isHint = chosenIdx === -2;
+  const isTimeout = chosenIdx === -1;
+  const isCorrect = !isHint && !isTimeout && chosenIdx === correctIdx;
+  const rating = autoRate(elapsedMs, isCorrect, isHint || isTimeout);
+  _pendingAnswer = {question:q,chosenIdx,correctIdx,isCorrect,performance:rating,rating,elapsedMs,chosen:q.options[chosenIdx] || (isTimeout ? 'Time expired' : isHint ? 'Answer revealed' : ''),answer:q.options[correctIdx]};
+  _activeContainer.querySelector('#drill-options-wrap').outerHTML = choices(q,{selected:chosenIdx >= 0 ? chosenIdx : null,revealed:true,id:'drill-options-wrap'});
+  _activeContainer.querySelector('#drill-feedback-slot').innerHTML = feedback({
+    id:'drill-feedback-box',
+    title: isTimeout ? 'Time’s up. Here’s the answer.' : isHint ? 'Answer revealed.' : isCorrect ? 'That’s correct.' : 'Here’s the correct answer.',
+    answer:q.options[correctIdx],
+    explanation:q.explanation,
+    correct:isCorrect,
+    performance:rating,
+    elapsedMs,
+    isHint,
+  });
+  _activeContainer.querySelector('#drill-action-note').textContent = 'Press Enter or Space to continue to the next question.';
+  const btn = _activeContainer.querySelector('#drill-submit-btn');
+  if (btn) btn.className = 'btn btn-primary session-primary-action';
   saveQuizAnswer(_practiceVersion);
 }
 
@@ -507,9 +532,9 @@ async function saveQuizAnswer(version) {
   button.disabled = true;
   button.textContent = 'Saving answer…';
   status.className = 'session-save-state';
-  status.textContent = 'Recording this answer in your session.';
+  status.textContent = 'Recording this answer and difficulty placement in your session.';
   try {
-    await API.post('/api/quiz/answer',{session_id:_sessionId,question_id:result.question.id,is_correct:result.isCorrect,performance:result.isCorrect ? 'good' : 'hard'});
+    await API.post('/api/quiz/answer',{session_id:_sessionId,question_id:result.question.id,is_correct:result.isCorrect,performance:result.performance});
     invalidateDueCount();
     if (version !== _practiceVersion) return;
     if (result.isCorrect) _score++;
@@ -519,7 +544,7 @@ async function saveQuizAnswer(version) {
     _pendingAnswer = null;
     button.disabled = false;
     button.textContent = _activeIdx+1 >= _questions.length ? 'See results →' : 'Next question →';
-    status.textContent = 'Answer saved.';
+    status.textContent = 'Answer & difficulty saved.';
     container.querySelector('.session-inspector').outerHTML = sessionPanel({items:_questions,index:_activeIdx,results:_results,kind:'practice',source:scopeLabel()});
     const fill = container.querySelector('#session-prog-fill');
     fill.style.width = `${Math.round(_results.length/_questions.length*100)}%`;

@@ -367,14 +367,17 @@ class DatabaseManager:
         times_answered = (row["times_answered"] or 0) + 1
         times_correct = row["times_correct"] or 0
 
-        if performance in ("good", "easy"):
+        if performance in ("good", "medium", "easy"):
             times_correct += 1
-        if performance == "hard":
-            level = 0
-        elif performance == "good":
-            level = min(level + 1, 6)
-        elif performance == "easy":
+        if performance == "easy":
             level = min(level + 2, 6)
+            mapped_difficulty = "easy"
+        elif performance in ("good", "medium"):
+            level = min(level + 1, 6)
+            mapped_difficulty = "medium"
+        else:
+            level = 0
+            mapped_difficulty = "hard"
 
         interval_days = [1, 3, 7, 14, 30, 90, 180][level]
         next_review = (datetime.now().date() + timedelta(days=interval_days)).isoformat()
@@ -382,6 +385,7 @@ class DatabaseManager:
         self.sb.table("quiz_questions").update({
             "srs_level":        level,
             "next_review_date": next_review,
+            "difficulty":       mapped_difficulty,
             "times_answered":   times_answered,
             "times_correct":    times_correct,
         }).eq("id", question_id).eq("user_id", user_id).execute()

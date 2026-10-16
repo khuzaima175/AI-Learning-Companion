@@ -11,6 +11,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -23,6 +24,7 @@ from src.database import DatabaseManager
 
 # ── App & shared singletons ────────────────────────────────────────────────
 app = FastAPI(title="AI Learning Companion", version="2.0.0")
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 _db: DatabaseManager | None = None
 _api: ApiProcessor | None = None

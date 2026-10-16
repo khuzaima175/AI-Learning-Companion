@@ -25,7 +25,7 @@ const LEGACY_ROUTES = {
   'dashboard': 'today',
   'browse': 'library',
   'add-video': 'import',
-  'flashcards': 'review?src=due',
+  'flashcards': 'review?src=flashcards',
   'daily-review': 'review?src=due',
   'quiz': 'practice',
   'stats': 'insights',
@@ -187,10 +187,12 @@ window.navigate = navigate;
 
 // ── 3. Shell State & Navigation Sync ─────────────────────────────
 function updateNav(primary, routeStr) {
+  const isFlashcardRoute = primary === 'review' && /src=(flashcards|deck:|course:)/.test(routeStr || '');
+  const activeRouteKey = isFlashcardRoute ? 'flashcards' : primary;
   document.querySelectorAll('.nav-item').forEach(el => {
     const routeAttr = el.dataset.route;
-    el.classList.toggle('active', routeAttr === primary);
-    if (routeAttr === primary) el.setAttribute('aria-current', 'page');
+    el.classList.toggle('active', routeAttr === activeRouteKey);
+    if (routeAttr === activeRouteKey) el.setAttribute('aria-current', 'page');
     else el.removeAttribute('aria-current');
     el.title = el.querySelector('.nav-label')?.textContent || primary;
   });
@@ -221,8 +223,10 @@ function updateBreadcrumbs(primary, segments, params) {
   } else if (primary === 'import') {
     crumbs.push('<span class="breadcrumb-item active">Import lecture</span>');
   } else if (primary === 'review') {
+    const src = params?.get('src') || 'due';
+    const isFlashcards = src === 'flashcards' || src.startsWith('deck:') || src.startsWith('course:');
     crumbs.push('<a href="#today" class="breadcrumb-item">Study</a>');
-    crumbs.push('<span class="breadcrumb-sep">/</span><span class="breadcrumb-item active">Review Session</span>');
+    crumbs.push(`<span class="breadcrumb-sep">/</span><span class="breadcrumb-item active">${isFlashcards ? 'Flashcards' : 'Review Session'}</span>`);
   } else if (primary === 'practice') {
     crumbs.push('<a href="#today" class="breadcrumb-item">Study</a>');
     crumbs.push('<span class="breadcrumb-sep">/</span><span class="breadcrumb-item active">Practice Hub</span>');
@@ -330,6 +334,7 @@ function initCommandPalette() {
 
   const ACTIONS = [
     { title: 'Start Due Review', meta: 'Study queue', route: 'review?src=due', icon: 'rotate-cw' },
+    { title: 'Study Flashcards', meta: 'Basic concept cards', route: 'review?src=flashcards', icon: 'layers' },
     { title: 'Practice Hub & Exam', meta: 'Active drill', route: 'practice', icon: 'brain-circuit' },
     { title: 'Import Video Lecture', meta: 'Create study materials', route: 'import', icon: 'download-cloud' },
     { title: 'Browse Course Library', meta: 'All lectures & cards', route: 'library', icon: 'library' },
