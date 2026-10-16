@@ -332,8 +332,7 @@ def submit_answer(req: QuizAnswerRequest, user: dict = Depends(verify_token)):
 @app.get("/api/review/due")
 def get_due_questions(limit: int = 0, user: dict = Depends(verify_token)):
     db = get_db()
-    count = db.get_due_review_count(user_id=user["id"])
-    rows = db.get_due_questions(user_id=user["id"], limit=limit)
+    count, rows = db.get_due_questions_with_count(user_id=user["id"], limit=limit)
     questions = []
     for qid, question, options_raw, answer in rows:
         try:

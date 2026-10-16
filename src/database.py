@@ -29,6 +29,12 @@ def _get_supabase_client() -> Client:
 class DatabaseManager:
     def __init__(self):
         self.sb: Client = _get_supabase_client()
+        self._courses_cache: dict[str, tuple[list, float]] = {}
+        self._stats_cache: dict[str, tuple[dict, float]] = {}
+
+    def _invalidate_user_cache(self, user_id: str):
+        self._courses_cache.pop(user_id, None)
+        self._stats_cache.pop(user_id, None)
 
     # ------------------------------------------------------------------
     # Course / Video CRUD
@@ -40,6 +46,7 @@ class DatabaseManager:
         if result.data:
             return result.data[0]["id"]
         insert_result = self.sb.table("courses").insert({"name": clean, "user_id": user_id}).execute()
+        self._invalidate_user_cache(user_id)
         return insert_result.data[0]["id"]
 
     def add_video_data(self, data: dict, user_id: str) -> int:
@@ -64,8 +71,10 @@ class DatabaseManager:
         if existing.data:
             vid_id = existing.data[0]["id"]
             self.sb.table("videos").update(payload).eq("id", vid_id).eq("user_id", user_id).execute()
+            self._invalidate_user_cache(user_id)
             return vid_id
         result = self.sb.table("videos").insert(payload).execute()
+        self._invalidate_user_cache(user_id)
         return result.data[0]["id"]
 
     def get_video_info_for_quiz(self, video_db_id: int, user_id: str):
@@ -120,12 +129,17 @@ class DatabaseManager:
         return [(row["id"], row["title"]) for row in result.data]
 
     def get_all_courses_full(self, user_id: str) -> list:
-        """Single-pass fetch of all courses + videos + question counts.
-        Replaces the N+1 loop in /api/courses — 3 queries instead of 1+2N+V.
-        """
+        """Single-pass fetch of all courses + videos + question counts with 20s memory cache."""
+        import time
+        now = time.time()
+        cached = self._courses_cache.get(user_id)
+        if cached and now < cached[1]:
+            return cached[0]
+
         # 1. All courses
         courses_res = self.sb.table("courses").select("id, name").eq("user_id", user_id).order("name").execute()
         if not courses_res.data:
+            self._courses_cache[user_id] = ([], now + 20.0)
             return []
 
         course_map = {c["id"]: {"id": c["id"], "name": c["name"], "videos": [], "video_count": 0, "question_count": 0}
@@ -147,15 +161,14 @@ class DatabaseManager:
             course_map[cid]["video_count"] += 1
             video_map[v["id"]] = cid
 
-        # 3. All question counts for those videos (one query)
+        # 3. All question counts for those videos (one query, without extra count="exact" overhead)
         if video_map:
             q_res = (
                 self.sb.table("quiz_questions")
-                .select("video_id", count="exact")
+                .select("video_id")
                 .in_("video_id", list(video_map.keys()))
                 .execute()
             )
-            # Count per video_id from returned rows
             from collections import Counter
             q_counts = Counter(r["video_id"] for r in q_res.data)
             for vid_id, count in q_counts.items():
@@ -166,12 +179,15 @@ class DatabaseManager:
                         v["question_count"] = count
                         break
 
-        return list(course_map.values())
+        result = list(course_map.values())
+        self._courses_cache[user_id] = (result, now + 20.0)
+        return result
 
     def delete_video(self, video_id: int, user_id: str):
         try:
             self.sb.table("quiz_questions").delete().eq("video_id", video_id).eq("user_id", user_id).execute()
             self.sb.table("videos").delete().eq("id", video_id).eq("user_id", user_id).execute()
+            self._invalidate_user_cache(user_id)
             return True, "Video and all associated data deleted successfully."
         except Exception as e:
             return False, f"Error deleting video: {e}"
@@ -191,6 +207,7 @@ class DatabaseManager:
                 self.sb.table("quiz_questions").delete().in_("video_id", vid_ids).eq("user_id", user_id).execute()
             self.sb.table("videos").delete().eq("course_id", course_id).eq("user_id", user_id).execute()
             self.sb.table("courses").delete().eq("id", course_id).eq("user_id", user_id).execute()
+            self._invalidate_user_cache(user_id)
             return True, "Course and all associated data deleted successfully."
         except Exception as e:
             return False, f"Error deleting course: {e}"
@@ -283,6 +300,7 @@ class DatabaseManager:
 
         if rows_to_insert:
             self.sb.table("quiz_questions").insert(rows_to_insert).execute()
+            self._invalidate_user_cache(user_id)
 
         return inserted
 
@@ -293,6 +311,7 @@ class DatabaseManager:
             .select("id", count="exact")
             .eq("user_id", user_id)
             .lte("next_review_date", today)
+            .limit(0)
             .execute()
         )
         return result.count or 0
@@ -309,6 +328,22 @@ class DatabaseManager:
             query = query.limit(limit)
         result = query.execute()
         return [(r["id"], r["question"], r["options"], r["answer"]) for r in result.data]
+
+    def get_due_questions_with_count(self, user_id: str, limit=None):
+        """Fetch due review count and limited due questions in a single DB round-trip."""
+        today = datetime.now().date().isoformat()
+        query = (
+            self.sb.table("quiz_questions")
+            .select("id, question, options, answer", count="exact")
+            .eq("user_id", user_id)
+            .lte("next_review_date", today)
+        )
+        if limit:
+            query = query.limit(limit)
+        result = query.execute()
+        rows = [(r["id"], r["question"], r["options"], r["answer"]) for r in (result.data or [])]
+        count = result.count if result.count is not None else len(rows)
+        return count, rows
 
     def get_questions_by_video(self, video_id: int, user_id: str, limit=None):
         query = (
@@ -353,6 +388,7 @@ class DatabaseManager:
         return [(r["id"], r["question"], r["options"], r["answer"]) for r in result.data]
 
     def update_srs_level(self, question_id: int, performance: str, user_id: str):
+        self._invalidate_user_cache(user_id)
         result = (
             self.sb.table("quiz_questions")
             .select("srs_level, times_answered, times_correct")
@@ -421,9 +457,13 @@ class DatabaseManager:
     # ------------------------------------------------------------------
 
     def get_full_stats(self, user_id: str) -> dict:
-        """Unified, thread-safe, single-pass telemetry stats.
-        Replaces 7 separate queries and avoids multi-thread socket collisions.
-        """
+        """Unified, thread-safe, single-pass telemetry stats with 15s memory cache."""
+        import time
+        now = time.time()
+        cached = self._stats_cache.get(user_id)
+        if cached and now < cached[1]:
+            return cached[0]
+
         today = datetime.now().date().isoformat()
 
         # 1. Courses count (fast header count, 0 payload bytes)
@@ -468,7 +508,7 @@ class DatabaseManager:
             for r in (sessions_res.data or [])
         ]
 
-        return {
+        result = {
             "courses":          courses_count,
             "videos":           videos_count,
             "questions":        questions_count,
@@ -481,6 +521,8 @@ class DatabaseManager:
             "path":             "Supabase (cloud)",
             "size_kb":          0,
         }
+        self._stats_cache[user_id] = (result, now + 15.0)
+        return result
 
     def get_quiz_stats(self, user_id: str) -> dict:
         stats = self.get_full_stats(user_id)
@@ -500,6 +542,9 @@ class DatabaseManager:
         return result.data[0]["id"]
 
     def update_quiz_session(self, session_id: int, correct: bool, user_id: str):
+        self._invalidate_user_cache(user_id)
+        if not session_id:
+            return
         try:
             self.sb.rpc("increment_session", {
                 "s_id": session_id,

@@ -12,7 +12,7 @@ security = HTTPBearer()
 _sb_auth_client: Client | None = None
 # In-memory token cache: { token_str: (user_dict, timestamp_expires) }
 _token_cache: dict[str, tuple[dict, float]] = {}
-_CACHE_TTL_SECONDS = 90.0  # Cache verified tokens for 90 seconds to avoid remote round-trips
+_CACHE_TTL_SECONDS = 1800.0  # Cache verified tokens for 30 minutes to avoid remote round-trips
 
 
 def _get_auth_client() -> Client:

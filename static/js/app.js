@@ -20,6 +20,54 @@ let _lastDueFetch = 0;
 let _cachedCourses = null;
 let _currentLectureContext = null;
 
+const _memCache = new Map();
+const _inflightGets = new Map();
+const CACHE_TTL_MS = 25000;
+
+function _isCacheableGet(path) {
+  return (
+    path.startsWith('/api/courses') ||
+    path.startsWith('/api/review/due') ||
+    path.startsWith('/api/stats') ||
+    path.startsWith('/api/videos/') ||
+    path.startsWith('/api/config')
+  );
+}
+
+function _readCache(path) {
+  const mem = _memCache.get(path);
+  if (mem) return mem;
+  try {
+    const raw = sessionStorage.getItem('alc_api_' + path);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      _memCache.set(path, parsed);
+      return parsed;
+    }
+  } catch { /**/ }
+  return null;
+}
+
+function _writeCache(path, data) {
+  const entry = { data, ts: Date.now() };
+  _memCache.set(path, entry);
+  try {
+    sessionStorage.setItem('alc_api_' + path, JSON.stringify(entry));
+  } catch { /**/ }
+}
+
+export function clearApiCache(prefix = '') {
+  for (const k of Array.from(_memCache.keys())) {
+    if (!prefix || k.startsWith(prefix)) _memCache.delete(k);
+  }
+  try {
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const k = sessionStorage.key(i);
+      if (k && k.startsWith('alc_api_' + prefix)) sessionStorage.removeItem(k);
+    }
+  } catch { /**/ }
+}
+
 // Legacy Bookmark Route Mapping
 const LEGACY_ROUTES = {
   'dashboard': 'today',
@@ -51,26 +99,76 @@ export const API = {
     }
     return res.json();
   },
-  get(path)        { return this.req('GET', path); },
-  post(path, body) { return this.req('POST', path, body); },
-  put(path, body)  { return this.req('PUT', path, body); },
-  del(path)        { return this.req('DELETE', path); },
+  async get(path) {
+    // If asking for due?limit=1 and we already have due?limit=50 cached, reuse it
+    if (path === '/api/review/due?limit=1') {
+      const fullDue = _readCache('/api/review/due?limit=50');
+      if (fullDue && (Date.now() - fullDue.ts) < CACHE_TTL_MS) {
+        return fullDue.data;
+      }
+    }
+
+    if (_isCacheableGet(path)) {
+      const cached = _readCache(path);
+      const now = Date.now();
+      if (cached) {
+        if ((now - cached.ts) < CACHE_TTL_MS) {
+          return cached.data;
+        }
+        // Stale-while-revalidate: return cached immediately and refresh in background
+        if (!_inflightGets.has(path)) {
+          const bg = this.req('GET', path)
+            .then(data => { _writeCache(path, data); return data; })
+            .catch(() => {})
+            .finally(() => _inflightGets.delete(path));
+          _inflightGets.set(path, bg);
+        }
+        return cached.data;
+      }
+      if (_inflightGets.has(path)) {
+        return _inflightGets.get(path);
+      }
+      const p = this.req('GET', path)
+        .then(data => {
+          _writeCache(path, data);
+          return data;
+        })
+        .finally(() => _inflightGets.delete(path));
+      _inflightGets.set(path, p);
+      return p;
+    }
+    return this.req('GET', path);
+  },
+  post(path, body) {
+    if (!path.startsWith('/api/quiz/start-session') && !path.startsWith('/api/ask')) {
+      clearApiCache('/api/review/due');
+      clearApiCache('/api/stats');
+      if (path.startsWith('/api/courses') || path.startsWith('/api/add-video') || path.startsWith('/api/quiz/generate')) {
+        clearApiCache('/api/courses');
+      }
+    }
+    return this.req('POST', path, body);
+  },
+  put(path, body) {
+    clearApiCache();
+    return this.req('PUT', path, body);
+  },
+  del(path) {
+    clearApiCache();
+    return this.req('DELETE', path);
+  },
 };
 
 // ── 2. Parameterized Router ──────────────────────────────────────
-let navigationQueue = Promise.resolve();
 let navigationVersion = 0;
 export function navigate(rawRoute) {
   const version = ++navigationVersion;
   const route = rawRoute || window.location.hash.slice(1) || 'today';
-  navigationQueue = navigationQueue.catch(() => {}).then(() => {
-    if (version !== navigationVersion) return;
-    return performNavigate(route);
-  });
-  return navigationQueue;
+  return performNavigate(route, version);
 }
 
-async function performNavigate(rawRoute) {
+async function performNavigate(rawRoute, version = navigationVersion) {
+  if (version !== navigationVersion) return;
   let routeStr = (rawRoute || window.location.hash.slice(1) || 'today').trim();
   if (routeStr.startsWith('/')) routeStr = routeStr.slice(1);
   if (routeStr.startsWith('#')) routeStr = routeStr.slice(1);
@@ -84,12 +182,12 @@ async function performNavigate(rawRoute) {
   // Legacy route redirections
   if (LEGACY_ROUTES[primary]) {
     const target = LEGACY_ROUTES[primary];
-    return performNavigate(target);
+    return performNavigate(target, version);
   }
 
   const user = getUser();
   if (!user && primary !== 'login') {
-    return performNavigate('login');
+    return performNavigate('login', version);
   }
 
   // Update URL Hash cleanly
@@ -104,8 +202,9 @@ async function performNavigate(rawRoute) {
   document.getElementById('mobile-menu-btn')?.setAttribute('aria-expanded', 'false');
   document.body.classList.remove('nav-open');
 
-  // Determine focused mode (Review and active practice drill)
-  const isFocused = primary === 'review' || (primary === 'practice' && segments[1] === 'session');
+  // Determine focused mode (Flashcards or active practice drill; Daily Review starts in lobby first)
+  const srcParam = params.get('src') || 'due';
+  const isFocused = (primary === 'review' && srcParam !== 'due') || (primary === 'practice' && segments[1] === 'session');
   document.body.classList.toggle('mode-focused', isFocused);
 
   // Update Topbar and Sidebar active navigation
@@ -122,20 +221,17 @@ async function performNavigate(rawRoute) {
   container.classList.remove('page-enter');
   container.setAttribute('aria-busy', 'true');
   window.scrollTo({ top: 0, behavior: 'instant' });
+  document.getElementById('main-content')?.scrollTo?.({ top: 0, behavior: 'instant' });
   const renderView = async render => {
     let work;
     const mount = () => {
+      if (version !== navigationVersion) return;
       container.innerHTML = '';
       work = render();
       initMotion(container);
       container.classList.add('page-enter');
     };
-    if (document.startViewTransition && !reducedMotion()) {
-      const transition = document.startViewTransition(mount);
-      transition.ready.catch(() => {});
-      transition.finished.catch(() => {});
-      await transition.updateCallbackDone;
-    } else mount();
+    mount();
     await work;
   };
 
@@ -165,6 +261,7 @@ async function performNavigate(rawRoute) {
       await renderView(() => renderToday(container));
     }
   } catch (err) {
+    if (version !== navigationVersion) return;
     console.error(`Route render error on "${routeStr}":`, err);
     container.innerHTML = `
       <div class="card empty-state" style="margin-top:40px">
@@ -178,8 +275,10 @@ async function performNavigate(rawRoute) {
         </button>
       </div>`;
   } finally {
-    container.setAttribute('aria-busy', 'false');
-    if (primary !== 'login') updateGlobalMetrics();
+    if (version === navigationVersion) {
+      container.setAttribute('aria-busy', 'false');
+      if (primary !== 'login') updateGlobalMetrics();
+    }
   }
 }
 
@@ -262,6 +361,8 @@ export async function getDueCount() {
 export function invalidateDueCount() {
   _cachedDue = null;
   _lastDueFetch = 0;
+  clearApiCache('/api/review/due');
+  clearApiCache('/api/stats');
 }
 
 export async function updateGlobalMetrics() {

@@ -38,31 +38,62 @@ export async function renderToday(container) {
   };
   document.getElementById('quick-capture-btn').addEventListener('click',quickImport);
   document.getElementById('quick-capture-url').addEventListener('keydown', e => { if (e.key === 'Enter') quickImport(); });
-  const [due, courses, stats] = await Promise.allSettled([API.get('/api/review/due?limit=1'),API.get('/api/courses'),API.get('/api/stats')]);
-  const list = courses.status === 'fulfilled' ? courses.value : [];
-  const videos = list.flatMap(c => (c.videos || []).map(v => ({...v,courseName:c.name})));
-  const count = due.status === 'fulfilled' ? due.value.due_count ?? due.value.questions?.length ?? 0 : 0;
-  for (const [id,value] of [['today-due-hero',count],['today-course-count',list.length],['today-lecture-count',videos.length],['today-card-count',list.reduce((n,c) => n + (c.question_count || 0),0)]]) {
+  const setMetric = (id, value) => {
     const el = document.getElementById(id);
-    el.dataset.count = value;
-    el.textContent = value;
-  }
-  document.getElementById('today-plan-text').textContent = count ? `${count} cards are scheduled for today. Start with your next question, or choose a course below.` : 'No cards are due today. Choose a lecture from your library or take a practice quiz.';
-  const next = due.status === 'fulfilled' ? (due.value.questions || (Array.isArray(due.value) ? due.value : []))[0] : null;
-  document.getElementById('today-next-question').textContent = next?.question || (videos.length ? 'Your review queue is clear.' : 'Your first lecture starts the collection.');
-  if (!next) {
-    document.getElementById('today-next-caption').textContent = videos.length ? 'Use a practice quiz to revisit questions from your library.' : 'Import a video or transcript to generate notes and review cards.';
-    const link = document.getElementById('today-preview-link');
-    link.href = videos.length ? '#practice' : '#import';
-    link.textContent = videos.length ? 'Practice ↗' : 'Import ↗';
-  }
-  document.getElementById('today-continue-list').innerHTML = videos.length ? videos.slice(0,3).map((v,i) => `
-    <div class="lecture-line"><a class="lecture-number" href="#lecture/${v.id}" aria-label="Open ${escapeHtml(v.title)}">${String(i+1).padStart(2,'0')}</a><div class="lecture-info"><a href="#lecture/${v.id}">${escapeHtml(v.title)}</a><div class="caption-text">${escapeHtml(v.courseName)} · ${v.question_count || 0} questions</div></div><a class="btn btn-secondary btn-sm" href="#review?src=deck:${v.id}">Study ↗</a></div>`).join('') : `<div class="empty-workspace"><h3>No lectures yet</h3><p>Add a YouTube lecture or paste your own transcript. Notes, concepts, and practice questions will be collected here.</p><a class="btn btn-primary btn-sm" href="#import">Import your first lecture →</a></div>`;
-  document.getElementById('today-due-courses').innerHTML = list.length ? list.slice(0,4).map(c => `<a href="#library/${c.id}" class="course-index-link"><span>${escapeHtml(c.name)}</span><span class="mono">${c.question_count || 0} ↗</span></a>`).join('') : '<p class="caption-text">Choose a subject during your first import to create a course.</p>';
-  const sessions = stats.status === 'fulfilled' ? (stats.value.recent_sessions || []).filter(s => s.answered > 0) : [];
-  document.getElementById('today-sessions-tbody').innerHTML = sessions.length ? sessions.slice(0,5).map(s => {
-    const accuracy = Math.round(s.correct / s.answered * 100);
-    return `<tr><td class="mono">${escapeHtml(s.date)}</td><td>Practice &amp; review</td><td class="num-col"><span class="chip ${accuracy >= 80 ? 'chip-ok' : 'chip-warn'}">${accuracy}%</span></td><td class="num-col mono">${s.answered}</td></tr>`;
-  }).join('') : '<tr><td colspan="4" style="padding:32px;text-align:center"><p class="caption-text" style="margin-bottom:14px">No completed sessions yet. Try a short practice quiz.</p><a href="#practice" class="btn btn-secondary btn-sm">Start practice →</a></td></tr>';
-  if ([due,courses,stats].some(r => r.status === 'rejected')) showToast('Some study data could not load. Try refreshing this view.', 'warn');
+    if (el) { el.dataset.count = value; el.textContent = value; }
+  };
+  let hasVideos = false;
+  const duePromise = API.get('/api/review/due?limit=50').then(data => {
+    const count = data.due_count ?? data.questions?.length ?? 0;
+    setMetric('today-due-hero', count);
+    const planEl = document.getElementById('today-plan-text');
+    if (planEl) planEl.textContent = count ? `${count} cards are scheduled for today. Start with your next question, or choose a course below.` : 'No cards are due today. Choose a lecture from your library or take a practice quiz.';
+    const next = (data.questions || (Array.isArray(data) ? data : []))[0] || null;
+    const nextQEl = document.getElementById('today-next-question');
+    if (nextQEl) nextQEl.textContent = next?.question || (hasVideos ? 'Your review queue is clear.' : 'Your first lecture starts the collection.');
+    if (!next) {
+      const capEl = document.getElementById('today-next-caption');
+      if (capEl) capEl.textContent = hasVideos ? 'Use a practice quiz to revisit questions from your library.' : 'Import a video or transcript to generate notes and review cards.';
+      const link = document.getElementById('today-preview-link');
+      if (link) {
+        link.href = hasVideos ? '#practice' : '#import';
+        link.textContent = hasVideos ? 'Practice ↗' : 'Import ↗';
+      }
+    }
+    return data;
+  });
+
+  const coursesPromise = API.get('/api/courses').then(raw => {
+    const list = Array.isArray(raw) ? raw : [];
+    const videos = list.flatMap(c => (c.videos || []).map(v => ({ ...v, courseName: c.name })));
+    hasVideos = videos.length > 0;
+    setMetric('today-course-count', list.length);
+    setMetric('today-lecture-count', videos.length);
+    setMetric('today-card-count', list.reduce((n, c) => n + (c.question_count || 0), 0));
+    const contEl = document.getElementById('today-continue-list');
+    if (contEl) {
+      contEl.innerHTML = videos.length ? videos.slice(0, 3).map((v, i) => `
+        <div class="lecture-line"><a class="lecture-number" href="#lecture/${v.id}" aria-label="Open ${escapeHtml(v.title)}">${String(i + 1).padStart(2, '0')}</a><div class="lecture-info"><a href="#lecture/${v.id}">${escapeHtml(v.title)}</a><div class="caption-text">${escapeHtml(v.courseName)} · ${v.question_count || 0} questions</div></div><a class="btn btn-secondary btn-sm" href="#review?src=deck:${v.id}">Study ↗</a></div>`).join('') : `<div class="empty-workspace"><h3>No lectures yet</h3><p>Add a YouTube lecture or paste your own transcript. Notes, concepts, and practice questions will be collected here.</p><a class="btn btn-primary btn-sm" href="#import">Import your first lecture →</a></div>`;
+    }
+    const coursesEl = document.getElementById('today-due-courses');
+    if (coursesEl) {
+      coursesEl.innerHTML = list.length ? list.slice(0, 4).map(c => `<a href="#library/${c.id}" class="course-index-link"><span>${escapeHtml(c.name)}</span><span class="mono">${c.question_count || 0} ↗</span></a>`).join('') : '<p class="caption-text">Choose a subject during your first import to create a course.</p>';
+    }
+    return list;
+  });
+
+  const statsPromise = API.get('/api/stats').then(raw => {
+    const sessions = (raw?.recent_sessions || []).filter(s => s.answered > 0);
+    const tbody = document.getElementById('today-sessions-tbody');
+    if (tbody) {
+      tbody.innerHTML = sessions.length ? sessions.slice(0, 5).map(s => {
+        const accuracy = Math.round(s.correct / s.answered * 100);
+        return `<tr><td class="mono">${escapeHtml(s.date)}</td><td>Practice &amp; review</td><td class="num-col"><span class="chip ${accuracy >= 80 ? 'chip-ok' : 'chip-warn'}">${accuracy}%</span></td><td class="num-col mono">${s.answered}</td></tr>`;
+      }).join('') : '<tr><td colspan="4" style="padding:32px;text-align:center"><p class="caption-text" style="margin-bottom:14px">No completed sessions yet. Try a short practice quiz.</p><a href="#practice" class="btn btn-secondary btn-sm">Start practice →</a></td></tr>';
+    }
+    return raw;
+  });
+
+  const results = await Promise.allSettled([duePromise, coursesPromise, statsPromise]);
+  if (results.some(r => r.status === 'rejected')) showToast('Some study data could not load. Try refreshing this view.', 'warn');
 }

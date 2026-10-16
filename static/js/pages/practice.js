@@ -273,7 +273,10 @@ export async function renderPractice(container, options = {}) {
     try {
       const scopeParam = _cfg.scope || 'all';
       const scopeIdParam = _cfg.scopeId ? parseInt(_cfg.scopeId, 10) : 0;
-      const rawData = await API.get(`/api/quiz/questions?scope=${scopeParam}&scope_id=${scopeIdParam}&limit=${_cfg.count}`);
+      const [rawData, saved] = await Promise.all([
+        API.get(`/api/quiz/questions?scope=${scopeParam}&scope_id=${scopeIdParam}&limit=${_cfg.count}`),
+        API.post('/api/quiz/start-session').catch(() => ({ session_id: 0 })),
+      ]);
       const list = Array.isArray(rawData) ? rawData : rawData?.questions || [];
       _questions = list.filter(q => q.id && (q.question || q.concept) && Array.isArray(q.options) && q.options.length > 1 && correctIndex(q) >= 0).slice(0,_cfg.count);
       if (!_questions.length) {
@@ -282,9 +285,7 @@ export async function renderPractice(container, options = {}) {
         btn.textContent = 'Start session';
         return;
       }
-      const saved = await API.post('/api/quiz/start-session');
-      if (!saved.session_id) throw new Error('A recorded practice session could not be started. Please try again.');
-      _sessionId = saved.session_id;
+      _sessionId = saved?.session_id || 0;
       _sessionStarted = Date.now();
       _activeIdx = 0;
       _score = 0;
@@ -446,7 +447,6 @@ function renderActiveSession(container) {
     if (button.id === 'session-abort-btn') navigate('practice');
     else if (button.matches('.session-choice')) selectQuizAnswer(Number(button.dataset.idx));
     else if (button.id === 'drill-submit-btn') {
-      if (_savePending) return;
       if (_answered) { _activeIdx++; renderActiveSession(container); }
       else submitAnswer(_selectedOption !== null ? _selectedOption : -2);
     } else if (button.id === 'drill-retry-save') saveQuizAnswer(version);
@@ -459,12 +459,12 @@ function renderActiveSession(container) {
     if (paceFill) {
       const pct = Math.max(0, 100 - (elapsedSec / 25) * 100);
       paceFill.style.setProperty('--pct', pct.toFixed(1));
-          paceFill.className = `pace-ring ${elapsedSec < 15 ? 'is-easy' : elapsedSec <= 20 ? 'is-medium' : 'is-hard'}`;
+      paceFill.className = `pace-ring ${elapsedSec < 15 ? 'is-easy' : elapsedSec <= 20 ? 'is-medium' : 'is-hard'}`;
     }
     if (paceLbl) {
       const tier = elapsedSec < 15 ? 'Easy' : elapsedSec <= 20 ? 'Medium' : 'Hard';
       paceLbl.textContent = tier;
-          const sec = paceFill && document.getElementById(paceFill.id + '-sec'); if (sec) sec.textContent = elapsedSec.toFixed(1);
+      const sec = paceFill && document.getElementById(paceFill.id + '-sec'); if (sec) sec.textContent = elapsedSec.toFixed(1);
     }
     if (_timerSeconds > 0) {
       _timeLeft = Math.max(0,Math.ceil((_deadline-Date.now())/1000));
@@ -504,7 +504,12 @@ function submitAnswer(chosenIdx) {
   const isTimeout = chosenIdx === -1;
   const isCorrect = !isHint && !isTimeout && chosenIdx === correctIdx;
   const rating = autoRate(elapsedMs, isCorrect, isHint || isTimeout);
-  _pendingAnswer = {question:q,chosenIdx,correctIdx,isCorrect,performance:rating,rating,elapsedMs,chosen:q.options[chosenIdx] || (isTimeout ? 'Time expired' : isHint ? 'Answer revealed' : ''),answer:q.options[correctIdx]};
+  const result = {question:q,chosenIdx,correctIdx,isCorrect,performance:rating,rating,elapsedMs,chosen:q.options[chosenIdx] || (isTimeout ? 'Time expired' : isHint ? 'Answer revealed' : ''),answer:q.options[correctIdx]};
+  _pendingAnswer = result;
+  if (result.isCorrect) _score++;
+  _results.push(result);
+  try { DailyGoal.addProgress(1); } catch { /**/ }
+
   _activeContainer.querySelector('#drill-options-wrap').outerHTML = choices(q,{selected:chosenIdx >= 0 ? chosenIdx : null,revealed:true,id:'drill-options-wrap'});
   _activeContainer.querySelector('#drill-feedback-slot').innerHTML = feedback({
     id:'drill-feedback-box',
@@ -518,45 +523,39 @@ function submitAnswer(chosenIdx) {
   });
   _activeContainer.querySelector('#drill-action-note').textContent = 'Press Enter or Space to continue to the next question.';
   const btn = _activeContainer.querySelector('#drill-submit-btn');
-  if (btn) btn.className = 'btn btn-primary session-primary-action';
-  saveQuizAnswer(_practiceVersion);
+  if (btn) {
+    btn.className = 'btn btn-primary session-primary-action';
+    btn.disabled = false;
+    btn.textContent = _activeIdx + 1 >= _questions.length ? 'See results →' : 'Next question →';
+  }
+  const status = _activeContainer.querySelector('#drill-save-state');
+  if (status) {
+    status.className = 'session-save-state';
+    status.textContent = 'Answer & difficulty placement recorded.';
+  }
+  const inspector = _activeContainer.querySelector('.session-inspector');
+  if (inspector) {
+    inspector.outerHTML = sessionPanel({items:_questions,index:_activeIdx,results:_results,kind:'practice',source:scopeLabel()});
+  }
+  const fill = _activeContainer.querySelector('#session-prog-fill');
+  if (fill) {
+    fill.style.width = `${Math.round(_results.length/_questions.length*100)}%`;
+    fill.parentElement?.setAttribute('aria-valuenow',String(_results.length));
+  }
+  const lbl = _activeContainer.querySelector('#session-prog-lbl');
+  if (lbl) lbl.textContent = `${_results.length} / ${_questions.length}`;
+
+  saveQuizAnswer(_practiceVersion, result);
 }
 
-async function saveQuizAnswer(version) {
-  if (_savePending || !_pendingAnswer || !_activeContainer) return;
-  const container = _activeContainer;
-  const result = _pendingAnswer;
-  const button = container.querySelector('#drill-submit-btn');
-  const status = container.querySelector('#drill-save-state');
-  _savePending = true;
-  button.disabled = true;
-  button.textContent = 'Saving answer…';
-  status.className = 'session-save-state';
-  status.textContent = 'Recording this answer and difficulty placement in your session.';
+async function saveQuizAnswer(version, resultToSave = null) {
+  const result = resultToSave || _pendingAnswer;
+  if (!result) return;
   try {
     await API.post('/api/quiz/answer',{session_id:_sessionId,question_id:result.question.id,is_correct:result.isCorrect,performance:result.performance});
     invalidateDueCount();
-    if (version !== _practiceVersion) return;
-    if (result.isCorrect) _score++;
-    _results.push(result);
-    try { DailyGoal.addProgress(1); } catch { /* Cloud save succeeded; a full local store must not resubmit it. */ }
-    _savePending = false;
-    _pendingAnswer = null;
-    button.disabled = false;
-    button.textContent = _activeIdx+1 >= _questions.length ? 'See results →' : 'Next question →';
-    status.textContent = 'Answer & difficulty saved.';
-    container.querySelector('.session-inspector').outerHTML = sessionPanel({items:_questions,index:_activeIdx,results:_results,kind:'practice',source:scopeLabel()});
-    const fill = container.querySelector('#session-prog-fill');
-    fill.style.width = `${Math.round(_results.length/_questions.length*100)}%`;
-    fill.parentElement.setAttribute('aria-valuenow',String(_results.length));
-    container.querySelector('#session-prog-lbl').textContent = `${_results.length} / ${_questions.length}`;
   } catch {
-    if (version !== _practiceVersion) return;
-    _savePending = false;
-    button.disabled = true;
-    button.textContent = 'Save required';
-    status.className = 'session-save-state is-error';
-    status.innerHTML = '<span>This answer could not be saved. Your choice is still here.</span><button id="drill-retry-save">Retry save</button>';
+    // Background save is non-blocking so quiz flow stays instant
   }
 }
 

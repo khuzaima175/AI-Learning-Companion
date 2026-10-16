@@ -4,11 +4,26 @@
 let SUPABASE_URL = '';
 let SUPABASE_ANON = '';
 
+const CFG_KEY = 'alc_sb_cfg_v1';
 try {
-    const configResp = await fetch('/api/supabase-config');
-    const config = await configResp.json();
-    SUPABASE_URL = config.supabase_url;
-    SUPABASE_ANON = config.supabase_anon;
+    const cachedCfg = JSON.parse(localStorage.getItem(CFG_KEY) || 'null');
+    if (cachedCfg?.supabase_url && cachedCfg?.supabase_anon) {
+        SUPABASE_URL = cachedCfg.supabase_url;
+        SUPABASE_ANON = cachedCfg.supabase_anon;
+        // Refresh quietly in the background without blocking startup
+        fetch('/api/supabase-config')
+            .then(r => r.ok ? r.json() : null)
+            .then(cfg => { if (cfg?.supabase_url) localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); })
+            .catch(() => {});
+    } else {
+        const configResp = await fetch('/api/supabase-config');
+        const config = await configResp.json();
+        SUPABASE_URL = config.supabase_url;
+        SUPABASE_ANON = config.supabase_anon;
+        if (SUPABASE_URL && SUPABASE_ANON) {
+            localStorage.setItem(CFG_KEY, JSON.stringify(config));
+        }
+    }
 } catch (e) {
     console.error("Failed to load Supabase config from server:", e);
 }

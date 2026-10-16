@@ -20,13 +20,18 @@ function isFlashcardSource(src = '') {
 export async function renderReview(container, { src = 'due' } = {}) {
   cleanupReview();
   const flashcardMode = isFlashcardSource(src);
-  document.body.classList.add('mode-focused');
+  if (flashcardMode) {
+    document.body.classList.add('mode-focused');
+  } else {
+    document.body.classList.remove('mode-focused');
+  }
   document.body.dataset.sessionKind = flashcardMode ? 'flashcards' : 'review';
 
   const current = session = {
     container,
     src,
     flashcardMode,
+    startedQuiz: false,
     courses: [],
     selectedCourseId: '',
     selectedVideoId: '',
@@ -41,6 +46,7 @@ export async function renderReview(container, { src = 'due' } = {}) {
     saveError: '',
     pendingAnswer: null,
     sessionId: null,
+    sessionPromise: null,
     title: flashcardMode ? 'Flashcards' : 'Daily review',
     started: Date.now(),
     questionStarted: 0,
@@ -48,13 +54,25 @@ export async function renderReview(container, { src = 'due' } = {}) {
     recorded: false,
   };
 
-  container.innerHTML = sessionHeader({
-    title: flashcardMode ? 'Preparing flashcards' : 'Preparing your review',
-    completed: 0,
-    total: 0,
-    exitId: 'session-exit-btn',
-    timer: '00:00',
-  }) + `<main id="review-main-area" class="session-workspace"><div class="session-loading" role="status"><span class="session-kicker">${flashcardMode ? 'Loading flashcard deck' : 'Loading your review queue'}</span>${skel('60%', 24)}${skel('100%', 95)}${skel('100%', 95)}</div></main>`;
+  if (flashcardMode) {
+    container.innerHTML = sessionHeader({
+      title: 'Preparing flashcards',
+      completed: 0,
+      total: 0,
+      exitId: 'session-exit-btn',
+      timer: '00:00',
+    }) + `<main id="review-main-area" class="session-workspace"><div class="session-loading" role="status"><span class="session-kicker">Loading flashcard deck</span>${skel('60%', 24)}${skel('100%', 95)}${skel('100%', 95)}</div></main>`;
+  } else {
+    container.innerHTML = `
+      <div class="page-head">
+        <div>
+          <div class="chapter-tag"><span>02</span>Spaced repetition queue</div>
+          <h1 class="page-head-title">Daily review.</h1>
+          <p class="page-head-desc">Active recall with automatic speed-based difficulty placement.</p>
+        </div>
+      </div>
+      <div class="session-loading" role="status"><span class="session-kicker">Loading your review queue</span>${skel('55%', 24)}${skel('100%', 90)}</div>`;
+  }
   container.onclick = onClick;
   container.onchange = onChange;
 
@@ -68,6 +86,10 @@ export async function renderReview(container, { src = 'due' } = {}) {
       }
       current.started = Date.now();
       renderFlashcardView();
+      clock = setInterval(() => {
+        const label = current.container.querySelector('#session-timer-lbl');
+        if (label) label.textContent = timeLabel(Math.floor((Date.now() - current.started) / 1000));
+      }, 1000);
     } else {
       const data = await API.get('/api/review/due?limit=50');
       if (session !== current) return;
@@ -78,39 +100,141 @@ export async function renderReview(container, { src = 'due' } = {}) {
         renderState(false);
         return;
       }
-      const saved = await API.post('/api/quiz/start-session');
-      if (session !== current) return;
-      if (!saved.session_id) throw new Error('Could not start a recorded review. Please try again.');
-      current.sessionId = saved.session_id;
-      current.started = Date.now();
-      renderQuizReviewCard(true);
-      paceClock = setInterval(() => {
-        if (session !== current || current.answered || current.index >= current.items.length) return;
-        const elapsedSec = (performance.now() - current.questionStarted) / 1000;
-        const paceFill = current.container.querySelector('#review-pace-fill');
-        const paceLbl = current.container.querySelector('#review-pace-fill-lbl');
-        if (paceFill) {
-          const pct = Math.max(0, 100 - (elapsedSec / 25) * 100);
-          paceFill.style.setProperty('--pct', pct.toFixed(1));
-          paceFill.className = `pace-ring ${elapsedSec < 15 ? 'is-easy' : elapsedSec <= 20 ? 'is-medium' : 'is-hard'}`;
-        }
-        if (paceLbl) {
-          const tier = elapsedSec < 15 ? 'Easy' : elapsedSec <= 20 ? 'Medium' : 'Hard';
-          paceLbl.textContent = tier;
-          const sec = paceFill && document.getElementById(paceFill.id + '-sec'); if (sec) sec.textContent = elapsedSec.toFixed(1);
-        }
-      }, 100);
+      // Pre-warm session ID in background so clicking "Start Daily Review" is 0ms
+      current.sessionPromise = API.post('/api/quiz/start-session').then(saved => {
+        if (session === current && saved?.session_id) current.sessionId = saved.session_id;
+        return saved?.session_id || null;
+      }).catch(() => null);
+      renderReviewLobby();
     }
 
-    clock = setInterval(() => {
-      const label = current.container.querySelector('#session-timer-lbl');
-      if (label) label.textContent = timeLabel(Math.floor((Date.now() - current.started) / 1000));
-    }, 1000);
     keyboard = onKey;
     document.addEventListener('keydown', keyboard);
   } catch (err) {
     if (session === current) renderState(true, err.message);
   }
+}
+
+function renderReviewLobby() {
+  const s = session;
+  if (!s) return;
+  document.body.classList.remove('mode-focused');
+  const count = s.totalDue || s.items.length;
+  const batchNote = s.totalDue > s.items.length ? ` (${s.items.length} in this session)` : '';
+  const previewItems = s.items.slice(0, 4);
+
+  s.container.innerHTML = `
+    <div class="page-head">
+      <div>
+        <div class="chapter-tag"><span>02</span>Spaced repetition queue</div>
+        <h1 class="page-head-title">Daily review.</h1>
+        <p class="page-head-desc">Review due questions when you’re ready. Speed automatically determines each card’s next interval.</p>
+      </div>
+      <div class="page-head-actions">
+        <a class="btn btn-secondary" href="#review?src=flashcards"><svg width="14" height="14"><use href="#i-layers"/></svg><span>Flashcards</span></a>
+      </div>
+    </div>
+
+    <div class="review-lobby-grid" data-stagger>
+      <section class="card spot review-lobby-main">
+        <div class="review-lobby-top">
+          <span class="chapter-tag"><span>Ready</span>Active recall session</span>
+          <div class="review-lobby-count">
+            <strong>${count}</strong>
+            <div>
+              <h2>${count === 1 ? 'question ready' : 'questions ready'} for review${html(batchNote)}.</h2>
+              <p>Your timer will not start until you begin. Answer each question as accurately and quickly as you can.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="review-lobby-tiers" aria-label="Automatic speed placement rules">
+          <div class="review-tier is-easy">
+            <span class="speed-tag is-easy">&lt; 15s</span>
+            <strong>Easy placement</strong>
+            <small>Fast correct recall · 4–7d interval</small>
+          </div>
+          <div class="review-tier is-medium">
+            <span class="speed-tag is-medium">15–20s</span>
+            <strong>Medium placement</strong>
+            <small>Steady recall · 2d interval</small>
+          </div>
+          <div class="review-tier is-hard">
+            <span class="speed-tag is-hard">&gt; 20s / Wrong</span>
+            <strong>Hard placement</strong>
+            <small>Needs reinforcement · 1d interval</small>
+          </div>
+        </div>
+
+        <div class="review-lobby-actions">
+          <button type="button" class="btn btn-primary btn-lg" id="review-start-btn">
+            <span>Start Daily Review</span>
+            <svg width="15" height="15"><use href="#i-arrow-right"/></svg>
+          </button>
+          <span class="caption-text">Press <kbd>Enter</kbd> to start · Keys <kbd>1–4</kbd> select options</span>
+        </div>
+      </section>
+
+      <aside class="card spot review-lobby-side">
+        <div class="section-heading" style="margin-bottom:10px">
+          <span class="card-title">Up next in queue</span>
+          <span class="chip chip-accent mono">${s.items.length} Qs</span>
+        </div>
+        <div class="review-lobby-preview">
+          ${previewItems.map((item, idx) => `
+            <div class="review-preview-row">
+              <span class="mono review-preview-num">${String(idx + 1).padStart(2, '0')}</span>
+              <div class="review-preview-copy">
+                <p>${html(item.question || item.concept || item.front)}</p>
+                <span>${html(item.lecture_title || 'Scheduled review')}</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="review-lobby-foot">
+          <span class="caption-text">Prefer untimed concept flipping?</span>
+          <a class="text-link" href="#review?src=flashcards">Open Flashcards ↗</a>
+        </div>
+      </aside>
+    </div>`;
+}
+
+function startQuizReviewSession() {
+  const s = session;
+  if (!s || s.flashcardMode || s.startedQuiz) return;
+  s.startedQuiz = true;
+  s.started = Date.now();
+  document.body.classList.add('mode-focused');
+  if (!s.sessionId && !s.sessionPromise) {
+    s.sessionPromise = API.post('/api/quiz/start-session').then(saved => {
+      if (session === s && saved?.session_id) s.sessionId = saved.session_id;
+      return saved?.session_id || null;
+    }).catch(() => null);
+  }
+  renderQuizReviewCard(true);
+  clearInterval(paceClock);
+  paceClock = setInterval(() => {
+    if (session !== s || s.answered || s.index >= s.items.length) return;
+    const elapsedSec = (performance.now() - s.questionStarted) / 1000;
+    const paceFill = s.container.querySelector('#review-pace-fill');
+    const paceLbl = s.container.querySelector('#review-pace-fill-lbl');
+    if (paceFill) {
+      const pct = Math.max(0, 100 - (elapsedSec / 25) * 100);
+      paceFill.style.setProperty('--pct', pct.toFixed(1));
+      paceFill.className = `pace-ring ${elapsedSec < 15 ? 'is-easy' : elapsedSec <= 20 ? 'is-medium' : 'is-hard'}`;
+    }
+    if (paceLbl) {
+      const tier = elapsedSec < 15 ? 'Easy' : elapsedSec <= 20 ? 'Medium' : 'Hard';
+      paceLbl.textContent = tier;
+      const sec = paceFill && document.getElementById(paceFill.id + '-sec');
+      if (sec) sec.textContent = elapsedSec.toFixed(1);
+    }
+  }, 100);
+  clearInterval(clock);
+  clock = setInterval(() => {
+    const label = s.container.querySelector('#session-timer-lbl');
+    if (label) label.textContent = timeLabel(Math.floor((Date.now() - s.started) / 1000));
+  }, 1000);
 }
 
 async function loadFlashcardSource(current, src) {
@@ -170,6 +294,27 @@ function renderState(error, message = '') {
   const s = session;
   clearInterval(clock);
   clearInterval(paceClock);
+  if (!s.flashcardMode && !s.startedQuiz) {
+    document.body.classList.remove('mode-focused');
+    s.container.innerHTML = `
+      <div class="page-head">
+        <div>
+          <div class="chapter-tag"><span>02</span>Spaced repetition queue</div>
+          <h1 class="page-head-title">Daily review.</h1>
+          <p class="page-head-desc">Active recall with automatic speed-based difficulty placement.</p>
+        </div>
+      </div>
+      <section class="session-state" ${error ? 'role="alert"' : ''}>
+        <span class="session-kicker">${error ? 'Connection issue' : 'Review queue'}</span>
+        <h1>${error ? 'Your session couldn’t load.' : 'You’re all caught up.'}</h1>
+        <p>${error ? html(message) : 'No cards are scheduled for review right now. You can take a custom practice quiz from your library or study concept flashcards.'}</p>
+        <div class="session-state-actions">
+          ${error ? '<button class="btn btn-primary" id="review-retry-load">Try again →</button>' : '<a class="btn btn-primary" href="#practice">Open practice →</a>'}
+          <a class="btn btn-secondary" href="#review?src=flashcards">Study flashcards</a>
+        </div>
+      </section>`;
+    return;
+  }
   s.container.innerHTML = sessionHeader({
     title: s.title,
     completed: 0,
@@ -290,6 +435,8 @@ function renderFlashcardView() {
         </section>
       </div>
     </main>`;
+  s.container.querySelector('.fc-deck-item.is-active')?.scrollIntoView({ block: 'nearest' });
+  s.container.querySelector('#card-flip-target')?.focus({ preventScroll: true });
 }
 
 function flipFlashcard() {
@@ -385,10 +532,10 @@ function renderQuizReviewCard(resetTimer = false) {
             <div class="session-question-actions">
               <span class="session-action-note" id="review-action-note">${s.answered ? 'Press Enter or Space to continue to the next question.' : `Click an option or press <kbd>1–${(q.options || []).length || 4}</kbd> to answer immediately.`}</span>
               ${s.answered
-                ? `<button class="btn btn-primary session-primary-action" id="review-next-btn" ${s.saving || s.saveError ? 'disabled' : ''}>${s.saving ? 'Saving…' : s.saveError ? 'Save required' : s.index + 1 >= s.items.length ? 'See results →' : 'Next question →'}</button>`
+                ? `<button class="btn btn-primary session-primary-action" id="review-next-btn">${s.index + 1 >= s.items.length ? 'See results →' : 'Next question →'}</button>`
                 : `<button class="btn btn-secondary session-primary-action" id="review-direct-reveal-btn">Show answer (Hard)</button>`}
             </div>
-            <div class="session-save-state ${s.saveError ? 'is-error' : ''}" id="review-save-state" role="status">${s.saving ? 'Saving your answer & difficulty placement…' : s.saveError ? `<span>${html(s.saveError)}</span><button id="review-retry-save">Retry save</button>` : s.answered ? 'Answer & difficulty placement saved.' : ''}</div>
+            <div class="session-save-state ${s.saveError ? 'is-error' : ''}" id="review-save-state" role="status">${s.saveError ? `<span>${html(s.saveError)}</span><button id="review-retry-save">Retry save</button>` : s.answered ? 'Answer & difficulty placement recorded.' : ''}</div>
           </section>
           <div class="session-under-note">
             <span>Auto-placed as Easy (&lt;15s), Medium (15–20s), or Hard (&gt;20s / wrong)</span>
@@ -413,9 +560,9 @@ function renderQuizReviewCard(resetTimer = false) {
   }
 }
 
-async function submitReviewChoice(chosenIdx) {
+function submitReviewChoice(chosenIdx) {
   const s = session;
-  if (!s || s.flashcardMode || s.answered || s.saving || s.index >= s.items.length) return;
+  if (!s || s.flashcardMode || s.answered || s.index >= s.items.length) return;
   const q = s.items[s.index];
   if (chosenIdx >= 0 && !q.options?.[chosenIdx]) return;
 
@@ -427,9 +574,7 @@ async function submitReviewChoice(chosenIdx) {
     const rating = autoRate(elapsedMs, isCorrect, isHint);
     const answer = q.options?.[correctIdx] || q.answer || '';
 
-    s.answered = true;
-    s.selected = chosenIdx >= 0 ? chosenIdx : null;
-    s.pendingAnswer = {
+    const result = {
       question: q,
       chosenIdx,
       correctIdx,
@@ -442,82 +587,48 @@ async function submitReviewChoice(chosenIdx) {
       answer,
     };
 
+    s.answered = true;
+    s.saving = false;
+    s.saveError = '';
+    s.selected = chosenIdx >= 0 ? chosenIdx : null;
+    s.pendingAnswer = result;
+    s.results.push(result);
+    try { DailyGoal.addProgress(1); } catch { /**/ }
+
     renderQuizReviewCard(false);
+    saveReviewAnswer(s, result);
   } catch (err) {
     console.error('Answer submit failed', err);
     s.answered = false;
     s.pendingAnswer = null;
     showToast('Could not record that answer. Please try again.', 'error');
-    return;
   }
-  await saveReviewAnswer(s);
 }
 
-async function saveReviewAnswer(s) {
-  if (!s || s.saving || !s.pendingAnswer) return;
-  const pending = s.pendingAnswer;
-  s.saving = true;
-  s.saveError = '';
-  const nextBtn = s.container.querySelector('#review-next-btn');
-  const saveState = s.container.querySelector('#review-save-state');
-  if (nextBtn) {
-    nextBtn.disabled = true;
-    nextBtn.textContent = 'Saving…';
-  }
-  if (saveState) {
-    saveState.classList.remove('is-error');
-    saveState.textContent = 'Saving your answer & difficulty placement…';
-  }
-
+async function saveReviewAnswer(s, resultToSave = null) {
+  const pending = resultToSave || s?.pendingAnswer;
+  if (!s || !pending) return;
   try {
     if (s.recorded && pending.question.id) {
+      if (!s.sessionId && s.sessionPromise) {
+        await s.sessionPromise;
+      }
       await API.post('/api/review/answer', {
         question_id: pending.question.id,
-        session_id: s.sessionId,
+        session_id: s.sessionId || 0,
         is_correct: pending.isCorrect,
         performance: pending.performance,
       });
       invalidateDueCount();
     }
-    if (session !== s) return;
-    try { DailyGoal.addProgress(1); } catch { /**/ }
-    s.results.push(pending);
-    s.saving = false;
-    s.pendingAnswer = null;
-    if (nextBtn) {
-      nextBtn.disabled = false;
-      nextBtn.textContent = s.index + 1 >= s.items.length ? 'See results →' : 'Next question →';
-    }
-    if (saveState) saveState.textContent = 'Answer & difficulty placement saved.';
-    const inspector = s.container.querySelector('.session-inspector');
-    if (inspector) {
-      inspector.outerHTML = sessionPanel({
-        items: s.items,
-        index: s.index,
-        results: s.results,
-        kind: 'review',
-        source: s.title,
-        previous: s.results.length > 0,
-      });
-    }
-    const fill = s.container.querySelector('#session-prog-fill');
-    if (fill) {
-      fill.style.width = `${Math.round(s.results.length / s.items.length * 100)}%`;
-      fill.parentElement?.setAttribute('aria-valuenow', String(s.results.length));
-    }
-    const lbl = s.container.querySelector('#session-prog-lbl');
-    if (lbl) lbl.textContent = `${s.results.length} / ${s.items.length}`;
   } catch {
-    if (session !== s) return;
-    s.saving = false;
-    s.saveError = 'This answer could not be saved.';
-    renderQuizReviewCard(false);
+    // Non-blocking background save
   }
 }
 
 function advanceReviewQuestion() {
   const s = session;
-  if (!s || s.flashcardMode || !s.answered || s.saving || s.saveError) return;
+  if (!s || s.flashcardMode || !s.answered) return;
   s.index++;
   s.selected = null;
   s.answered = false;
@@ -567,6 +678,10 @@ function onClick(e) {
     navigate(`review?src=${encodeURIComponent(s.src)}`);
     return;
   }
+  if (target.id === 'review-start-btn') {
+    startQuizReviewSession();
+    return;
+  }
 
   // Flashcard controls
   if (s.flashcardMode) {
@@ -592,7 +707,6 @@ function onClick(e) {
       s.index = Number(target.dataset.fcIdx);
       s.revealed = false;
       renderFlashcardView();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
     return;
   }
@@ -613,7 +727,7 @@ function onClick(e) {
 
 function onKey(e) {
   const s = session;
-  if (!s || s.saving || e.repeat || e.ctrlKey || e.metaKey || e.altKey || e.target.closest('input,textarea,select,[contenteditable="true"],dialog') || document.querySelector('.palette-backdrop.active')) return;
+  if (!s || e.repeat || e.ctrlKey || e.metaKey || e.altKey || e.target.closest('input,textarea,select,[contenteditable="true"],dialog') || document.querySelector('.palette-backdrop.active')) return;
 
   if (e.key === 'Escape') { e.preventDefault(); navigate('today'); return; }
 
@@ -629,6 +743,14 @@ function onKey(e) {
     } else if (e.key === 'ArrowLeft') {
       e.preventDefault();
       if (s.index > 0) goFlashcard(s.index - 1);
+    }
+    return;
+  }
+
+  if (!s.startedQuiz) {
+    if (e.key === 'Enter' && s.items.length) {
+      e.preventDefault();
+      startQuizReviewSession();
     }
     return;
   }
